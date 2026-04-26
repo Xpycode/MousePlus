@@ -127,3 +127,9 @@ To include assets in your feature package:
 
 ### Generated with XcodeBuildMCP
 This project was scaffolded using [XcodeBuildMCP](https://github.com/cameroncooke/XcodeBuildMCP), which provides tools for AI-assisted macOS development workflows.
+
+## License
+
+MousePlus is licensed under the **GNU General Public License v3.0** — see [LICENSE](LICENSE).
+
+This is a copyleft license: forks and derivative works must also be released under GPLv3 with source code available. The choice of GPLv3 (rather than MIT) reflects the project goal of preventing closed-source commercial forks while keeping the source open for anyone to study, modify, and redistribute.
