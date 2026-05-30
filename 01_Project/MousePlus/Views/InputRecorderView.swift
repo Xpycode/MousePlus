@@ -4,6 +4,10 @@ import SwiftUI
 struct InputRecorderView: View {
     @Bindable var service: InputRecorderService
     var onDone: () -> Void
+    /// Optional escape hatch to open the Settings window. Temporary: the menu-bar
+    /// icon is invisible on the M1 Max, so this is currently the only reliable way
+    /// into Settings. Remove when the menu-bar-icon bug is fixed.
+    var onOpenSettings: (() -> Void)? = nil
 
     var body: some View {
         VStack(spacing: 16) {
@@ -32,9 +36,14 @@ struct InputRecorderView: View {
 
             historyList
 
-            Button("Done") { onDone() }
-                .buttonStyle(.borderedProminent)
-                .keyboardShortcut(.defaultAction)
+            HStack {
+                if let onOpenSettings {
+                    Button("Settings…") { onOpenSettings() }
+                }
+                Button("Done") { onDone() }
+                    .buttonStyle(.borderedProminent)
+                    .keyboardShortcut(.defaultAction)
+            }
         }
         .padding(28)
         .frame(width: 480)

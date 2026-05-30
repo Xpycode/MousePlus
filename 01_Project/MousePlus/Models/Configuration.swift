@@ -101,7 +101,7 @@ enum TriggerBinding: Codable, Equatable, Sendable {
 }
 
 /// Both trigger slots — keyboard and mouse button — each independently configurable.
-struct TriggersConfig: Codable, Sendable {
+struct TriggersConfig: Codable, Sendable, Equatable {
     var keyboard: TriggerBinding
     var mouseButton: TriggerBinding
 

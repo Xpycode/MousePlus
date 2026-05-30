@@ -9,9 +9,9 @@ struct SettingsView: View {
                     Label("General", systemImage: "gear")
                 }
 
-            HotkeySettingsView()
+            TriggersSettingsView()
                 .tabItem {
-                    Label("Hotkey", systemImage: "keyboard")
+                    Label("Triggers", systemImage: "cursorarrow.click.2")
                 }
 
             RingAppearanceSettingsView()
@@ -24,7 +24,7 @@ struct SettingsView: View {
                     Label("Menu Items", systemImage: "circle.hexagongrid")
                 }
         }
-        .frame(width: 460, height: 420)
+        .frame(width: 460, height: 460)
     }
 }
 
@@ -121,38 +121,18 @@ struct RingAppearanceSettingsView: View {
 }
 
 struct GeneralSettingsView: View {
-    @AppStorage("holdToActivate") private var holdToActivate = true
-    @AppStorage("tapToActivate") private var tapToActivate = true
-
     var body: some View {
         Form {
-            Section("Activation") {
-                Toggle("Hold hotkey + release to select", isOn: $holdToActivate)
-                Toggle("Tap hotkey, click to select", isOn: $tapToActivate)
+            Section("Triggers") {
+                Text("Bind the ring to a keyboard shortcut or mouse button — and choose hold-release vs tap-toggle per binding — in the Triggers tab.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
             }
 
             Section("Appearance") {
                 Text("Ring geometry, dimming, and animation are configured in the Ring Appearance tab.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
-            }
-        }
-        .formStyle(.grouped)
-        .padding()
-    }
-}
-
-struct HotkeySettingsView: View {
-    var body: some View {
-        Form {
-            Section("Current Hotkey") {
-                Text("Control + Space")
-                    .font(.title2)
-                    .foregroundStyle(.secondary)
-
-                Text("Hotkey customization coming soon")
-                    .font(.caption)
-                    .foregroundStyle(.tertiary)
             }
         }
         .formStyle(.grouped)

@@ -30,6 +30,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// to disk by Settings, so the next open reflects it regardless).
     @MainActor static var applyAppearance: ((AppearanceConfig) -> Void)?
 
+    /// Settings → live trigger bridge: pushes an edited `TriggersConfig` into the
+    /// running `TriggerService` so a rebind takes effect immediately (also persisted
+    /// to disk by Settings, so the next launch reflects it regardless).
+    @MainActor static var applyTriggers: ((TriggersConfig) -> Void)?
+
     private var menuBarController: MenuBarController?
     private var ringWindowController: RingWindowController?
     private var triggerService: TriggerService?
@@ -106,6 +111,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         if inputRecorderWindowController == nil {
             inputRecorderWindowController = InputRecorderWindowController()
         }
+        inputRecorderWindowController?.onOpenSettings = { [weak self] in self?.showSettings() }
         inputRecorderWindowController?.show()
     }
 
@@ -114,7 +120,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         triggerService = service
         ringWindowController = RingWindowController()
 
-        service.start(config: .default)
+        // Start from whatever config has loaded so far; `loadConfiguration`'s async
+        // completion calls `updateConfig` once the saved triggers are in hand.
+        service.start(config: configuration.triggers)
 
         triggerEventTask = Task { [weak self] in
             for await event in service.events {
@@ -151,10 +159,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             self.ringViewModel.radii = appearance.bandRadii
         }
 
+        // Live-apply trigger rebinds from the Triggers settings tab into the running monitors.
+        AppDelegate.applyTriggers = { [weak self] triggers in
+            guard let self else { return }
+            self.configuration.triggers = triggers
+            self.triggerService?.updateConfig(triggers)
+        }
+
         Task {
             if let config = try? await configService?.load() {
                 configuration = config
                 ringViewModel.load(from: config)
+                // Now that the saved triggers are loaded, snap the live monitors to them
+                // (setupTriggers may have started with the default before load finished).
+                triggerService?.updateConfig(config.triggers)
             }
         }
     }
