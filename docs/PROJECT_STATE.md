@@ -3,8 +3,8 @@
 ## Quick Facts
 - **Project:** MousePlus (renamed from PointerActions on 2026-04-26)
 - **Started:** 2026-01-09 (as PointerActions)
-- **Current Phase:** implementation. **Two parallel tracks:** (1) *Trigger/HID backend* — Waves 1+2 done, W3 architecture done, plan A (`IOHIDDeviceInspector`) built, plan B blocked on the HID++ strategy decision (#17); (2) *Ring UI redesign* — concentric wedge menu **planned 2026-05-30** in `IMPLEMENTATION_PLAN.md` (12 tasks / 5 waves), ready for `/execute`, independent of track 1.
-- **Last Session:** 2026-05-02-a (Inspector bumped to schema v3 — `fireCounts` in JSON, per-device live-capture buffers cap 80→10000, raw-report cap 40→1000, `matchAllDevices` provenance. MX4 BLE snapshot captured on M4 Pro: 5/7 page-9 buttons fire on raw HID, vendor pipe is `0xFF43` (vs 3S's `0xFF03`) and **emits HID++ traffic without divert** — directly contradicts session-e's "firmware-withholds" conclusion for the MX3S, which is now suspect pending a v3 re-capture. M4 Pro signing bootstrapped via `Debug.local.xcconfig`. Raw reports still empty on standard mouse interface; capture #3 from the vendor-only interface needed before HID++ strategy decision.)
+- **Current Phase:** implementation. **Two parallel tracks:** (1) *Trigger/HID backend* — Waves 1+2 done, W3 architecture done, plan A (`IOHIDDeviceInspector`) built, plan B blocked on the HID++ strategy decision (#17); (2) *Ring UI redesign* — concentric wedge menu **✅ COMPLETE & verified live 2026-05-30** (`IMPLEMENTATION_PLAN.md`, 12 tasks / 5 waves), merged to `main`. Track 1 (HID++ decision + Triggers settings tab) is the remaining work.
+- **Last Session:** 2026-05-30-a (Executed the concentric ring menu plan via `/execute` — all 5 waves build-gated green, full interactive flow verified live: trigger, concentric render, expand→outer arc, hold-to-select, click-outside + Esc dismissal. New files `AnnularWedge`/`WedgeView`/`RadialGeometry`/`DismissMonitor`; rewrote `RingViewModel`/`RingMenuView`/`RingWindowController`; `Configuration` inner/middle split + `AppearanceConfig` band-radius/dim/keepSpokeLit + Ring Appearance settings tab. Three bugs caught in verification & fixed: app quit on last-window-close (`applicationShouldTerminateAfterLastWindowClosed`), Esc not dismissing (needed a local key monitor), F5/voice-key collision. git initialized — baseline on `main` + per-wave commits, merged `--no-ff`, feature branch deleted.)
 - **Repo:** https://github.com/Xpycode/MousePlus (public, GPLv3)
 - **Build:** ✅ clean on both Macs under `xcodebuild -workspace 01_Project/MousePlus.xcworkspace -scheme MousePlus -configuration Debug build` (M4 Pro + M1 Max both have `Debug.local.xcconfig` bootstrapped)
 
@@ -13,6 +13,10 @@
 Radial quick-access menu summoned by mouse-button or hotkey — app switching, clipboard, menu bar access, and custom actions in a beautiful ring interface. Designed to complement BetterMouse; built for MX Master 3s/4 owners but works with any mouse or trackpad.
 
 ## Current Focus
+
+**Ring UI redesign ✅ DONE (2026-05-30) — see the "Ring UI redesign track" section below and `IMPLEMENTATION_PLAN.md`.** With the concentric wedge menu complete and on `main`, the remaining work is all on the **HID/trigger backend track**: (a) the HID++ strategy decision (#17, gated on MX4 capture #3) and (b) the **Triggers settings tab** so the user can pick a permanent conflict-free trigger and switch modes in-app (currently a temporary F5 test default that collides with the system/Perplexity voice key — use Fn+F5 or map a mouse button to F5). Also still open: the M1 Max menu-bar-icon mystery (the "Identify Input" auto-open is a workaround).
+
+---
 
 **Plan A — `IOHIDDeviceInspector` ✅ done (session-e), bumped to schema v3 (session 2026-05-02-a).** Side panel in Identify Input that enumerates HID devices via IOHIDManager (multi-pair matching + a "match all" toggle), lists elements with live-fire counters, captures raw input reports for vendor pipes, and saves per-device snapshots as JSON. v3 schema adds per-element accumulated `fireCounts` (the authoritative "did this element ever fire" signal — supersedes the lossy `liveCaptures` ring), per-device live-capture buffers, and `matchAllDevices` provenance.
 
