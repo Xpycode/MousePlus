@@ -57,6 +57,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
+    /// MousePlus is a menu-bar/LSUIElement utility — its real job (the global
+    /// trigger + ring) runs with no windows open. Without this, closing the last
+    /// window (e.g. the "Identify Input" diagnostic) terminates the app and the
+    /// trigger dies. Keep the process alive across all window closes.
+    func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
+        false
+    }
+
     private func showPermissionOnboarding() {
         let controller = OnboardingWindowController()
         onboardingWindowController = controller
