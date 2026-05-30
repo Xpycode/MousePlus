@@ -110,22 +110,25 @@ struct TriggersConfig: Codable, Sendable {
         self.mouseButton = mouseButton
     }
 
-    /// W3 test default — keyboard + mouse button bound side-by-side so both
-    /// pipelines and both modes get exercised:
-    ///   • Numpad-Clear → tap-toggle (one tap opens, another closes)
-    ///   • Mouse button 3 (back button on MX Master) → hold-release
-    /// W4 deletes this default — onboarding forces a real choice (D1).
+    /// Test default — keyboard + mouse button bound side-by-side so BOTH
+    /// interaction modes are live at once and the user can feel each:
+    ///   • F5 → tap-toggle (tap opens the ring, tap a slice to pick). This is the
+    ///     key meant to be mapped from a mouse button in BetterMouse/Logi Options+
+    ///     (the mouse app sends raw keyCode 96, bypassing the fn-row dictation
+    ///     binding; pressing F5 on the keyboard directly needs fn or the
+    ///     "Use F1, F2 as standard function keys" setting).
+    ///   • Middle-click (wheel press) → hold-release (Blender-style: hold, move,
+    ///     release on a slice). Lets the user compare modes without a rebuild.
+    /// Proper in-app mode switching arrives with the Triggers settings tab (HID
+    /// track / W4); this default is removed when onboarding forces a choice (D1).
     static let `default` = TriggersConfig(
         keyboard: .keyboard(
-            keyCode: 71,           // Numpad Clear (kVK_ANSI_KeypadClear)
+            keyCode: 96,           // F5 (kVK_F5)
             modifiers: 0,
             mode: .tapToggle
         ),
         mouseButton: .mouseButton(
-            buttonNumber: 2,       // middle-click (wheel click) — only extended button
-                                   // that survives the user's Karabiner DriverKit
-                                   // virtual HID device. Temp testing default;
-                                   // W4 onboarding lets the user pick.
+            buttonNumber: 2,       // middle-click (wheel click)
             mode: .holdRelease
         )
     )
