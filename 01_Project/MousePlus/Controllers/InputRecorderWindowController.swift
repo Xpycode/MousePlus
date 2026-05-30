@@ -29,7 +29,7 @@ final class InputRecorderWindowController {
 
         let w = NSWindow(
             contentRect: NSRect(origin: .zero, size: host.fittingSize),
-            styleMask: [.titled, .closable, .resizable],
+            styleMask: [.titled, .closable, .miniaturizable, .resizable],
             backing: .buffered,
             defer: false
         )
