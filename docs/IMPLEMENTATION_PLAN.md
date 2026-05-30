@@ -1,9 +1,9 @@
 # IMPLEMENTATION_PLAN — Concentric Ring Menu UI
 
 **Created:** 2026-05-30
-**Status:** BUILT — T1–T11 done & compiling (5 wave build-gates green); T12 awaiting human interactive verification
-**Funnel stage:** plan → build → (interactive verify gate) → done
-**Executed:** 2026-05-30 via `/execute`. Each wave built clean under the backpressure command before proceeding. App launches without crash. Remaining: the live interactive flow (open → hover → expand → select → dismiss) must be exercised by hand — it's driven by physical mouse/hotkey triggers at the live pointer, which the SwiftUI `/preview` harness (standalone/iOS-sim only) cannot render for this multi-file macOS view.
+**Status:** ✅ COMPLETE — T1–T12 done. All 5 wave build-gates green; full interactive flow verified by hand 2026-05-30.
+**Funnel stage:** plan → build → interactive verify ✓ → done
+**Executed:** 2026-05-30 via `/execute`. Each wave built clean under the backpressure command before proceeding. T12 verified live by the user: trigger (Fn+F5 / mouse-button→F5), concentric render (inner symbols + middle labels, correct orientation), expand (middle → outer arc), hold-to-select (middle-click hold-release), and dismissal (click-outside closes; Esc collapses expanded→root then closes). Two integration bugs surfaced during verification and were fixed (see §7).
 **Workstream:** UI/interaction layer. **Independent of** the HID++ backend track (decision #17) — touches no trigger/HID code beyond one commit-path wire-up.
 
 ---
@@ -171,6 +171,11 @@ Visual tasks additionally verify with `/preview <file>` and a launch.
 - Hold-release commit landing on a *different* expandable wedge **closes** (release = commit) rather than re-pointing; in-view mouse/drag branch-switching still re-points in place. (Refinement candidate if it feels wrong in use.)
 - §2.1 spoke-lock padding decision logged to `decisions.md` (2026-05-30 "Ring spoke-lock: pad shorter band").
 
-**T12 — NOT yet done.** Needs a human to launch and exercise: open → hover inner & middle → expand a middle item → select an outer item → dismiss (Esc collapses expanded→root then closes; click-outside closes). Watch specifically for the three §6 risks: flipped-clockwise wedge orientation, NSPanel first-click swallow, hover delivery to the non-activating panel (the angle hit-test depends on `onContinuousHover`/drag reaching the panel — if selection doesn't track the cursor during a global mouse-button hold, that's the wiring to revisit).
+**T12 — ✅ DONE (verified live 2026-05-30).** User exercised open → hover inner & middle → expand a middle item → select an outer item → dismiss. All work. The three §6 risks all cleared: wedge orientation correct (no flipped-clockwise bug), first click registers, and hover/drag selection tracks the cursor on the non-activating panel.
 
-*Original plan: 12 tasks across 5 waves. T1–T11 built 2026-05-30.*
+**Bugs found & fixed during T12 verification:**
+1. **App quit on last-window-close** (`fix: keep app alive when the last window closes`) — LSUIElement app whose only SwiftUI scene is `Settings`; closing the auto-opened "Identify Input" diagnostic window terminated the app and killed the trigger. Added `applicationShouldTerminateAfterLastWindowClosed -> false`; made that window `.miniaturizable`.
+2. **Escape didn't dismiss** (`fix: Escape dismissal — add local key monitor`) — `DismissMonitor` used only a global key monitor, which can't see Escape when focus is on our own panel (click-outside worked because a global mouse-down is inherently to another app). Added an `addLocalMonitorForEvents` keyDown monitor for Escape.
+3. **Trigger key:** swapped Numpad-Clear → F5 (`chore: set F5 + middle-click as test triggers`). Note F5 collides with the system/Perplexity voice key on a bare press; use Fn+F5 directly or map a mouse button to F5 (sends the raw keycode).
+
+*Original plan: 12 tasks across 5 waves. T1–T12 built & verified 2026-05-30.*
