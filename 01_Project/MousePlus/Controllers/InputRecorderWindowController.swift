@@ -10,6 +10,10 @@ final class InputRecorderWindowController {
     private let recorder = InputRecorderService()
     private let inspector = IOHIDDeviceInspector()
 
+    /// Temporary: lets the auto-opened diagnostic window open Settings, since the
+    /// menu-bar icon is invisible on the M1 Max. Set by AppDelegate before `show()`.
+    var onOpenSettings: (() -> Void)?
+
     func show() {
         guard window == nil else {
             window?.makeKeyAndOrderFront(nil)
@@ -23,7 +27,8 @@ final class InputRecorderWindowController {
         let view = IdentifyInputContainerView(
             recorder: recorder,
             inspector: inspector,
-            onDone: { [weak self] in self?.close() }
+            onDone: { [weak self] in self?.close() },
+            onOpenSettings: { [weak self] in self?.onOpenSettings?() }
         )
         let host = NSHostingView(rootView: view)
 
@@ -37,7 +42,9 @@ final class InputRecorderWindowController {
         w.contentView = host
         w.center()
         w.isReleasedWhenClosed = false
-        w.level = .floating
+        // Normal level (not .floating): AppKit disables the minimize button on any
+        // window above .normal, and this diagnostic needs to be minimizable.
+        w.level = .normal
         w.collectionBehavior = [.moveToActiveSpace]
 
         NSApp.activate(ignoringOtherApps: true)
@@ -59,10 +66,11 @@ private struct IdentifyInputContainerView: View {
     @Bindable var recorder: InputRecorderService
     @Bindable var inspector: IOHIDDeviceInspector
     var onDone: () -> Void
+    var onOpenSettings: () -> Void
 
     var body: some View {
         HStack(alignment: .top, spacing: 0) {
-            InputRecorderView(service: recorder, onDone: onDone)
+            InputRecorderView(service: recorder, onDone: onDone, onOpenSettings: onOpenSettings)
             Divider()
             HIDInspectorPanel(inspector: inspector)
         }
