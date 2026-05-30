@@ -1,0 +1,1467 @@
+{
+  "capturedAt" : "2026-05-02T12:52:05Z",
+  "device" : {
+    "locationID" : 3725481528,
+    "manufacturer" : "Logitech",
+    "primaryUsage" : 2,
+    "primaryUsagePage" : 1,
+    "product" : "MX Master 4",
+    "productID" : 45122,
+    "transport" : "Bluetooth Low Energy",
+    "vendorID" : 1133
+  },
+  "elements" : [
+    {
+      "cookie" : 1,
+      "isArray" : true,
+      "isRelative" : false,
+      "logicalMax" : 0,
+      "logicalMin" : 0,
+      "reportCount" : 1,
+      "reportID" : 0,
+      "reportSize" : 0,
+      "type" : "collection",
+      "usage" : 2,
+      "usagePage" : 1
+    },
+    {
+      "cookie" : 2,
+      "isArray" : true,
+      "isRelative" : false,
+      "logicalMax" : 0,
+      "logicalMin" : 0,
+      "reportCount" : 1,
+      "reportID" : 0,
+      "reportSize" : 0,
+      "type" : "collection",
+      "usage" : 1,
+      "usagePage" : 1
+    },
+    {
+      "cookie" : 10,
+      "isArray" : false,
+      "isRelative" : false,
+      "logicalMax" : 1,
+      "logicalMin" : 0,
+      "reportCount" : 1,
+      "reportID" : 2,
+      "reportSize" : 1,
+      "type" : "input.button",
+      "usage" : 1,
+      "usagePage" : 9
+    },
+    {
+      "cookie" : 11,
+      "isArray" : false,
+      "isRelative" : false,
+      "logicalMax" : 1,
+      "logicalMin" : 0,
+      "reportCount" : 1,
+      "reportID" : 2,
+      "reportSize" : 1,
+      "type" : "input.button",
+      "usage" : 2,
+      "usagePage" : 9
+    },
+    {
+      "cookie" : 12,
+      "isArray" : false,
+      "isRelative" : false,
+      "logicalMax" : 1,
+      "logicalMin" : 0,
+      "reportCount" : 1,
+      "reportID" : 2,
+      "reportSize" : 1,
+      "type" : "input.button",
+      "usage" : 3,
+      "usagePage" : 9
+    },
+    {
+      "cookie" : 13,
+      "isArray" : false,
+      "isRelative" : false,
+      "logicalMax" : 1,
+      "logicalMin" : 0,
+      "reportCount" : 1,
+      "reportID" : 2,
+      "reportSize" : 1,
+      "type" : "input.button",
+      "usage" : 4,
+      "usagePage" : 9
+    },
+    {
+      "cookie" : 14,
+      "isArray" : false,
+      "isRelative" : false,
+      "logicalMax" : 1,
+      "logicalMin" : 0,
+      "reportCount" : 1,
+      "reportID" : 2,
+      "reportSize" : 1,
+      "type" : "input.button",
+      "usage" : 5,
+      "usagePage" : 9
+    },
+    {
+      "cookie" : 15,
+      "isArray" : false,
+      "isRelative" : false,
+      "logicalMax" : 1,
+      "logicalMin" : 0,
+      "reportCount" : 1,
+      "reportID" : 2,
+      "reportSize" : 1,
+      "type" : "input.button",
+      "usage" : 6,
+      "usagePage" : 9
+    },
+    {
+      "cookie" : 16,
+      "isArray" : false,
+      "isRelative" : false,
+      "logicalMax" : 1,
+      "logicalMin" : 0,
+      "reportCount" : 1,
+      "reportID" : 2,
+      "reportSize" : 1,
+      "type" : "input.button",
+      "usage" : 7,
+      "usagePage" : 9
+    },
+    {
+      "cookie" : 59,
+      "isArray" : false,
+      "isRelative" : true,
+      "logicalMax" : 2047,
+      "logicalMin" : -2048,
+      "reportCount" : 1,
+      "reportID" : 2,
+      "reportSize" : 12,
+      "type" : "input.misc",
+      "usage" : 48,
+      "usagePage" : 1
+    },
+    {
+      "cookie" : 60,
+      "isArray" : false,
+      "isRelative" : true,
+      "logicalMax" : 2047,
+      "logicalMin" : -2048,
+      "reportCount" : 1,
+      "reportID" : 2,
+      "reportSize" : 12,
+      "type" : "input.misc",
+      "usage" : 49,
+      "usagePage" : 1
+    },
+    {
+      "cookie" : 61,
+      "isArray" : false,
+      "isRelative" : true,
+      "logicalMax" : 127,
+      "logicalMin" : -128,
+      "reportCount" : 1,
+      "reportID" : 2,
+      "reportSize" : 8,
+      "type" : "input.misc",
+      "usage" : 56,
+      "usagePage" : 1
+    },
+    {
+      "cookie" : 62,
+      "isArray" : false,
+      "isRelative" : true,
+      "logicalMax" : 127,
+      "logicalMin" : -128,
+      "reportCount" : 1,
+      "reportID" : 2,
+      "reportSize" : 8,
+      "type" : "input.misc",
+      "usage" : 568,
+      "usagePage" : 12
+    },
+    {
+      "cookie" : 3,
+      "isArray" : true,
+      "isRelative" : false,
+      "logicalMax" : 0,
+      "logicalMin" : 0,
+      "reportCount" : 1,
+      "reportID" : 0,
+      "reportSize" : 0,
+      "type" : "collection",
+      "usage" : 514,
+      "usagePage" : 65347
+    },
+    {
+      "cookie" : 17,
+      "isArray" : true,
+      "isRelative" : false,
+      "logicalMax" : 255,
+      "logicalMin" : 0,
+      "reportCount" : 19,
+      "reportID" : 17,
+      "reportSize" : 8,
+      "type" : "input.button",
+      "usage" : 4294967295,
+      "usagePage" : 65347
+    },
+    {
+      "cookie" : 18,
+      "isArray" : true,
+      "isRelative" : false,
+      "logicalMax" : 255,
+      "logicalMin" : 0,
+      "reportCount" : 1,
+      "reportID" : 17,
+      "reportSize" : 8,
+      "type" : "input.button",
+      "usage" : 4294967295,
+      "usagePage" : 65347
+    },
+    {
+      "cookie" : 19,
+      "isArray" : true,
+      "isRelative" : false,
+      "logicalMax" : 255,
+      "logicalMin" : 0,
+      "reportCount" : 1,
+      "reportID" : 17,
+      "reportSize" : 8,
+      "type" : "input.button",
+      "usage" : 4294967295,
+      "usagePage" : 65347
+    },
+    {
+      "cookie" : 20,
+      "isArray" : true,
+      "isRelative" : false,
+      "logicalMax" : 255,
+      "logicalMin" : 0,
+      "reportCount" : 1,
+      "reportID" : 17,
+      "reportSize" : 8,
+      "type" : "input.button",
+      "usage" : 4294967295,
+      "usagePage" : 65347
+    },
+    {
+      "cookie" : 21,
+      "isArray" : true,
+      "isRelative" : false,
+      "logicalMax" : 255,
+      "logicalMin" : 0,
+      "reportCount" : 1,
+      "reportID" : 17,
+      "reportSize" : 8,
+      "type" : "input.button",
+      "usage" : 4294967295,
+      "usagePage" : 65347
+    },
+    {
+      "cookie" : 22,
+      "isArray" : true,
+      "isRelative" : false,
+      "logicalMax" : 255,
+      "logicalMin" : 0,
+      "reportCount" : 1,
+      "reportID" : 17,
+      "reportSize" : 8,
+      "type" : "input.button",
+      "usage" : 4294967295,
+      "usagePage" : 65347
+    },
+    {
+      "cookie" : 23,
+      "isArray" : true,
+      "isRelative" : false,
+      "logicalMax" : 255,
+      "logicalMin" : 0,
+      "reportCount" : 1,
+      "reportID" : 17,
+      "reportSize" : 8,
+      "type" : "input.button",
+      "usage" : 4294967295,
+      "usagePage" : 65347
+    },
+    {
+      "cookie" : 24,
+      "isArray" : true,
+      "isRelative" : false,
+      "logicalMax" : 255,
+      "logicalMin" : 0,
+      "reportCount" : 1,
+      "reportID" : 17,
+      "reportSize" : 8,
+      "type" : "input.button",
+      "usage" : 4294967295,
+      "usagePage" : 65347
+    },
+    {
+      "cookie" : 25,
+      "isArray" : true,
+      "isRelative" : false,
+      "logicalMax" : 255,
+      "logicalMin" : 0,
+      "reportCount" : 1,
+      "reportID" : 17,
+      "reportSize" : 8,
+      "type" : "input.button",
+      "usage" : 4294967295,
+      "usagePage" : 65347
+    },
+    {
+      "cookie" : 26,
+      "isArray" : true,
+      "isRelative" : false,
+      "logicalMax" : 255,
+      "logicalMin" : 0,
+      "reportCount" : 1,
+      "reportID" : 17,
+      "reportSize" : 8,
+      "type" : "input.button",
+      "usage" : 4294967295,
+      "usagePage" : 65347
+    },
+    {
+      "cookie" : 27,
+      "isArray" : true,
+      "isRelative" : false,
+      "logicalMax" : 255,
+      "logicalMin" : 0,
+      "reportCount" : 1,
+      "reportID" : 17,
+      "reportSize" : 8,
+      "type" : "input.button",
+      "usage" : 4294967295,
+      "usagePage" : 65347
+    },
+    {
+      "cookie" : 28,
+      "isArray" : true,
+      "isRelative" : false,
+      "logicalMax" : 255,
+      "logicalMin" : 0,
+      "reportCount" : 1,
+      "reportID" : 17,
+      "reportSize" : 8,
+      "type" : "input.button",
+      "usage" : 4294967295,
+      "usagePage" : 65347
+    },
+    {
+      "cookie" : 29,
+      "isArray" : true,
+      "isRelative" : false,
+      "logicalMax" : 255,
+      "logicalMin" : 0,
+      "reportCount" : 1,
+      "reportID" : 17,
+      "reportSize" : 8,
+      "type" : "input.button",
+      "usage" : 4294967295,
+      "usagePage" : 65347
+    },
+    {
+      "cookie" : 30,
+      "isArray" : true,
+      "isRelative" : false,
+      "logicalMax" : 255,
+      "logicalMin" : 0,
+      "reportCount" : 1,
+      "reportID" : 17,
+      "reportSize" : 8,
+      "type" : "input.button",
+      "usage" : 4294967295,
+      "usagePage" : 65347
+    },
+    {
+      "cookie" : 31,
+      "isArray" : true,
+      "isRelative" : false,
+      "logicalMax" : 255,
+      "logicalMin" : 0,
+      "reportCount" : 1,
+      "reportID" : 17,
+      "reportSize" : 8,
+      "type" : "input.button",
+      "usage" : 4294967295,
+      "usagePage" : 65347
+    },
+    {
+      "cookie" : 32,
+      "isArray" : true,
+      "isRelative" : false,
+      "logicalMax" : 255,
+      "logicalMin" : 0,
+      "reportCount" : 1,
+      "reportID" : 17,
+      "reportSize" : 8,
+      "type" : "input.button",
+      "usage" : 4294967295,
+      "usagePage" : 65347
+    },
+    {
+      "cookie" : 33,
+      "isArray" : true,
+      "isRelative" : false,
+      "logicalMax" : 255,
+      "logicalMin" : 0,
+      "reportCount" : 1,
+      "reportID" : 17,
+      "reportSize" : 8,
+      "type" : "input.button",
+      "usage" : 4294967295,
+      "usagePage" : 65347
+    },
+    {
+      "cookie" : 34,
+      "isArray" : true,
+      "isRelative" : false,
+      "logicalMax" : 255,
+      "logicalMin" : 0,
+      "reportCount" : 1,
+      "reportID" : 17,
+      "reportSize" : 8,
+      "type" : "input.button",
+      "usage" : 4294967295,
+      "usagePage" : 65347
+    },
+    {
+      "cookie" : 35,
+      "isArray" : true,
+      "isRelative" : false,
+      "logicalMax" : 255,
+      "logicalMin" : 0,
+      "reportCount" : 1,
+      "reportID" : 17,
+      "reportSize" : 8,
+      "type" : "input.button",
+      "usage" : 4294967295,
+      "usagePage" : 65347
+    },
+    {
+      "cookie" : 36,
+      "isArray" : true,
+      "isRelative" : false,
+      "logicalMax" : 255,
+      "logicalMin" : 0,
+      "reportCount" : 1,
+      "reportID" : 17,
+      "reportSize" : 8,
+      "type" : "input.button",
+      "usage" : 4294967295,
+      "usagePage" : 65347
+    },
+    {
+      "cookie" : 37,
+      "isArray" : true,
+      "isRelative" : false,
+      "logicalMax" : 1,
+      "logicalMin" : 0,
+      "reportCount" : 19,
+      "reportID" : 17,
+      "reportSize" : 1,
+      "type" : "input.button",
+      "usage" : 2,
+      "usagePage" : 65347
+    },
+    {
+      "cookie" : 38,
+      "isArray" : true,
+      "isRelative" : false,
+      "logicalMax" : 255,
+      "logicalMin" : 0,
+      "reportCount" : 19,
+      "reportID" : 17,
+      "reportSize" : 8,
+      "type" : "output",
+      "usage" : 4294967295,
+      "usagePage" : 65347
+    },
+    {
+      "cookie" : 39,
+      "isArray" : true,
+      "isRelative" : false,
+      "logicalMax" : 255,
+      "logicalMin" : 0,
+      "reportCount" : 1,
+      "reportID" : 17,
+      "reportSize" : 8,
+      "type" : "output",
+      "usage" : 4294967295,
+      "usagePage" : 65347
+    },
+    {
+      "cookie" : 40,
+      "isArray" : true,
+      "isRelative" : false,
+      "logicalMax" : 255,
+      "logicalMin" : 0,
+      "reportCount" : 1,
+      "reportID" : 17,
+      "reportSize" : 8,
+      "type" : "output",
+      "usage" : 4294967295,
+      "usagePage" : 65347
+    },
+    {
+      "cookie" : 41,
+      "isArray" : true,
+      "isRelative" : false,
+      "logicalMax" : 255,
+      "logicalMin" : 0,
+      "reportCount" : 1,
+      "reportID" : 17,
+      "reportSize" : 8,
+      "type" : "output",
+      "usage" : 4294967295,
+      "usagePage" : 65347
+    },
+    {
+      "cookie" : 42,
+      "isArray" : true,
+      "isRelative" : false,
+      "logicalMax" : 255,
+      "logicalMin" : 0,
+      "reportCount" : 1,
+      "reportID" : 17,
+      "reportSize" : 8,
+      "type" : "output",
+      "usage" : 4294967295,
+      "usagePage" : 65347
+    },
+    {
+      "cookie" : 43,
+      "isArray" : true,
+      "isRelative" : false,
+      "logicalMax" : 255,
+      "logicalMin" : 0,
+      "reportCount" : 1,
+      "reportID" : 17,
+      "reportSize" : 8,
+      "type" : "output",
+      "usage" : 4294967295,
+      "usagePage" : 65347
+    },
+    {
+      "cookie" : 44,
+      "isArray" : true,
+      "isRelative" : false,
+      "logicalMax" : 255,
+      "logicalMin" : 0,
+      "reportCount" : 1,
+      "reportID" : 17,
+      "reportSize" : 8,
+      "type" : "output",
+      "usage" : 4294967295,
+      "usagePage" : 65347
+    },
+    {
+      "cookie" : 45,
+      "isArray" : true,
+      "isRelative" : false,
+      "logicalMax" : 255,
+      "logicalMin" : 0,
+      "reportCount" : 1,
+      "reportID" : 17,
+      "reportSize" : 8,
+      "type" : "output",
+      "usage" : 4294967295,
+      "usagePage" : 65347
+    },
+    {
+      "cookie" : 46,
+      "isArray" : true,
+      "isRelative" : false,
+      "logicalMax" : 255,
+      "logicalMin" : 0,
+      "reportCount" : 1,
+      "reportID" : 17,
+      "reportSize" : 8,
+      "type" : "output",
+      "usage" : 4294967295,
+      "usagePage" : 65347
+    },
+    {
+      "cookie" : 47,
+      "isArray" : true,
+      "isRelative" : false,
+      "logicalMax" : 255,
+      "logicalMin" : 0,
+      "reportCount" : 1,
+      "reportID" : 17,
+      "reportSize" : 8,
+      "type" : "output",
+      "usage" : 4294967295,
+      "usagePage" : 65347
+    },
+    {
+      "cookie" : 48,
+      "isArray" : true,
+      "isRelative" : false,
+      "logicalMax" : 255,
+      "logicalMin" : 0,
+      "reportCount" : 1,
+      "reportID" : 17,
+      "reportSize" : 8,
+      "type" : "output",
+      "usage" : 4294967295,
+      "usagePage" : 65347
+    },
+    {
+      "cookie" : 49,
+      "isArray" : true,
+      "isRelative" : false,
+      "logicalMax" : 255,
+      "logicalMin" : 0,
+      "reportCount" : 1,
+      "reportID" : 17,
+      "reportSize" : 8,
+      "type" : "output",
+      "usage" : 4294967295,
+      "usagePage" : 65347
+    },
+    {
+      "cookie" : 50,
+      "isArray" : true,
+      "isRelative" : false,
+      "logicalMax" : 255,
+      "logicalMin" : 0,
+      "reportCount" : 1,
+      "reportID" : 17,
+      "reportSize" : 8,
+      "type" : "output",
+      "usage" : 4294967295,
+      "usagePage" : 65347
+    },
+    {
+      "cookie" : 51,
+      "isArray" : true,
+      "isRelative" : false,
+      "logicalMax" : 255,
+      "logicalMin" : 0,
+      "reportCount" : 1,
+      "reportID" : 17,
+      "reportSize" : 8,
+      "type" : "output",
+      "usage" : 4294967295,
+      "usagePage" : 65347
+    },
+    {
+      "cookie" : 52,
+      "isArray" : true,
+      "isRelative" : false,
+      "logicalMax" : 255,
+      "logicalMin" : 0,
+      "reportCount" : 1,
+      "reportID" : 17,
+      "reportSize" : 8,
+      "type" : "output",
+      "usage" : 4294967295,
+      "usagePage" : 65347
+    },
+    {
+      "cookie" : 53,
+      "isArray" : true,
+      "isRelative" : false,
+      "logicalMax" : 255,
+      "logicalMin" : 0,
+      "reportCount" : 1,
+      "reportID" : 17,
+      "reportSize" : 8,
+      "type" : "output",
+      "usage" : 4294967295,
+      "usagePage" : 65347
+    },
+    {
+      "cookie" : 54,
+      "isArray" : true,
+      "isRelative" : false,
+      "logicalMax" : 255,
+      "logicalMin" : 0,
+      "reportCount" : 1,
+      "reportID" : 17,
+      "reportSize" : 8,
+      "type" : "output",
+      "usage" : 4294967295,
+      "usagePage" : 65347
+    },
+    {
+      "cookie" : 55,
+      "isArray" : true,
+      "isRelative" : false,
+      "logicalMax" : 255,
+      "logicalMin" : 0,
+      "reportCount" : 1,
+      "reportID" : 17,
+      "reportSize" : 8,
+      "type" : "output",
+      "usage" : 4294967295,
+      "usagePage" : 65347
+    },
+    {
+      "cookie" : 56,
+      "isArray" : true,
+      "isRelative" : false,
+      "logicalMax" : 255,
+      "logicalMin" : 0,
+      "reportCount" : 1,
+      "reportID" : 17,
+      "reportSize" : 8,
+      "type" : "output",
+      "usage" : 4294967295,
+      "usagePage" : 65347
+    },
+    {
+      "cookie" : 57,
+      "isArray" : true,
+      "isRelative" : false,
+      "logicalMax" : 255,
+      "logicalMin" : 0,
+      "reportCount" : 1,
+      "reportID" : 17,
+      "reportSize" : 8,
+      "type" : "output",
+      "usage" : 4294967295,
+      "usagePage" : 65347
+    },
+    {
+      "cookie" : 58,
+      "isArray" : true,
+      "isRelative" : false,
+      "logicalMax" : 1,
+      "logicalMin" : 0,
+      "reportCount" : 19,
+      "reportID" : 17,
+      "reportSize" : 1,
+      "type" : "output",
+      "usage" : 2,
+      "usagePage" : 65347
+    },
+    {
+      "cookie" : 5,
+      "isArray" : true,
+      "isRelative" : false,
+      "logicalMax" : 0,
+      "logicalMin" : 0,
+      "reportCount" : 1,
+      "reportID" : 0,
+      "reportSize" : 0,
+      "type" : "type(5)",
+      "usage" : 4294967295,
+      "usagePage" : 0
+    },
+    {
+      "cookie" : 4,
+      "isArray" : true,
+      "isRelative" : false,
+      "logicalMax" : 1,
+      "logicalMin" : 0,
+      "reportCount" : 1,
+      "reportID" : 0,
+      "reportSize" : 1,
+      "type" : "type(5)",
+      "usage" : 0,
+      "usagePage" : 0
+    },
+    {
+      "cookie" : 7,
+      "isArray" : true,
+      "isRelative" : false,
+      "logicalMax" : 0,
+      "logicalMin" : 0,
+      "reportCount" : 1,
+      "reportID" : 2,
+      "reportSize" : 0,
+      "type" : "type(5)",
+      "usage" : 4294967295,
+      "usagePage" : 0
+    },
+    {
+      "cookie" : 6,
+      "isArray" : true,
+      "isRelative" : false,
+      "logicalMax" : 1,
+      "logicalMin" : 0,
+      "reportCount" : 1,
+      "reportID" : 2,
+      "reportSize" : 1,
+      "type" : "type(5)",
+      "usage" : 0,
+      "usagePage" : 0
+    },
+    {
+      "cookie" : 9,
+      "isArray" : true,
+      "isRelative" : false,
+      "logicalMax" : 0,
+      "logicalMin" : 0,
+      "reportCount" : 1,
+      "reportID" : 17,
+      "reportSize" : 0,
+      "type" : "type(5)",
+      "usage" : 4294967295,
+      "usagePage" : 0
+    },
+    {
+      "cookie" : 8,
+      "isArray" : true,
+      "isRelative" : false,
+      "logicalMax" : 1,
+      "logicalMin" : 0,
+      "reportCount" : 1,
+      "reportID" : 17,
+      "reportSize" : 1,
+      "type" : "type(5)",
+      "usage" : 0,
+      "usagePage" : 0
+    }
+  ],
+  "liveCaptures" : [
+    {
+      "cookie" : 10,
+      "id" : "61D262AB-1857-4688-BA8A-C6D89E56EDBD",
+      "integerValue" : 1,
+      "timestamp" : "2026-05-02T12:52:05Z",
+      "usage" : 1,
+      "usagePage" : 9
+    },
+    {
+      "cookie" : 59,
+      "id" : "6A02B289-4510-4607-88CD-5BF7CD76F78A",
+      "integerValue" : 0,
+      "timestamp" : "2026-05-02T12:52:05Z",
+      "usage" : 48,
+      "usagePage" : 1
+    },
+    {
+      "cookie" : 60,
+      "id" : "5AD3627A-007C-47B4-9FB6-C4753C57F6A8",
+      "integerValue" : 0,
+      "timestamp" : "2026-05-02T12:52:05Z",
+      "usage" : 49,
+      "usagePage" : 1
+    },
+    {
+      "cookie" : 61,
+      "id" : "CECF5F25-E959-4321-ABD0-8641BC8C2C4A",
+      "integerValue" : 0,
+      "timestamp" : "2026-05-02T12:52:05Z",
+      "usage" : 56,
+      "usagePage" : 1
+    },
+    {
+      "cookie" : 62,
+      "id" : "6440898F-A2B8-4022-8CC1-22053629C5FA",
+      "integerValue" : 0,
+      "timestamp" : "2026-05-02T12:52:05Z",
+      "usage" : 568,
+      "usagePage" : 12
+    },
+    {
+      "cookie" : 59,
+      "id" : "0B6BCF33-54A7-492B-A403-91B61056CE56",
+      "integerValue" : 0,
+      "timestamp" : "2026-05-02T12:52:04Z",
+      "usage" : 48,
+      "usagePage" : 1
+    },
+    {
+      "cookie" : 60,
+      "id" : "9BAB3225-9437-495F-A3A2-1EC607507BCC",
+      "integerValue" : 1,
+      "timestamp" : "2026-05-02T12:52:04Z",
+      "usage" : 49,
+      "usagePage" : 1
+    },
+    {
+      "cookie" : 61,
+      "id" : "D23868D2-AB61-4BAE-BED3-1F9045B6B1B0",
+      "integerValue" : 0,
+      "timestamp" : "2026-05-02T12:52:04Z",
+      "usage" : 56,
+      "usagePage" : 1
+    },
+    {
+      "cookie" : 62,
+      "id" : "9E55C9CA-4387-42ED-B32E-4A59EE7C658C",
+      "integerValue" : 0,
+      "timestamp" : "2026-05-02T12:52:04Z",
+      "usage" : 568,
+      "usagePage" : 12
+    },
+    {
+      "cookie" : 59,
+      "id" : "D345DF40-58D7-4AF0-94F6-5B16824C41C3",
+      "integerValue" : -1,
+      "timestamp" : "2026-05-02T12:52:04Z",
+      "usage" : 48,
+      "usagePage" : 1
+    },
+    {
+      "cookie" : 60,
+      "id" : "9C834CC8-DAA2-440F-B27A-9573C9347389",
+      "integerValue" : 0,
+      "timestamp" : "2026-05-02T12:52:04Z",
+      "usage" : 49,
+      "usagePage" : 1
+    },
+    {
+      "cookie" : 61,
+      "id" : "DFDFF174-5A44-49F0-9C1E-75BC6447F6DB",
+      "integerValue" : 0,
+      "timestamp" : "2026-05-02T12:52:04Z",
+      "usage" : 56,
+      "usagePage" : 1
+    },
+    {
+      "cookie" : 62,
+      "id" : "ED9ECB06-A238-4747-A2B8-DD96D9D4C75C",
+      "integerValue" : 0,
+      "timestamp" : "2026-05-02T12:52:04Z",
+      "usage" : 568,
+      "usagePage" : 12
+    },
+    {
+      "cookie" : 59,
+      "id" : "AADF958F-1C2E-4E6C-8E05-FE9455856FB8",
+      "integerValue" : 0,
+      "timestamp" : "2026-05-02T12:52:04Z",
+      "usage" : 48,
+      "usagePage" : 1
+    },
+    {
+      "cookie" : 60,
+      "id" : "A0FBAA77-52F3-4D26-A6DC-AB100F08D6AD",
+      "integerValue" : 1,
+      "timestamp" : "2026-05-02T12:52:04Z",
+      "usage" : 49,
+      "usagePage" : 1
+    },
+    {
+      "cookie" : 61,
+      "id" : "10491F88-16FD-4294-A98A-7755785092BC",
+      "integerValue" : 0,
+      "timestamp" : "2026-05-02T12:52:04Z",
+      "usage" : 56,
+      "usagePage" : 1
+    },
+    {
+      "cookie" : 62,
+      "id" : "43955CA0-B1FE-4E3B-B14E-D48F135D986F",
+      "integerValue" : 0,
+      "timestamp" : "2026-05-02T12:52:04Z",
+      "usage" : 568,
+      "usagePage" : 12
+    },
+    {
+      "cookie" : 59,
+      "id" : "6881F5C3-E32A-462F-BD1B-8CA00A9BA617",
+      "integerValue" : -1,
+      "timestamp" : "2026-05-02T12:52:04Z",
+      "usage" : 48,
+      "usagePage" : 1
+    },
+    {
+      "cookie" : 60,
+      "id" : "BC9D47DE-8D22-4E73-B291-8D320AD57551",
+      "integerValue" : 1,
+      "timestamp" : "2026-05-02T12:52:04Z",
+      "usage" : 49,
+      "usagePage" : 1
+    },
+    {
+      "cookie" : 61,
+      "id" : "62F04738-A64D-4570-84E7-28EDF09A006C",
+      "integerValue" : 0,
+      "timestamp" : "2026-05-02T12:52:04Z",
+      "usage" : 56,
+      "usagePage" : 1
+    },
+    {
+      "cookie" : 62,
+      "id" : "6DDB0CEC-0AD7-41C8-89BC-4E686ECB3A61",
+      "integerValue" : 0,
+      "timestamp" : "2026-05-02T12:52:04Z",
+      "usage" : 568,
+      "usagePage" : 12
+    },
+    {
+      "cookie" : 59,
+      "id" : "FB70BFE5-A825-4306-BDD6-277689885462",
+      "integerValue" : -1,
+      "timestamp" : "2026-05-02T12:52:04Z",
+      "usage" : 48,
+      "usagePage" : 1
+    },
+    {
+      "cookie" : 60,
+      "id" : "34A2DD27-5746-458F-AE4A-2C9977BA5FBA",
+      "integerValue" : 1,
+      "timestamp" : "2026-05-02T12:52:04Z",
+      "usage" : 49,
+      "usagePage" : 1
+    },
+    {
+      "cookie" : 61,
+      "id" : "D44E938C-091C-49B2-A864-7D97AACA0C1B",
+      "integerValue" : 0,
+      "timestamp" : "2026-05-02T12:52:04Z",
+      "usage" : 56,
+      "usagePage" : 1
+    },
+    {
+      "cookie" : 62,
+      "id" : "DEBEDF34-8127-4005-B197-A63D022FBE1C",
+      "integerValue" : 0,
+      "timestamp" : "2026-05-02T12:52:04Z",
+      "usage" : 568,
+      "usagePage" : 12
+    },
+    {
+      "cookie" : 59,
+      "id" : "0730FB60-898C-4889-B61A-941ED4393F3A",
+      "integerValue" : -2,
+      "timestamp" : "2026-05-02T12:52:04Z",
+      "usage" : 48,
+      "usagePage" : 1
+    },
+    {
+      "cookie" : 60,
+      "id" : "6B95F9CD-3FC4-4CD7-BFC3-7E33CF957286",
+      "integerValue" : 1,
+      "timestamp" : "2026-05-02T12:52:04Z",
+      "usage" : 49,
+      "usagePage" : 1
+    },
+    {
+      "cookie" : 61,
+      "id" : "90F20E7D-5DCE-47BE-A01A-BA209B10743C",
+      "integerValue" : 0,
+      "timestamp" : "2026-05-02T12:52:04Z",
+      "usage" : 56,
+      "usagePage" : 1
+    },
+    {
+      "cookie" : 62,
+      "id" : "80C1364B-5935-4815-BD8A-6227BD10EB27",
+      "integerValue" : 0,
+      "timestamp" : "2026-05-02T12:52:04Z",
+      "usage" : 568,
+      "usagePage" : 12
+    },
+    {
+      "cookie" : 59,
+      "id" : "41087FF1-CC0F-44C9-87D7-6D7F5020D14E",
+      "integerValue" : -1,
+      "timestamp" : "2026-05-02T12:52:04Z",
+      "usage" : 48,
+      "usagePage" : 1
+    },
+    {
+      "cookie" : 60,
+      "id" : "DE92CF2F-8623-4B7A-B793-A4DAC3D479E2",
+      "integerValue" : 1,
+      "timestamp" : "2026-05-02T12:52:04Z",
+      "usage" : 49,
+      "usagePage" : 1
+    },
+    {
+      "cookie" : 61,
+      "id" : "2E4E220F-E895-4977-954F-2FC69132A18B",
+      "integerValue" : 0,
+      "timestamp" : "2026-05-02T12:52:04Z",
+      "usage" : 56,
+      "usagePage" : 1
+    },
+    {
+      "cookie" : 62,
+      "id" : "C6269525-DE07-44A2-ABA2-CA0B1054309D",
+      "integerValue" : 0,
+      "timestamp" : "2026-05-02T12:52:04Z",
+      "usage" : 568,
+      "usagePage" : 12
+    },
+    {
+      "cookie" : 59,
+      "id" : "0F012367-5E25-4544-AF1E-5982951F8550",
+      "integerValue" : -1,
+      "timestamp" : "2026-05-02T12:52:04Z",
+      "usage" : 48,
+      "usagePage" : 1
+    },
+    {
+      "cookie" : 60,
+      "id" : "245A0564-B51B-4CC6-A952-90F877175852",
+      "integerValue" : 0,
+      "timestamp" : "2026-05-02T12:52:04Z",
+      "usage" : 49,
+      "usagePage" : 1
+    },
+    {
+      "cookie" : 61,
+      "id" : "45CD7BDA-C8E2-496D-B9AF-17DC62E4DC9B",
+      "integerValue" : 0,
+      "timestamp" : "2026-05-02T12:52:04Z",
+      "usage" : 56,
+      "usagePage" : 1
+    },
+    {
+      "cookie" : 62,
+      "id" : "CB0B2B28-0E1D-4AAE-A5C9-046940544357",
+      "integerValue" : 0,
+      "timestamp" : "2026-05-02T12:52:04Z",
+      "usage" : 568,
+      "usagePage" : 12
+    },
+    {
+      "cookie" : 59,
+      "id" : "43EE0DBD-13E1-43F1-8E6E-3A6BAD2D2029",
+      "integerValue" : -1,
+      "timestamp" : "2026-05-02T12:52:04Z",
+      "usage" : 48,
+      "usagePage" : 1
+    },
+    {
+      "cookie" : 60,
+      "id" : "AC7C4548-F510-4F7B-9966-1A5BF40DEE03",
+      "integerValue" : 1,
+      "timestamp" : "2026-05-02T12:52:04Z",
+      "usage" : 49,
+      "usagePage" : 1
+    },
+    {
+      "cookie" : 61,
+      "id" : "FEA823E3-D8EC-41DA-9D7B-D0AB01D7E8C6",
+      "integerValue" : 0,
+      "timestamp" : "2026-05-02T12:52:04Z",
+      "usage" : 56,
+      "usagePage" : 1
+    },
+    {
+      "cookie" : 62,
+      "id" : "693116A4-0EF8-4288-87BE-8795F5F48FAC",
+      "integerValue" : 0,
+      "timestamp" : "2026-05-02T12:52:04Z",
+      "usage" : 568,
+      "usagePage" : 12
+    },
+    {
+      "cookie" : 59,
+      "id" : "D889AF3B-B4F5-4EB1-AEED-9CEC02319EAC",
+      "integerValue" : -1,
+      "timestamp" : "2026-05-02T12:52:04Z",
+      "usage" : 48,
+      "usagePage" : 1
+    },
+    {
+      "cookie" : 60,
+      "id" : "1BECBEC8-E97F-4A83-A639-6E08E5A809F1",
+      "integerValue" : 0,
+      "timestamp" : "2026-05-02T12:52:04Z",
+      "usage" : 49,
+      "usagePage" : 1
+    },
+    {
+      "cookie" : 61,
+      "id" : "98F8CF46-B0F9-4028-89D0-009A67454637",
+      "integerValue" : 0,
+      "timestamp" : "2026-05-02T12:52:04Z",
+      "usage" : 56,
+      "usagePage" : 1
+    },
+    {
+      "cookie" : 62,
+      "id" : "47DBEBDF-A728-4314-9188-4CDC9C46EB9D",
+      "integerValue" : 0,
+      "timestamp" : "2026-05-02T12:52:04Z",
+      "usage" : 568,
+      "usagePage" : 12
+    },
+    {
+      "cookie" : 59,
+      "id" : "BB4FF229-ACA1-47D9-89F3-6D85B4416D2C",
+      "integerValue" : -4,
+      "timestamp" : "2026-05-02T12:52:04Z",
+      "usage" : 48,
+      "usagePage" : 1
+    },
+    {
+      "cookie" : 60,
+      "id" : "847002EC-8A82-492F-853B-0C2B612F7452",
+      "integerValue" : 0,
+      "timestamp" : "2026-05-02T12:52:04Z",
+      "usage" : 49,
+      "usagePage" : 1
+    },
+    {
+      "cookie" : 61,
+      "id" : "AD3547EC-F2B8-4327-927B-BA78F9156A64",
+      "integerValue" : 0,
+      "timestamp" : "2026-05-02T12:52:04Z",
+      "usage" : 56,
+      "usagePage" : 1
+    },
+    {
+      "cookie" : 62,
+      "id" : "3F7D5563-063D-4890-BB94-997937706B22",
+      "integerValue" : 0,
+      "timestamp" : "2026-05-02T12:52:04Z",
+      "usage" : 568,
+      "usagePage" : 12
+    },
+    {
+      "cookie" : 59,
+      "id" : "72D75A8A-A144-4866-A6A2-0A12EC8A830E",
+      "integerValue" : -3,
+      "timestamp" : "2026-05-02T12:52:04Z",
+      "usage" : 48,
+      "usagePage" : 1
+    },
+    {
+      "cookie" : 60,
+      "id" : "1D3973D7-C8BC-4562-9A8F-66834BB45C99",
+      "integerValue" : 0,
+      "timestamp" : "2026-05-02T12:52:04Z",
+      "usage" : 49,
+      "usagePage" : 1
+    },
+    {
+      "cookie" : 61,
+      "id" : "9E38404B-5B20-42A6-AA36-1F1DA5BC6D44",
+      "integerValue" : 0,
+      "timestamp" : "2026-05-02T12:52:04Z",
+      "usage" : 56,
+      "usagePage" : 1
+    },
+    {
+      "cookie" : 62,
+      "id" : "33D8608D-00AD-45E6-8C6B-16FC92B9B7BF",
+      "integerValue" : 0,
+      "timestamp" : "2026-05-02T12:52:04Z",
+      "usage" : 568,
+      "usagePage" : 12
+    },
+    {
+      "cookie" : 59,
+      "id" : "66D67393-E207-4102-B0CC-63B2B05C049F",
+      "integerValue" : -2,
+      "timestamp" : "2026-05-02T12:52:04Z",
+      "usage" : 48,
+      "usagePage" : 1
+    },
+    {
+      "cookie" : 60,
+      "id" : "49DFC0C8-25FE-4ED1-809B-92E39CB7046C",
+      "integerValue" : 0,
+      "timestamp" : "2026-05-02T12:52:04Z",
+      "usage" : 49,
+      "usagePage" : 1
+    },
+    {
+      "cookie" : 61,
+      "id" : "3972FAA4-1201-45BA-A1B1-697890F8776E",
+      "integerValue" : 0,
+      "timestamp" : "2026-05-02T12:52:04Z",
+      "usage" : 56,
+      "usagePage" : 1
+    },
+    {
+      "cookie" : 62,
+      "id" : "5D3CFA5C-9FED-42D2-A0F9-B879090F4595",
+      "integerValue" : 0,
+      "timestamp" : "2026-05-02T12:52:04Z",
+      "usage" : 568,
+      "usagePage" : 12
+    },
+    {
+      "cookie" : 59,
+      "id" : "34D1E32B-798B-4453-958C-BC8CDB1A426B",
+      "integerValue" : -2,
+      "timestamp" : "2026-05-02T12:52:04Z",
+      "usage" : 48,
+      "usagePage" : 1
+    },
+    {
+      "cookie" : 60,
+      "id" : "5D9A5834-9C7E-4CEB-8F94-A7758E4FAF02",
+      "integerValue" : 0,
+      "timestamp" : "2026-05-02T12:52:04Z",
+      "usage" : 49,
+      "usagePage" : 1
+    },
+    {
+      "cookie" : 61,
+      "id" : "715402A9-CC77-4333-BF80-974573AA1DAB",
+      "integerValue" : 0,
+      "timestamp" : "2026-05-02T12:52:04Z",
+      "usage" : 56,
+      "usagePage" : 1
+    },
+    {
+      "cookie" : 62,
+      "id" : "10141B6E-EE8D-46A7-AC97-A10536CADDA2",
+      "integerValue" : 0,
+      "timestamp" : "2026-05-02T12:52:04Z",
+      "usage" : 568,
+      "usagePage" : 12
+    },
+    {
+      "cookie" : 59,
+      "id" : "23166ADA-A7CF-4B24-A59F-ADBD3D054EFA",
+      "integerValue" : -2,
+      "timestamp" : "2026-05-02T12:52:04Z",
+      "usage" : 48,
+      "usagePage" : 1
+    },
+    {
+      "cookie" : 60,
+      "id" : "9FADD423-95B1-40A2-B998-5486AA88EA50",
+      "integerValue" : 0,
+      "timestamp" : "2026-05-02T12:52:04Z",
+      "usage" : 49,
+      "usagePage" : 1
+    },
+    {
+      "cookie" : 61,
+      "id" : "F71DF0B6-A7FA-45FF-86F0-92AC3CAF78AF",
+      "integerValue" : 0,
+      "timestamp" : "2026-05-02T12:52:04Z",
+      "usage" : 56,
+      "usagePage" : 1
+    },
+    {
+      "cookie" : 62,
+      "id" : "FE84C452-39E7-4AB4-82C7-B25334F18196",
+      "integerValue" : 0,
+      "timestamp" : "2026-05-02T12:52:04Z",
+      "usage" : 568,
+      "usagePage" : 12
+    },
+    {
+      "cookie" : 59,
+      "id" : "1A446B78-F8E4-4268-80E7-8963F39F0F0C",
+      "integerValue" : -2,
+      "timestamp" : "2026-05-02T12:52:04Z",
+      "usage" : 48,
+      "usagePage" : 1
+    },
+    {
+      "cookie" : 60,
+      "id" : "51C55DAA-2EB1-4EF2-8929-CB23FCCB34C9",
+      "integerValue" : 0,
+      "timestamp" : "2026-05-02T12:52:04Z",
+      "usage" : 49,
+      "usagePage" : 1
+    },
+    {
+      "cookie" : 61,
+      "id" : "D4447DB3-F536-4F81-87A6-0FF772EEE984",
+      "integerValue" : 0,
+      "timestamp" : "2026-05-02T12:52:04Z",
+      "usage" : 56,
+      "usagePage" : 1
+    },
+    {
+      "cookie" : 62,
+      "id" : "29A2710C-074A-4917-9650-82D08E4F3DB9",
+      "integerValue" : 0,
+      "timestamp" : "2026-05-02T12:52:04Z",
+      "usage" : 568,
+      "usagePage" : 12
+    },
+    {
+      "cookie" : 59,
+      "id" : "3DCA1839-84CC-4175-9205-9ECA2123BBAA",
+      "integerValue" : -3,
+      "timestamp" : "2026-05-02T12:52:04Z",
+      "usage" : 48,
+      "usagePage" : 1
+    },
+    {
+      "cookie" : 60,
+      "id" : "8E9C8837-6F8C-43A5-85E0-929E82F41361",
+      "integerValue" : 0,
+      "timestamp" : "2026-05-02T12:52:04Z",
+      "usage" : 49,
+      "usagePage" : 1
+    },
+    {
+      "cookie" : 61,
+      "id" : "20538453-D1D8-4BC7-BC0E-9494E4A67E11",
+      "integerValue" : 0,
+      "timestamp" : "2026-05-02T12:52:04Z",
+      "usage" : 56,
+      "usagePage" : 1
+    },
+    {
+      "cookie" : 62,
+      "id" : "10FC68C9-C244-4E18-9175-AFBD24E1F267",
+      "integerValue" : 0,
+      "timestamp" : "2026-05-02T12:52:04Z",
+      "usage" : 568,
+      "usagePage" : 12
+    },
+    {
+      "cookie" : 59,
+      "id" : "C6E806A2-59BB-4D27-B8E5-E84D0F8EFB29",
+      "integerValue" : -5,
+      "timestamp" : "2026-05-02T12:52:04Z",
+      "usage" : 48,
+      "usagePage" : 1
+    },
+    {
+      "cookie" : 60,
+      "id" : "D3DA609C-98CF-4B40-86AB-F8FFB52973EE",
+      "integerValue" : 0,
+      "timestamp" : "2026-05-02T12:52:04Z",
+      "usage" : 49,
+      "usagePage" : 1
+    },
+    {
+      "cookie" : 61,
+      "id" : "D233E7B0-1B53-4E69-AE99-1F49D08E088F",
+      "integerValue" : 0,
+      "timestamp" : "2026-05-02T12:52:04Z",
+      "usage" : 56,
+      "usagePage" : 1
+    },
+    {
+      "cookie" : 62,
+      "id" : "99A3D8A7-A4AC-4A78-9C88-6E0A707DDDBC",
+      "integerValue" : 0,
+      "timestamp" : "2026-05-02T12:52:04Z",
+      "usage" : 568,
+      "usagePage" : 12
+    },
+    {
+      "cookie" : 59,
+      "id" : "AFA637C0-88C4-4FA0-BBBE-C99B11AFAEAD",
+      "integerValue" : -3,
+      "timestamp" : "2026-05-02T12:52:04Z",
+      "usage" : 48,
+      "usagePage" : 1
+    },
+    {
+      "cookie" : 60,
+      "id" : "BCA1BECD-8517-423E-8F3E-80CFA2D29D90",
+      "integerValue" : 1,
+      "timestamp" : "2026-05-02T12:52:04Z",
+      "usage" : 49,
+      "usagePage" : 1
+    },
+    {
+      "cookie" : 61,
+      "id" : "32553A06-33D5-4155-B2EC-DF754084613D",
+      "integerValue" : 0,
+      "timestamp" : "2026-05-02T12:52:04Z",
+      "usage" : 56,
+      "usagePage" : 1
+    }
+  ],
+  "rawReports" : [
+
+  ],
+  "schemaVersion" : 2
+}

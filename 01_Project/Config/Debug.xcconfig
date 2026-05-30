@@ -1,0 +1,30 @@
+// Debug.xcconfig
+// Debug configuration for macOS projects.
+
+#include "Shared.xcconfig"
+
+// Stable signing for Debug builds.
+//
+// Without this, ad-hoc signing (`-`) gives every build a different cdhash,
+// which invalidates TCC grants (Accessibility, Input Monitoring) on every
+// rebuild — forcing the user to re-grant after every iteration.
+//
+// With Apple Development + a fixed Team ID, the signing certificate chain
+// is stable, so macOS records the grant against a Designated Requirement
+// like `anchor apple generic AND identifier = com.xpycode.MousePlus AND
+// certificate leaf[subject.OU] = H56HM4MMZS`. Subsequent rebuilds satisfy
+// that requirement automatically.
+CODE_SIGN_STYLE = Manual
+DEVELOPMENT_TEAM = H56HM4MMZS
+
+// CODE_SIGN_IDENTITY is per-machine: each Mac has its own Apple Development
+// cert under team H56HM4MMZS with a different SHA-1, and we pin by SHA-1
+// because Xcode's macOS build pipeline still resolves the canonical name to
+// "Mac Development" (legacy) which doesn't match modern "Apple Development"
+// certs by name.
+//
+// Each Mac supplies its own SHA-1 via Debug.local.xcconfig (gitignored,
+// .stignore'd) sitting next to this file. To bootstrap a new machine:
+//   1. security find-identity -v -p codesigning | grep "Apple Development"
+//   2. echo 'CODE_SIGN_IDENTITY = <sha-1>' > 01_Project/Config/Debug.local.xcconfig
+#include? "Debug.local.xcconfig"
