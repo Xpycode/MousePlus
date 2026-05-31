@@ -27,8 +27,8 @@ Make the inner + middle rings user-customizable in-app via a dedicated resizable
 - [x] **T8**: `MenuEditorView` assembly (band switch, count, preview+form) -> `01_Project/MousePlus/Views/MenuEditor/MenuEditorView.swift`
 
 ### Wave 4 (window, persistence, launcher — depends W3)
-- [ ] **T9**: `MenuEditorWindowController` + replace `MenuSettingsView` stub with launcher -> `01_Project/MousePlus/Controllers/MenuEditorWindowController.swift`, `01_Project/MousePlus/Views/SettingsView.swift`
-- [ ] **T10**: load-on-open + debounced save + live-apply + Reset-to-Defaults wiring
+- [x] **T9**: `MenuEditorWindowController` + replace `MenuSettingsView` stub with launcher; AppDelegate `showMenuEditor` bridge -> `01_Project/MousePlus/Controllers/MenuEditorWindowController.swift`, `01_Project/MousePlus/Views/SettingsView.swift`, `01_Project/MousePlus/MousePlusApp.swift`
+- [x] **T10**: load-on-open + withObservationTracking debounced autosave (400ms) + applyMenuItems live-apply + flush-on-close; Reset owned by editor view
 
 ### Wave 5 (edge cases + verification)
 - [ ] **T11**: UI invariants (8-cap, symbol validation, inner no-label, sub-items middle-only, appSwitch icon note)

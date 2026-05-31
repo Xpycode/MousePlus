@@ -40,6 +40,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// to disk by the editor, so the next open reflects it regardless).
     @MainActor static var applyMenuItems: ((Configuration) -> Void)?
 
+    /// Settings → app bridge: opens the standalone Menu Items editor window.
+    @MainActor static var showMenuEditor: (() -> Void)?
+
     private var menuBarController: MenuBarController?
     private var ringWindowController: RingWindowController?
     private var triggerService: TriggerService?
@@ -48,6 +51,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var permissionsService = PermissionsService()
     private var onboardingWindowController: OnboardingWindowController?
     private var inputRecorderWindowController: InputRecorderWindowController?
+    private var menuEditorWindowController: MenuEditorWindowController?
 
     private var ringViewModel = RingViewModel()
     private var dismissMonitor: DismissMonitor?
@@ -120,6 +124,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         inputRecorderWindowController?.show()
     }
 
+    private func showMenuEditor() {
+        if menuEditorWindowController == nil {
+            menuEditorWindowController = MenuEditorWindowController()
+        }
+        menuEditorWindowController?.show()
+    }
+
     private func setupTriggers() {
         let service = TriggerService()
         triggerService = service
@@ -180,6 +191,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             // Drop any stale expansion/selection so the next ring open reflects the new items cleanly.
             self.ringViewModel.reset()
         }
+
+        // Open the standalone Menu Items editor from the Settings launcher.
+        AppDelegate.showMenuEditor = { [weak self] in self?.showMenuEditor() }
 
         Task {
             if let config = try? await configService?.load() {
