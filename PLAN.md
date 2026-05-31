@@ -22,9 +22,9 @@ Make the inner + middle rings user-customizable in-app via a dedicated resizable
 - [x] **T5**: `ActionDataEditor` (type-aware control) -> `01_Project/MousePlus/Views/MenuEditor/ActionDataEditor.swift`
 
 ### Wave 3 (editor shell — depends W1, W2)
-- [ ] **T6**: `RingPreviewSelector` (reuse RingMenuView, hit-test off, selection overlay, ghosts) -> `01_Project/MousePlus/Views/MenuEditor/RingPreviewSelector.swift`
-- [ ] **T7**: `SlotEditorForm` (symbol/label/action/sub-items/move/delete) -> `01_Project/MousePlus/Views/MenuEditor/SlotEditorForm.swift`
-- [ ] **T8**: `MenuEditorView` assembly (band switch, count, preview+form, autosave) -> `01_Project/MousePlus/Views/MenuEditor/MenuEditorView.swift`
+- [x] **T6**: `RingPreviewSelector` (reuse RingMenuView, hit-test off, selection overlay, ghosts; sub-item selection via labeled strip) -> `01_Project/MousePlus/Views/MenuEditor/RingPreviewSelector.swift`
+- [x] **T7**: `SlotEditorForm` (symbol/label/action/sub-items/move/delete) -> `01_Project/MousePlus/Views/MenuEditor/SlotEditorForm.swift`
+- [x] **T8**: `MenuEditorView` assembly (band switch, count, preview+form) -> `01_Project/MousePlus/Views/MenuEditor/MenuEditorView.swift`
 
 ### Wave 4 (window, persistence, launcher — depends W3)
 - [ ] **T9**: `MenuEditorWindowController` + replace `MenuSettingsView` stub with launcher -> `01_Project/MousePlus/Controllers/MenuEditorWindowController.swift`, `01_Project/MousePlus/Views/SettingsView.swift`
