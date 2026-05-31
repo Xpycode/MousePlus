@@ -46,6 +46,11 @@ final class RingViewModel {
     /// Whether the ring is on screen.
     var isVisible = false
 
+    /// Frontmost application's PID, captured by the owner (AppDelegate) at
+    /// ring-open — *before* our non-activating panel shows — so window/menu
+    /// actions target the user's app and not MousePlus. `nil` if none.
+    var frontmostPID: pid_t?
+
     private let actionService = ActionService()
 
     /// Pure UI callback the owner (AppDelegate) sets to dismiss the panel after a
@@ -125,8 +130,13 @@ final class RingViewModel {
         }
 
         // Direct item → fire and fully reset, then ask the owner to close the panel.
+        // Build the action context HERE, on the main actor: front-app PID (captured
+        // at ring-open) plus a live screen-geometry snapshot for window snapping.
+        // Cheap to build unconditionally; passed across the actor boundary as Sendable.
+        let context = ActionContext(frontmostPID: frontmostPID,
+                                    screenLayout: ScreenLayout.capture())
         Task {
-            try? await actionService.execute(item)
+            try? await actionService.execute(item, context: context)
         }
         reset()
         requestClose?()

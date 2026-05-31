@@ -170,7 +170,7 @@ struct WedgeView: View {
     }
 
     let inner = RingMenuItem(label: "Copy", icon: "doc.on.doc", actionType: .custom)
-    let labeled = RingMenuItem(label: "Clipboard", icon: "doc.on.clipboard", actionType: .clipboard)
+    let labeled = RingMenuItem(label: "Snap", icon: "rectangle.split.2x1", actionType: .windowSnap)
     let expandable = RingMenuItem(
         label: "Apps", icon: "square.grid.2x2", actionType: .appSwitch,
         subItems: [RingMenuItem(label: "Safari", icon: "safari", actionType: .appSwitch)]

@@ -41,7 +41,7 @@ extension RingMenuItem {
     /// but kept for accessibility / settings UI). Independent of `sampleItems` (middle band).
     static let sampleInnerItems: [RingMenuItem] = [
         RingMenuItem(label: "Copy", icon: "doc.on.doc", actionType: .custom, actionData: ""),
-        RingMenuItem(label: "Paste", icon: "doc.on.clipboard", actionType: .clipboard),
+        RingMenuItem(label: "Paste", icon: "doc.on.clipboard", actionType: .custom, actionData: ""),
         RingMenuItem(label: "Mission Control", icon: "rectangle.3.group", actionType: .custom, actionData: ""),
         RingMenuItem(label: "Spotlight", icon: "magnifyingglass", actionType: .custom, actionData: ""),
     ]
@@ -58,9 +58,17 @@ extension RingMenuItem {
             ]
         ),
         RingMenuItem(
-            label: "Clipboard",
-            icon: "doc.on.clipboard",
-            actionType: .clipboard
+            label: "Snap",
+            icon: "rectangle.split.2x1",
+            actionType: .windowSnap,    // parent marker; commit expands to the zone arc
+            subItems: SnapZone.allCases.map { zone in
+                RingMenuItem(
+                    label: zone.displayName,
+                    icon: zone.systemImage,
+                    actionType: .windowSnap,
+                    actionData: zone.rawValue
+                )
+            }
         ),
         RingMenuItem(
             label: "Menu",
