@@ -150,15 +150,22 @@ struct RingMenuView: View {
 
     /// Outer band — a localized arc of the expanded parent's sub-items (§2.3).
     /// Always lit (it IS the live branch).
+    ///
+    /// Iterates the items themselves keyed by stable `id`, NOT `0..<count`. A
+    /// constant-range `ForEach(0..<count)` captures the range at graph-build time;
+    /// when `outerItems` empties on commit/collapse/reset, SwiftUI re-renders the
+    /// stale indices and `outerItems[index]` traps "Index out of range" (crashed
+    /// the app on selecting a sub-item, 2026-05-31). Enumerate so `index` (the arc
+    /// offset the geometry needs) comes from the *current* snapshot.
     private var outerBand: some View {
-        ForEach(0..<viewModel.outerItems.count, id: \.self) { index in
+        ForEach(Array(viewModel.outerItems.enumerated()), id: \.element.id) { index, outerItem in
             let angles = RadialGeometry.wedgeAngles(
                 band: .outer, index: index, spokeCount: spokeCount,
                 expandedParentIndex: viewModel.expandedParentIndex,
                 outerCount: viewModel.outerItems.count
             )
             WedgeView(
-                item: viewModel.outerItems[index],
+                item: outerItem,
                 startAngle: angles.start,
                 endAngle: angles.end,
                 innerRadius: radii.r2,
