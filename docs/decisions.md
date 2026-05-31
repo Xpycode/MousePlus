@@ -438,4 +438,106 @@ Recorded so they aren't mistaken for the original spec:
 
 ---
 
+## 2026-05-30 - HUD Actions Plan: what the ring actually *does* (research-backed, session-c)
+
+**Context:** With the ring *rendering* done (`IMPLEMENTATION_PLAN.md`), an audit found the action
+*backend* is mostly stubs — `ActionService.execute` handles only `appSwitch` + `custom`;
+`clipboard`/`menuBar` are literal `break` cases, and several default wedges have empty
+`actionData` no-ops. Specced five real action types, each source-verified by research agents
+(`acsandmann/menuanywhere`, `rxhanson/Rectangle`, live `man screencapture`, Apple docs). Full
+spec lives in `docs/HUD_ACTIONS_PLAN.md`; the load-bearing decisions are logged here.
+
+**Decisions:**
+
+1. **Drop `ActionType.clipboard`.** The user is building a separate clipboard manager
+   (ClipSmart/Aloft). Bridge to it via an `appSwitch`/`custom` wedge instead of reimplementing
+   clipboard inside MousePlus. *Rejected:* a native clipboard action set — duplicates a
+   dedicated app for no gain.
+
+2. **Menu-bar mirror = radial top-level → native `NSMenu` handoff** (not a fully ring-rendered
+   menu tree). The outer ring shows only the frontmost app's top-level menus (File/Edit/…);
+   committing one mirrors that menu's AX subtree into a fresh `NSMenu` and `popUp`s it at the
+   cursor. `kAXPressAction` is used only on the final leaf, after `app.activate()` + a 0.1s
+   settle. `AccessibilityService` is **`@MainActor`, not an `actor`** (NSMenu/NSMenuItem are
+   main-thread-affine; only the slow bulk AX reads go to a background queue). *Rationale:*
+   app menus are deep/dynamic trees and the ring is depth-capped at 3 — radial is a fast index,
+   AppKit handles the lists. Matches menuanywhere's proven path. *Rejected:* (A) AXPress the
+   live bar item (opens at the menu bar, flaky in fullscreen); (B2) recurse menus into rings
+   (huge AX traffic, fights dynamic menus). *Deferred:* a search palette (NOT in menuanywhere's
+   current source — would be net-new).
+
+3. **Window snapping = own middle wedge → outer arc of 8 directions**, in an `actor
+   WindowService`. Ports Rectangle's two non-obvious hacks verbatim: the
+   `AXEnhancedUserInterface` toggle (off-before-move, restore-after, for Electron/Catalyst
+   apps) and the **size→position→size** set order (beats display + min-size clamping). The AX
+   y-flip pivots about the **primary** screen's `frame.maxY` (`NSScreen.screens[0]`), never the
+   target screen's — the #1 multi-monitor bug. `_AXUIElementGetWindow` is private → not used.
+   *Rationale:* 8 spokes = 8 screen directions is the most radial-native feature; self-contained.
+
+4. **App switcher = self-tracked MRU.** No public app z-order/MRU API exists, so observe
+   `NSWorkspace.didActivateApplicationNotification` from app launch (not ring-open) to order
+   apps most-recent-first (alphabetical tie-break). The existing macOS-14 `app.activate()` call
+   is already correct (`.activateIgnoringOtherApps` is deprecated/no-op). **Real app icons via
+   an `IconSource` enum** passed to `WedgeView` + a side dictionary keyed by item id — `NSImage`
+   is **never** put in the `Codable` `RingMenuItem` model (static config stays SF-Symbol
+   strings). *Rejected:* resolving icons in SwiftUI `body` (re-runs, blocks main) and storing
+   `NSImage` on the model (breaks `Codable`/`Hashable`).
+
+5. **System toggles = dedicated `ActionType.systemToggle` with a curated enum** (not overloaded
+   `custom`) — no arbitrary-shell injection surface, typed config UI, per-action TCC reasoning.
+   Mechanism is `Process`→`/usr/bin/osascript`, **not `NSAppleScript`** (which must run on and
+   blocks the main thread; wrong from an `actor`). Lock screen uses **CGEvent ⌃⌘Q**, not the
+   private `SACLockScreenImmediate`. v1 set = dark mode, display sleep, screen saver,
+   volume/mute, lock screen, empty trash (confirm-gated). **Deferred:** DND/Focus (no reliable
+   public *setter* — the `ncprefs`/`controlcenter`+killall hack is broken post-Monterey;
+   `INFocusStatusCenter` is read-only) and brightness (private `DisplayServices*` only, or
+   jittery CGEvent keys). TCC must be **pre-primed in Settings**, never prompted mid-gesture.
+
+6. **Screenshots = interactive `screencapture` modes only for v1.** Interactive `-i`/`-U`
+   (user-driven selection UI) require **no Screen-Recording TCC** attributed to MousePlus — the
+   user's drag *is* the consent. Silent full-screen/video capture *does* need the grant, so
+   it's deferred behind explicit UX. New `ActionType.screenshot` + `ShotMode` enum; dismiss the
+   ring (`requestClose` → `Task.yield()`) before capturing. `ScreenCaptureKit` is reserved for a
+   future silent / sandboxed backend behind the same `ShotMode` abstraction.
+
+7. **Product — sandbox incompatibility (reinforces direct distribution).** Features 2, 3, and 5
+   (cross-app AX control; shelling to system binaries; scripting System Events/Finder) are
+   **fundamentally incompatible with the App Store sandbox.** This hardens the already-chosen
+   direct-distribution / GPLv3 path. Each feature stays behind its own service so a future
+   sandboxed target can compile them out; only the app switcher (4) and interactive screenshots
+   (6, via an SCK backend swap) could survive a sandbox.
+
+**Shared foundation (build once, all five depend on it):** extend `ActionType`; make
+`RingViewModel.expand()` async with a stale-expansion guard (dynamic outer ring); the
+`IconSource` pattern; one reusable Accessibility-TCC status/prompt flow; the
+dismiss-before-action seam (`requestClose` at `RingViewModel.swift:132`).
+
+**Build order:** foundation (~1–1.5d) → window snap (~2d) → screenshots (~0.5–1d) → menu
+mirror (~1.5–2d) → app switcher (~1.5–2d) → system toggles (~3.5–4d). ≈10–13 dev-days at v1.
+
+---
+
 *Add decisions as they are made. Future-you will thank present-you.*
+
+
+## 2026-05-30 - App-Aware Command Rings: min target, AX-press, center-search (planned)
+
+**Context:** User asked for app-specific shortcuts in the ring (top ~8 per app), a "pages" overflow in RING 3, and a search palette for all current-app commands — i.e. Paletro-class capability in the HUD. Planned in `APP_COMMANDS_PLAN.md` (builds on `HUD_ACTIONS_PLAN.md` Feature A). Backed by 5 research agents + Tahoe adoption research.
+
+**Decisions:**
+
+1. **Min deployment target stays macOS 14; Liquid Glass is conditional, not required.** `glassEffect`/`GlassEffectContainer` are `@available(macOS 26.0,*)` — neither 14 nor 15 has them, so the choice is min-26 (all-in glass) vs conditional. Adoption research (2026-05-30): Tahoe ~50% overall, higher in MousePlus's indie-dev/recent-hardware segment (TelemetryDeck skews that way), but ~half of users remain on Sequoia/Sonoma. → ship `if #available(macOS 26)` glass with a `.ultraThinMaterial` fallback. 14-vs-15 is independent of glass and held at 14 (both still get security updates as of May 2026).
+
+2. **App commands fire via AX press (`.menuCommand`/`kAXPressAction`), not synthesized keystrokes.** AX works for commands that have *no* keyboard shortcut at all — the whole point of surfacing an app's menu. CGEvent keystroke kept as a secondary `.keyShortcut` path only.
+
+3. **Center hub owns search; RING 2 owns sources.** Search is reached only via the center dead-zone tap (opens a separate non-activating `NSPanel` palette), never duplicated as a RING 2 wedge. RING 1/2 stay app-stable for muscle memory; only RING 3 is app-aware.
+
+4. **Search is self-curating (pin-or-execute).** A palette result can fire immediately *or* be pinned into the frontmost app's `AppProfile.ring3Shortcuts` — the ring learns each app over time. This is the differentiator vs Paletro (a list that only searches).
+
+5. **Pagination preserves muscle memory only via stable (page, angle) mapping.** Most-used on page 1; overflow on stable later pages; deep overflow defers to search rather than growing pages.
+
+**Why it matters:** keeps the "made for power users on modern Macs" pitch (glass) without abandoning the ~half still on Sonoma/Sequoia; the Tahoe legibility backlash is a hard design constraint for a HUD floating over arbitrary content (use `.regular` not `.clear`, vibrant foreground, explicit stroke, test under Reduce Transparency / Increase Contrast).
+
+**Consequences:** new `AccessibilityService` (shared with Feature A), `FrontmostAppService`, `CommandPalettePanel`; `Configuration.appProfiles`; `RingMenuItem.dynamicSource` gains `.appShortcuts`; `ActionType` gains `.menuCommand`(+`.keyShortcut`). Sandbox/MAS must re-validate cross-app AX reads before any App Store build.
+
+---
