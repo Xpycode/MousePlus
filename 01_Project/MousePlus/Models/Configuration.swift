@@ -110,28 +110,17 @@ struct TriggersConfig: Codable, Sendable, Equatable {
         self.mouseButton = mouseButton
     }
 
-    /// Test default — keyboard + mouse button bound side-by-side so BOTH
-    /// interaction modes are live at once and the user can feel each:
-    ///   • F5 → tap-toggle (tap opens the ring, tap a slice to pick). This is the
-    ///     key meant to be mapped from a mouse button in BetterMouse/Logi Options+
-    ///     (the mouse app sends raw keyCode 96, bypassing the fn-row dictation
-    ///     binding; pressing F5 on the keyboard directly needs fn or the
-    ///     "Use F1, F2 as standard function keys" setting).
-    ///   • Middle-click (wheel press) → hold-release (Blender-style: hold, move,
-    ///     release on a slice). Lets the user compare modes without a rebuild.
-    /// Proper in-app mode switching arrives with the Triggers settings tab (HID
-    /// track / W4); this default is removed when onboarding forces a choice (D1).
-    static let `default` = TriggersConfig(
-        keyboard: .keyboard(
-            keyCode: 96,           // F5 (kVK_F5)
-            modifiers: 0,
-            mode: .tapToggle
-        ),
-        mouseButton: .mouseButton(
-            buttonNumber: 2,       // middle-click (wheel click)
-            mode: .holdRelease
-        )
-    )
+    /// Ships **unbound** — no trigger is set out of the box. The user picks a
+    /// trigger explicitly: via first-launch onboarding (D1, W5) or the Triggers
+    /// settings tab (W4). A saved `config.json` always overrides this at load,
+    /// so this only governs a truly fresh install / a config missing the
+    /// `triggers` key.
+    ///
+    /// (Previously this hard-coded an F5 tap-toggle + middle-click hold-release
+    /// test pair so both interaction modes were live without onboarding; removed
+    /// 2026-05-31 now that the Triggers tab exists and onboarding is the intended
+    /// binding path.)
+    static let `default` = TriggersConfig()
 }
 
 /// Decode-only helper for pre-2026-04-29 config JSON (`hotkey: { keyCode, modifiers }`).
