@@ -17,9 +17,9 @@ Make the inner + middle rings user-customizable in-app via a dedicated resizable
 - [x] **T2**: `MenuEditorModel` working-state model (id-keyed safe bindings, invariants, spoke cap) -> `01_Project/MousePlus/ViewModels/MenuEditorModel.swift`
 
 ### Wave 2 (pickers — parallel, independent components)
-- [ ] **T3**: `SymbolField` + `Resources/CuratedSymbols.swift` -> `01_Project/MousePlus/Views/MenuEditor/SymbolField.swift`, `01_Project/MousePlus/Resources/CuratedSymbols.swift`
-- [ ] **T4**: `AppPickerSheet` (installed+running scan, search, Other…) -> `01_Project/MousePlus/Views/MenuEditor/AppPickerSheet.swift`
-- [ ] **T5**: `ActionDataEditor` (type-aware control) -> `01_Project/MousePlus/Views/MenuEditor/ActionDataEditor.swift`
+- [x] **T3**: `SymbolField` + `Resources/CuratedSymbols.swift` -> `01_Project/MousePlus/Views/MenuEditor/SymbolField.swift`, `01_Project/MousePlus/Resources/CuratedSymbols.swift`
+- [x] **T4**: `AppPickerSheet` (installed+running scan, search, Other…) -> `01_Project/MousePlus/Views/MenuEditor/AppPickerSheet.swift`
+- [x] **T5**: `ActionDataEditor` (type-aware control) -> `01_Project/MousePlus/Views/MenuEditor/ActionDataEditor.swift`
 
 ### Wave 3 (editor shell — depends W1, W2)
 - [ ] **T6**: `RingPreviewSelector` (reuse RingMenuView, hit-test off, selection overlay, ghosts) -> `01_Project/MousePlus/Views/MenuEditor/RingPreviewSelector.swift`
