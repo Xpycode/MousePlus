@@ -2,7 +2,7 @@ import AppKit
 
 /// Human-readable names for keyboard virtual key codes and mouse button numbers,
 /// plus a `displayString` for a `TriggerBinding`. Used by the Triggers settings tab
-/// to render what a recorded binding maps to ("⌃⌥ F5", "Middle Click", "Button 4 (Back)").
+/// to render what a recorded binding maps to ("Ctrl+Opt+F5", "Middle Click", "Button 4 (Back)").
 enum KeyCodeNames {
     /// Common macOS virtual key codes (`kVK_*`) → display label. Anything not listed
     /// falls back to "Key <code>" so an unusual key still shows something sensible.
@@ -33,15 +33,17 @@ enum KeyCodeNames {
         map[code] ?? "Key \(code)"
     }
 
-    /// Modifier glyphs in canonical Apple order (⌃⌥⇧⌘), or "" when none.
+    /// Modifier names as text in canonical Apple order ("Ctrl+Opt+Shift+Cmd"), or ""
+    /// when none. Text (not glyphs) because the ⌃⌥⇧⌘ glyphs render too close together
+    /// to read at a glance in the Triggers settings tab.
     static func modifiers(_ raw: UInt) -> String {
         let m = NSEvent.ModifierFlags(rawValue: raw)
         var parts: [String] = []
-        if m.contains(.control)  { parts.append("⌃") }
-        if m.contains(.option)   { parts.append("⌥") }
-        if m.contains(.shift)    { parts.append("⇧") }
-        if m.contains(.command)  { parts.append("⌘") }
-        return parts.joined()
+        if m.contains(.control)  { parts.append("Ctrl") }
+        if m.contains(.option)   { parts.append("Opt") }
+        if m.contains(.shift)    { parts.append("Shift") }
+        if m.contains(.command)  { parts.append("Cmd") }
+        return parts.joined(separator: "+")
     }
 
     /// macOS `buttonNumber` → friendly name. 0/1/2 are fixed; 3/4 are conventionally
@@ -59,7 +61,7 @@ enum KeyCodeNames {
 }
 
 extension TriggerBinding {
-    /// One-line label for the current binding, e.g. "⌃⌥ F5", "Middle Click", "Not set".
+    /// One-line label for the current binding, e.g. "Ctrl+Opt+F5", "Middle Click", "Not set".
     var displayString: String {
         switch self {
         case .none:
@@ -67,7 +69,7 @@ extension TriggerBinding {
         case let .keyboard(keyCode, modifiers, _):
             let mods = KeyCodeNames.modifiers(modifiers)
             let key = KeyCodeNames.key(keyCode)
-            return mods.isEmpty ? key : "\(mods) \(key)"
+            return mods.isEmpty ? key : "\(mods)+\(key)"
         case let .mouseButton(buttonNumber, _):
             return KeyCodeNames.mouseButton(buttonNumber)
         }
