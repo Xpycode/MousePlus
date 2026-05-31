@@ -181,6 +181,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // keyDown repeats while held — without this guard each tick creates a new NSPanel.
         guard let controller = ringWindowController, !controller.isVisible else { return }
 
+        // Capture the frontmost app BEFORE showing our (non-activating) panel, so
+        // window/menu actions target the user's app rather than MousePlus.
+        ringViewModel.frontmostPID = NSWorkspace.shared.frontmostApplication?.processIdentifier
+
         // Each open starts at the root: no stale expansion/selection.
         ringViewModel.reset()
         ringViewModel.isVisible = true
