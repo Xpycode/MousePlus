@@ -35,6 +35,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// to disk by Settings, so the next launch reflects it regardless).
     @MainActor static var applyTriggers: ((TriggersConfig) -> Void)?
 
+    /// Settings → live ring bridge: pushes edited menu items (inner + middle rings)
+    /// into the shared ring view model so edits apply without restarting (also persisted
+    /// to disk by the editor, so the next open reflects it regardless).
+    @MainActor static var applyMenuItems: ((Configuration) -> Void)?
+
     private var menuBarController: MenuBarController?
     private var ringWindowController: RingWindowController?
     private var triggerService: TriggerService?
@@ -164,6 +169,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             guard let self else { return }
             self.configuration.triggers = triggers
             self.triggerService?.updateConfig(triggers)
+        }
+
+        // Live-apply menu-item edits from the Menu Items editor into the shared ring.
+        AppDelegate.applyMenuItems = { [weak self] config in
+            guard let self else { return }
+            self.configuration = config
+            self.ringViewModel.innerItems = config.inner
+            self.ringViewModel.middleItems = config.middle
+            // Drop any stale expansion/selection so the next ring open reflects the new items cleanly.
+            self.ringViewModel.reset()
         }
 
         Task {
