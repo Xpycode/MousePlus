@@ -124,13 +124,13 @@ struct WedgeView: View {
         let foreground: Color = highlighted ? .white : .primary
 
         if symbolOnly {
-            Image(systemName: item.icon)
+            Image(systemName: SFSymbol.resolved(item.icon))
                 .font(.title2)
                 .foregroundStyle(foreground)
         } else {
             VStack(spacing: 4) {
                 HStack(spacing: 3) {
-                    Image(systemName: item.icon)
+                    Image(systemName: SFSymbol.resolved(item.icon))
                         .font(.title2)
                     // Subtle "expandable" hint for items with sub-items.
                     if item.hasSubItems {

@@ -132,12 +132,13 @@ struct SymbolField: View {
 
     /// Returns `true` if `name` is a real SF Symbol available on this system.
     ///
-    /// Reusable by forms / save-gating so the same validity rule is applied everywhere.
+    /// Thin forwarder to ``SFSymbol/isValid(_:)`` — the single source of truth the
+    /// renderer also uses — so the field's red-flag rule and the ring's
+    /// placeholder-substitution rule can never disagree about what counts as valid.
     /// Note: an empty name returns `false` here — empty-as-neutral is a UI concern
     /// handled by ``isValid``, not a statement about symbol validity.
     static func isValidSymbol(_ name: String) -> Bool {
-        guard !name.isEmpty else { return false }
-        return NSImage(systemSymbolName: name, accessibilityDescription: nil) != nil
+        SFSymbol.isValid(name)
     }
 }
 

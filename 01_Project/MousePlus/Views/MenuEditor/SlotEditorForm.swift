@@ -163,7 +163,7 @@ struct SlotEditorForm: View {
                             )
                         } label: {
                             HStack {
-                                Image(systemName: sub.icon)
+                                Image(systemName: SFSymbol.resolved(sub.icon))
                                     .frame(width: 18)
                                 Text(sub.label.isEmpty ? "(no label)" : sub.label)
                                     .foregroundStyle(sub.label.isEmpty ? .secondary : .primary)
