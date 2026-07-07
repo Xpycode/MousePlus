@@ -50,7 +50,15 @@ struct SlotSelection: Equatable {
 /// 2. **Depth cap 3 / sub-items only on middle** — only middle items may carry
 ///    sub-items, and sub-items never nest further. Guaranteed by simply not
 ///    exposing any API to add sub-items to inner items or to nest deeper.
-/// 3. **8-spoke cap** — ``addItem(to:)`` is a no-op once ``atSpokeCap`` is true.
+/// 3. **8-spoke cap (per band)** — ``addItem(to:)`` is a no-op once its band has
+///    8 items (``atCap(for:)``). The cap is per-band because the shared spoke
+///    count is `min(8, max(inner, middle))` — the shorter band growing never
+///    pushes N past 8, so it must not be blocked by the longer band being full.
+/// 4. **Type-consistent payload** — `actionData`'s meaning is defined by
+///    `actionType` (bundle id / `SnapZone` raw value / shell command). When a
+///    binding write changes the type but carries the old payload along unchanged,
+///    the setters reset `actionData` to the new type's default so the runtime
+///    never silently no-ops on a payload minted for a different type.
 ///
 /// All lookups are by `id` (never by cached index) so the editor cannot trap on
 /// an index-out-of-range when items are added/removed concurrently with binding writes.
@@ -104,9 +112,17 @@ final class MenuEditorModel {
         max(inner.count, middle.count)
     }
 
-    /// Whether the 8-spoke cap has been reached (disables adding more top-level items).
+    /// Whether the 8-spoke cap has been reached by the LARGER band (drives the
+    /// "N of 8" readout). Not an add-gate: use ``atCap(for:)`` for that — the
+    /// shorter band may legally grow until it reaches 8 itself, since
+    /// `N = min(8, max(inner, middle))` doesn't change when the non-max band adds.
     var atSpokeCap: Bool {
         spokesUsed >= 8
+    }
+
+    /// Whether `band` itself is full (8 items) and may not receive another item.
+    func atCap(for band: EditorBand) -> Bool {
+        self[keyPath: arrayKeyPath(for: band)].count >= 8
     }
 
     // MARK: - Identity-keyed safe bindings
@@ -135,7 +151,8 @@ final class MenuEditorModel {
             set: { [weak self] newValue in
                 guard let self else { return }
                 guard let index = self[keyPath: keyPath].firstIndex(where: { $0.id == id }) else { return }
-                self[keyPath: keyPath][index] = newValue
+                let old = self[keyPath: keyPath][index]
+                self[keyPath: keyPath][index] = Self.normalizingTypeSwitch(old: old, new: newValue)
                 // Re-assert inner invariants if we just wrote to the inner ring.
                 if band == .inner { self.enforceInnerInvariants() }
             }
@@ -164,10 +181,11 @@ final class MenuEditorModel {
             set: { [weak self] newValue in
                 guard let self,
                       let parentIndex = self.middle.firstIndex(where: { $0.id == parentID }),
-                      let subIndex = self.middle[parentIndex].subItems?.firstIndex(where: { $0.id == id }) else {
+                      let subIndex = self.middle[parentIndex].subItems?.firstIndex(where: { $0.id == id }),
+                      let old = self.middle[parentIndex].subItems?[subIndex] else {
                     return
                 }
-                self.middle[parentIndex].subItems?[subIndex] = newValue
+                self.middle[parentIndex].subItems?[subIndex] = Self.normalizingTypeSwitch(old: old, new: newValue)
             }
         )
     }
@@ -176,9 +194,11 @@ final class MenuEditorModel {
 
     /// Append a new blank top-level item to `band` and select it.
     ///
-    /// No-op when ``atSpokeCap`` (the UI also disables the button — invariant 3).
+    /// No-op when ``atCap(for:)`` says that band is full (the UI also disables
+    /// the button — invariant 3). The cap is per-band: middle at 8 must not
+    /// block inner from growing toward 8.
     func addItem(to band: EditorBand) {
-        guard !atSpokeCap else { return }
+        guard !atCap(for: band) else { return }
 
         // Inner items are symbol-only and never carry sub-items (invariant 1).
         let newItem = RingMenuItem(
@@ -304,6 +324,26 @@ final class MenuEditorModel {
     }
 
     // MARK: - Invariants
+
+    /// Reset a carried-over payload when a binding write switches `actionType`
+    /// (invariant 4: type-consistent payload).
+    ///
+    /// Fires only when the type changed AND the payload came through unchanged —
+    /// i.e. the write left the *old type's* payload behind (an action-type picker
+    /// change). A caller that deliberately sets type + payload together is untouched.
+    private static func normalizingTypeSwitch(old: RingMenuItem, new: RingMenuItem) -> RingMenuItem {
+        guard old.actionType != new.actionType, old.actionData == new.actionData else { return new }
+        var item = new
+        item.actionData = defaultActionData(for: new.actionType)
+        return item
+    }
+
+    /// The payload a freshly (re)typed item starts with. `.windowSnap` defaults to
+    /// a real zone (matching `ActionDataEditor`'s display fallback) so what the
+    /// picker shows is what the runtime does; everything else starts empty.
+    private static func defaultActionData(for type: ActionType) -> String {
+        type == .windowSnap ? SnapZone.left.rawValue : ""
+    }
 
     /// Strip `subItems` from every inner item (invariant 1: inner is direct-only).
     ///

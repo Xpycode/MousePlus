@@ -84,13 +84,15 @@ struct MenuEditorView: View {
 
     private var bottomToolbar: some View {
         HStack(spacing: 12) {
-            // Add to the active band; disabled (with an inline note) at cap.
+            // Add to the active band; disabled (with an inline note) when THAT
+            // band is full — the cap is per-band, so a full middle ring must
+            // not block adding inner items (and vice versa).
             Button(addButtonTitle) {
                 model.addItem(to: model.activeBand)
             }
-            .disabled(model.atSpokeCap)
+            .disabled(model.atCap(for: model.activeBand))
 
-            if model.atSpokeCap {
+            if model.atCap(for: model.activeBand) {
                 Text("Max 8 spokes")
                     .font(.caption)
                     .foregroundStyle(.secondary)

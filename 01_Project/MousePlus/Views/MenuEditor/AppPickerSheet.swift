@@ -24,11 +24,12 @@ struct AppPickerSheet: View {
     // MARK: - Row model
 
     /// One installed/running application, deduped by bundle identifier.
+    /// Carries no `NSImage` — icons are resolved lazily per visible row
+    /// (see `AppIconView`), so building the full list stays cheap.
     private struct AppEntry: Identifiable {
         let id: String   // bundleID
         let name: String
         let url: URL
-        let icon: NSImage
     }
 
     // MARK: - State
@@ -86,8 +87,7 @@ struct AppPickerSheet: View {
     @ViewBuilder
     private func appRow(_ entry: AppEntry) -> some View {
         HStack(spacing: 10) {
-            Image(nsImage: entry.icon)
-                .resizable()
+            AppIconView(path: entry.url.path)
                 .frame(width: 26, height: 26)
             Text(entry.name)
                 .lineLimit(1)
@@ -147,8 +147,7 @@ struct AppPickerSheet: View {
             seen.insert(bundleID)
 
             let name = displayName(for: appURL)
-            let icon = NSWorkspace.shared.icon(forFile: appURL.path)
-            result.append(AppEntry(id: bundleID, name: name, url: appURL, icon: icon))
+            result.append(AppEntry(id: bundleID, name: name, url: appURL))
         }
 
         // 1. Scan the standard application directories (shallow is enough).
@@ -196,5 +195,32 @@ struct AppPickerSheet: View {
                 : displayed
         }
         return url.deletingPathExtension().lastPathComponent
+    }
+}
+
+/// Resolves an app's Finder icon lazily, once per row appearance.
+///
+/// `NSWorkspace.icon(forFile:)` costs a few ms per app; fetching it for every
+/// installed app up-front made opening the picker block on hundreds of icon
+/// loads. `List` rows are lazy, so resolving here spreads the cost over
+/// scrolling and the sheet presents immediately.
+private struct AppIconView: View {
+    let path: String
+
+    @State private var icon: NSImage?
+
+    var body: some View {
+        Group {
+            if let icon {
+                Image(nsImage: icon)
+                    .resizable()
+            } else {
+                // Reserve the slot so rows don't jump when the icon lands.
+                Color.clear
+            }
+        }
+        .task(id: path) {
+            icon = NSWorkspace.shared.icon(forFile: path)
+        }
     }
 }

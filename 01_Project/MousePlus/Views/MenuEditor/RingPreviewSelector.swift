@@ -58,13 +58,14 @@ struct RingPreviewSelector: View {
     private func overlay(side: CGFloat) -> some View {
         let center = CGPoint(x: side / 2, y: side / 2)
 
-        // Iterate enough spokes to cover both bands plus (optionally) one empty
-        // "add" slot, never exceeding the cap. We pass the *real* band counts to
-        // the geometry so wedge angles line up with what RingMenuView draws.
+        // Iterate enough spokes to cover both bands plus one extra index so an
+        // empty-band ghost can render at spoke 0, never exceeding the cap.
+        // Whether a ghost actually appears is decided per band in `bandHotspot`
+        // (it needs a genuinely empty spoke within the current geometry).
         // `Array(0..<slots)` (vs a literal range) avoids the dynamic-range ForEach
         // pitfall when `slots` changes between renders.
         let occupied = max(model.inner.count, model.middle.count)
-        let slots = max(0, min(maxSpokes, occupied + (model.atSpokeCap ? 0 : 1)))
+        let slots = max(1, min(maxSpokes, occupied + 1))
 
         ZStack {
             ForEach(Array(0..<slots), id: \.self) { i in
@@ -153,8 +154,13 @@ struct RingPreviewSelector: View {
             .position(pos)
             .help(item.label.isEmpty ? "Empty" : item.label)
 
-        } else if i == items.count && !model.atSpokeCap {
+        } else if i == items.count, i < n {
             // First empty spoke for this band — dashed "click to add" ghost.
+            // The `i < n` guard matters: when a band is already full to the current
+            // spoke count, `centroid` would clamp the index and park the ghost ON
+            // TOP of the last real wedge's hotspot (stealing its clicks). A band
+            // full to N gets no in-ring ghost — the toolbar "Add" button covers it.
+            // (`i < n` also implies the band is under the 8-item cap, since n ≤ 8.)
             Button {
                 model.activeBand = band
                 model.addItem(to: band) // appends at end == fills this spoke
