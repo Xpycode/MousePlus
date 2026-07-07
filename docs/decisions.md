@@ -560,3 +560,20 @@ mirror (~1.5–2d) → app switcher (~1.5–2d) → system toggles (~3.5–4d). 
 **Consequences:** Every future config-writing surface (onboarding, import, profile switcher) must follow both rules. Option 1 (shared actor with internal read-modify-write) remains the right endpoint if writers multiply; revisit when a third writer appears. Related fix in the same review: the close-flush now lives in `saveTask` and reopen awaits it, so close→quick-reopen can't resurrect stale rings over a just-flushed edit.
 
 ---
+
+## T11 — Invalid SF Symbol handling: persist-with-placeholder + defensive render (2026-07-07)
+
+**Context:** The Menu Items editor lets users type a free-form SF Symbol name for a wedge's icon. `Image(systemName:)` is non-failable — an unknown name renders as *nothing*, which on the icon-only inner ring is an invisible, unusable wedge. The editor autosaves (400 ms debounce) with no Save button, and `SymbolField` already flags invalid names in red. Open question from `MENU_EDITOR_PLAN.md` §5A: what should an invalid name do to the persisted config and the live ring?
+
+**Options Considered:**
+1. **Keep-last-valid** — the model accepts a name only once it's a real symbol; while the field shows invalid text, the ring keeps the previous icon. Cleanest data on disk, but needs a draft-text layer inside `SymbolField` and is ambiguous when the field is cleared.
+2. **Revert-on-blur** — free typing while focused; on blur an invalid name snaps back to the last valid one. Few bad states on disk, but the in-progress typo silently vanishes (reads as lost work) and still needs a persist-side guard for the debounce window.
+3. **Persist-with-placeholder + defensive render** — the model keeps the raw text (field stays red so the user can fix it); every `Image(systemName:)` that draws a user-supplied icon substitutes a known-safe placeholder for any unknown/empty name at draw time.
+
+**Decision:** Option 3. Input can't be gated at the keystroke (a valid name like `star.fill` is typed through invalid prefixes `s`, `st`, …) and there's no Save button to gate (autosave), so the "no blank wedge" guarantee lives at the **render layer**, not on input. New `SFSymbol` util is the single source of truth (`isValid` / `placeholder` = `questionmark.circle` / `resolved`); `WedgeView` and `SlotEditorForm` render `SFSymbol.resolved(icon)`, and `SymbolField.isValidSymbol` forwards to `SFSymbol.isValid` so the field's red-flag rule and the ring's fallback can never disagree.
+
+**Rationale:** One render-layer fix covers three surfaces at once — the live ring, the editor's WYSIWYG preview (it embeds the real `RingMenuView` rather than reimplementing it), and any config source (hand-edited `config.json`, a file from an older build). The placeholder itself must always be valid (it *is* the backstop), so it's a long-standing, universally available symbol, hardcoded, never user-supplied. Preserving the raw text (vs revert-on-blur) means nothing the user typed is destroyed; keeping the model dumb (vs keep-last-valid) adds no draft-state layer and leaves autosave untouched.
+
+**Consequences:** A known-invalid icon string can reach disk, but it round-trips harmlessly (the renderer substitutes the placeholder) and the editor keeps showing it red until fixed. Any future icon-render site that draws a user-supplied name must also route through `SFSymbol.resolved()` — the guarantee is per-call-site, not global. If icon rendering ever centralizes (e.g. a single `RingGlyph` view), fold the resolve into it.
+
+---
