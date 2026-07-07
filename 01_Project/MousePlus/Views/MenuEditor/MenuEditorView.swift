@@ -26,18 +26,26 @@ struct MenuEditorView: View {
         VStack(spacing: 12) {
             topBar
 
-            // Live, click-to-select ring preview. Sized generously so the
-            // ~448pt default ring has room; the window stays resizable around it.
-            RingPreviewSelector(model: model)
-                .frame(maxWidth: .infinity, minHeight: 380)
+            // Ring preview (left) and the selected-slot detail form (right) sit
+            // side by side in a draggable split, so the fixed ~448pt ring no
+            // longer pushes the form below the fold. Matches the project's
+            // HSplitView shell convention.
+            HSplitView {
+                // Left pane: live, click-to-select ring preview. The ring is a
+                // fixed-size square, so centering it inside an expanding frame
+                // (default .center alignment) keeps it put; the pane min width
+                // stops the divider from clipping it when dragged left.
+                RingPreviewSelector(model: model)
+                    .frame(minWidth: 470, maxWidth: .infinity, maxHeight: .infinity)
+                    .padding(.trailing, 8)
 
-            Divider()
-
-            // Detail form for the selected slot, scrollable so it survives
-            // a short window height.
-            ScrollView {
-                SlotEditorForm(model: model)
-                    .padding(.vertical, 4)
+                // Right pane: detail form for the selected slot, scrollable so a
+                // tall form (long sub-item list) survives a short window height.
+                ScrollView {
+                    SlotEditorForm(model: model)
+                        .padding(.vertical, 4)
+                }
+                .frame(minWidth: 320, maxWidth: .infinity, maxHeight: .infinity)
             }
 
             Divider()
@@ -45,7 +53,7 @@ struct MenuEditorView: View {
             bottomToolbar
         }
         .padding(16)
-        .frame(minWidth: 560, minHeight: 620)
+        .frame(minWidth: 900, minHeight: 600)
         .confirmationDialog(
             "Reset both rings to the default items? This can't be undone.",
             isPresented: $showResetConfirm,

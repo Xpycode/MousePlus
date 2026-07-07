@@ -57,14 +57,18 @@ final class MenuEditorWindowController: NSObject, NSWindowDelegate {
         let host = NSHostingView(rootView: view)
 
         let w = NSWindow(
-            contentRect: NSRect(origin: .zero, size: NSSize(width: 560, height: 620)),
+            // Wider than tall now that the ring and detail form sit side by side
+            // (was 560×620 when they were stacked). contentMinSize clamps the
+            // autosaved frame up too, so an older saved narrow frame can't
+            // restore the panes into a squeezed state.
+            contentRect: NSRect(origin: .zero, size: NSSize(width: 960, height: 660)),
             styleMask: [.titled, .closable, .miniaturizable, .resizable],
             backing: .buffered,
             defer: false
         )
         w.title = "Menu Items"
         w.contentView = host
-        w.contentMinSize = NSSize(width: 560, height: 620)
+        w.contentMinSize = NSSize(width: 900, height: 600)
         w.delegate = self
         w.isReleasedWhenClosed = false
         w.setFrameAutosaveName("MenuEditorWindow")
