@@ -541,3 +541,22 @@ mirror (~1.5–2d) → app switcher (~1.5–2d) → system toggles (~3.5–4d). 
 **Consequences:** new `AccessibilityService` (shared with Feature A), `FrontmostAppService`, `CommandPalettePanel`; `Configuration.appProfiles`; `RingMenuItem.dynamicSource` gains `.appShortcuts`; `ActionType` gains `.menuCommand`(+`.keyShortcut`). Sandbox/MAS must re-validate cross-app AX reads before any App Store build.
 
 ---
+
+## 2026-07-07 - Menu Editor Persistence Safety Model
+
+**Context:** The 2026-07-07 code review of the menu editor (Waves 1–4) found three data-loss paths sharing one root cause: config writes trusted stale or unverified state. (a) Autosave merged edited rings into a `baseConfig` snapshot taken at window-open, silently reverting appearance/trigger changes made in Settings while the editor was open. (b) `(try? load()) ?? Configuration()` treated a corrupt-but-present `config.json` like a missing one, so the editor filled with sample defaults which autosave then persisted over the user's real (recoverable) file. (c) Closing the window before the first async load completed flushed a still-empty model merged into a default config — wiping rings *and* the trigger binding.
+
+**Options Considered:**
+1. Single shared `ConfigurationService` actor with read-modify-write inside the actor — cleanest concurrency story, but a wider refactor touching Settings, editor, and AppDelegate.
+2. Fresh-disk-read merge base + load-state save gate per writer — small, local, matches the pattern `RingAppearanceSettingsView` already established.
+3. Keep snapshots but push live updates between windows — most machinery, still racy.
+
+**Decision:** Option 2, as two rules for anyone writing `config.json`:
+1. **Merge into a fresh read, never a cached snapshot** — re-read the on-disk config at save time and swap in only your own section (editor: rings; appearance tab: appearance).
+2. **Saves are gated on a successful load** — the editor's `LoadState` (`pending/loaded/failed`) blocks all saves until the file has been read successfully once; a decode failure locks saving and surfaces an `NSAlert` instead of "recovering" with defaults.
+
+**Rationale:** Autosave inverts the usual safety calculus — loading defaults *is itself a write* 400ms later, so the guard must live at load time. `ConfigurationService.load()` already distinguishes the two cases (missing file → defaults without throwing; present-but-undecodable → throws); `try?` was erasing exactly the distinction that separates "fresh install" from "user data at risk". Hand-editing `config.json` is established practice in this project, so decode failure is a realistic input, not a theoretical one.
+
+**Consequences:** Every future config-writing surface (onboarding, import, profile switcher) must follow both rules. Option 1 (shared actor with internal read-modify-write) remains the right endpoint if writers multiply; revisit when a third writer appears. Related fix in the same review: the close-flush now lives in `saveTask` and reopen awaits it, so close→quick-reopen can't resurrect stale rings over a just-flushed edit.
+
+---
