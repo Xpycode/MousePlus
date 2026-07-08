@@ -217,7 +217,7 @@ struct RingPreviewSelector: View {
                             } label: {
                                 Label(
                                     sub.label.isEmpty ? "Item" : sub.label,
-                                    systemImage: sub.icon.isEmpty ? "circle" : sub.icon
+                                    systemImage: SFSymbol.resolved(sub.icon)
                                 )
                                 .labelStyle(.titleAndIcon)
                                 .font(.caption2)

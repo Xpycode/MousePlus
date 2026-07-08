@@ -191,6 +191,13 @@ struct SlotEditorForm: View {
             } label: {
                 Label("Add Sub-item", systemImage: "plus")
             }
+            .disabled(model.subItemsAtCap(for: parentID))
+
+            if model.subItemsAtCap(for: parentID) {
+                Text("Maximum sub-items reached.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
         }
     }
 

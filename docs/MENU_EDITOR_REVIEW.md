@@ -104,3 +104,53 @@ which broke signed Debug builds on this machine ("No certificate for team H56HM4
 matching…"). Rewrote it with this Mac's Apple Development SHA (`26570985…`) per the bootstrap
 procedure documented in `Debug.xcconfig`; signed build verified. If the wrong-Mac file
 reappears, the Syncthing ignore rules for `Debug.local.xcconfig` need checking.
+
+---
+
+## 7. Fable adversarial panel — round 2 (2026-07-07 part 3)
+
+A second, independent review of the same `main...HEAD` diff by a **four-lens adversarial panel**
+(four Claude Fable-5 reviewers, one lens each: *correctness*, *model-invariants*,
+*persistence-safety*, *SwiftUI-identity*), each handed §1 above so it hunted for what the first
+pass **missed** rather than re-flagging the seven fixed bugs. It surfaced **15 new findings**. The
+top data-loss cluster was **cross-confirmed by 2–3 lenses independently** — and resolved a
+disagreement: the *correctness* lens certified the `refreshFromDisk`/close-flush path as clean
+("fix #5 holds"); the *persistence* and *SwiftUI-identity* lenses refuted it, and a direct code read
+confirmed the refuters — **F1 is real** (a cancelled debounce task satisfies `await saveTask.value`
+without ever writing).
+
+**This pass fixed clusters A + B + D (build-verified).** Tier-2 (F5/F6) and all Tier-3 are logged
+as accepted risks in §3 above / below.
+
+| # | Sev | Status | File | Defect (brief) |
+|---|-----|--------|------|----------------|
+| **F1** | 🔴 data-loss | ✅ fixed (A) | `MenuEditorWindowController.swift` | `refreshFromDisk` treated a **cancelled** debounce task as a completed flush → reopen-during-debounce reloaded stale disk, reverted the model, then persisted the reverted rings. *(persistence + swiftui; correctness wrongly cleared it)* |
+| **F2** | 🔴 data-loss | ✅ fixed (A) | `MenuEditorWindowController.swift:174-178` | `saveNow`'s `(try? load()) ?? baseConfig` fallback **overwrote a config that went corrupt AFTER open** — the `.loaded` gate was never re-checked. *(invariants + persistence + correctness — 3 lenses)* |
+| **F3** | 🔴 data-loss | ✅ fixed (A) | `MenuEditorWindowController.swift`; `Configuration/ActionType` encode | A **zero-edit open→close→reopen rewrote `config.json`**, and encode doesn't round-trip what decode tolerates (legacy `clipboard`→`custom`, unknown keys dropped, inner sub-items stripped). Root cause: `@Observable` fires `onChange` on *assignment*, so `model.load` looked like an edit. *(persistence + swiftui)* |
+| **F4** | 🔴 data-loss | ✅ fixed (A) | `MenuEditorWindowController.swift:177-179` | Save error `try?`-swallowed while live-apply proceeded → a persistently failing write loses the **whole session** behind a saved-looking UI. *(persistence)* |
+| **F7** | 🟠 broken-fn | ✅ fixed (B) | `MenuEditorModel.swift` → `ActionService.swift:52` → `ActionDataEditor.swift` | Deleting all sub-items of the default "Snap"/"Apps" wedge makes it a **direct action with an empty payload** → silently no-ops at runtime **while the form claims "Snap to: Left."** Pure supported clicks. *(invariants)* |
+| **F8** | 🟠 UX | ✅ fixed (B) | `MenuEditorModel.swift` / `SlotEditorForm.swift` | **Outer band had no spoke cap** — "Add Sub-item" never disabled → ring degrades into unhittable slivers + editor pane overflow. *(invariants)* |
+| **F15** | 🟡 blank-icon | ✅ fixed (D) | `RingPreviewSelector.swift:220` | The sub-item strip rendered `sub.icon` raw instead of `SFSymbol.resolved(_:)` — **one render site the T11 fix missed** → blank icon for an invalid name. *(correctness)* |
+| **F5** | 🟠 data-loss | ⏸ deferred | `SettingsView.swift:113`, `TriggersSettingsView.swift:183` | The corrupt-config→sample-defaults wipe fix #2 closed **is still live in both Settings writers**. One slider drag after the fix-#2 "your file is protected" alert overwrites the recoverable file. *Pre-existing; the branch's alert now over-promises.* *(persistence)* |
+| **F6** | 🟠 edit-revert | ⏸ deferred | editor vs `SettingsView`/`TriggersSettingsView` writers | Residual **last-writer-wins race**: separate `ConfigurationService` instances, multi-await read-modify-write, nothing serializes them. Edit an item + drag a radii slider within ~1s → one reverts on disk. *(persistence)* |
+| **F9** | 🟡 edge | ⏸ deferred | `MenuEditorModel.swift:96-101` | `load()` bypasses the 8-item band cap → over-cap items are invisible/undeletable in the UI but persist. *Hand-edit-gated.* *(invariants)* |
+| **F10** | 🟡 edge | ⏸ deferred | `MenuEditorModel.swift:352-356` | Depth cap enforced asymmetrically on load: inner `subItems` scrubbed, middle sub-sub-items not → nested items laundered + false expand hint. *Hand-edit-gated.* *(invariants)* |
+| **F11** | 🟡 UX | ✅ mostly fixed (A) | `MenuEditorWindowController.swift` → `MenuEditorModel.load` | Reopen while the app-picker sheet is open nuked selection + force-dismissed the sheet. Now the reopen skips `model.load` when disk == model, so a no-op reopen preserves selection/sheet. *(External-change reopens still clear it — acceptable.)* *(swiftui)* |
+| **F12** | 🟡 conditional | ⏸ deferred | `SlotEditorForm.swift:24-31` | No `.id(model.selection)` on the detail form → `@State` + NSTextField first-responder can bleed across slot switches (possible cross-slot text write). *macOS-version-dependent.* *(swiftui)* |
+| **F13** | 🟡 perf | ⏸ deferred | `RingPreviewSelector.swift:28` | `@State private var preview = RingViewModel()` allocates a throwaway view model (+`ActionService` actor) per body eval, i.e. per keystroke; plus a first-frame sample-ring flash. *(swiftui)* |
+| **F14** | 🟡 mis-click | ⏸ deferred | `RingPreviewSelector.swift:34` | 44pt inner hotspots overlap ~5pt at 8 spokes → a boundary click selects the neighbor, or hits the ghost and silently appends. *2.5pt sliver.* *(correctness)* |
+
+### Fixed this pass (A + B + D)
+
+- **Cluster A — load/save path (`MenuEditorWindowController`):** new `isDirty` flag; `flushPendingSave()` persists deterministically instead of `await`-ing a possibly-cancelled task; `refreshFromDisk` refuses to overwrite the working model from disk while `isDirty` (local edits win) and skips `model.load` when disk == model (no churn, selection/sheet preserved); `saveNow` now **bails + alerts on a decode-throw** instead of clobbering with `baseConfig`, and **surfaces write failures** (`presentSaveFailure`) instead of swallowing them; a clean close writes nothing. Kills F1–F4, F11.
+- **Cluster B — model normalization (`MenuEditorModel`):** `normalizeSnapPayloads()` (run in `init`/`load`/`resetToDefaults`/after `removeSubItem`) gives a *direct* `.windowSnap` item a real zone so it can't no-op behind a "Left" label (F7, invariant 4); parent markers with sub-items are skipped to avoid churn. New `maxSubItems = 12` cap (clears the 10-zone Snap default) gates `addSubItem` + disables the "Add Sub-item" button (F8, invariant 3, outer band).
+- **Cluster D — render site (`RingPreviewSelector:220`):** `SFSymbol.resolved(sub.icon)` — completes T11's "no blank wedge" guarantee at the one missed draw site (F15).
+
+### Deferred (accepted risk until scheduled) — extends §3
+
+6. **F5 — Settings writers still wipe on corrupt config.** Same one-line pattern as the removed editor bug, in `SettingsView`/`TriggersSettingsView`. Should get the same load-gate; pre-existing, so out of this branch's scope but tracked.
+7. **F6 — editor↔Settings last-writer-wins.** Needs a shared/serialized config writer (single `ConfigurationService`, or an actor-level RMW).
+8. **F9 / F10 — load-time cap & depth-cap bypass.** Hand-edited/legacy configs only; a `load()`-time clamp (or surfacing over-cap items) would close them.
+9. **F12 — detail-form identity.** `.id(model.selection)` on the editor subtree (safe now that action-type reset lives in the model) would give each slot fresh `@State`/focus.
+10. **F13 — per-keystroke `RingViewModel` alloc.** Inject the preview model from the controller, or init it empty.
+11. **F14 — 8-spoke inner hotspot overlap.** Clamp hotspot diameter to the inner chord, or use per-spoke `AnnularWedge` content shapes.

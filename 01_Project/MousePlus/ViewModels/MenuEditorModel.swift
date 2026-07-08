@@ -90,6 +90,7 @@ final class MenuEditorModel {
         self.inner = inner
         self.middle = middle
         enforceInnerInvariants()
+        normalizeSnapPayloads()
     }
 
     /// Replace the working rings from a full configuration and clear selection.
@@ -98,6 +99,7 @@ final class MenuEditorModel {
         middle = config.middle
         selection = nil
         enforceInnerInvariants()
+        normalizeSnapPayloads()
     }
 
     // MARK: Computed
@@ -123,6 +125,18 @@ final class MenuEditorModel {
     /// Whether `band` itself is full (8 items) and may not receive another item.
     func atCap(for band: EditorBand) -> Bool {
         self[keyPath: arrayKeyPath(for: band)].count >= 8
+    }
+
+    /// Generous cap on sub-items (outer arc) per middle item. High enough to hold
+    /// the 10-zone Snap default with headroom, but bounded so the outer arc — which
+    /// saturates the full circle near 3·N wedges — can't be packed into unhittable
+    /// slivers. Gates ``addSubItem(toMiddle:)`` (the UI also disables the button).
+    static let maxSubItems = 12
+
+    /// Whether the middle item `parentID` has reached ``maxSubItems`` sub-items.
+    func subItemsAtCap(for parentID: UUID) -> Bool {
+        guard let parent = middle.first(where: { $0.id == parentID }) else { return false }
+        return (parent.subItems?.count ?? 0) >= Self.maxSubItems
     }
 
     // MARK: - Identity-keyed safe bindings
@@ -273,6 +287,7 @@ final class MenuEditorModel {
     /// sub-items (invariant 2); there is deliberately no inner equivalent.
     func addSubItem(toMiddle parentID: UUID) {
         guard let parentIndex = middle.firstIndex(where: { $0.id == parentID }) else { return }
+        guard !subItemsAtCap(for: parentID) else { return }   // invariant 3, outer band
 
         let newSub = RingMenuItem(label: "New", icon: "questionmark", actionType: .custom)
         if middle[parentIndex].subItems == nil {
@@ -298,6 +313,11 @@ final class MenuEditorModel {
             middle[parentIndex].subItems = nil
         }
 
+        // A `.windowSnap` parent that just lost its last sub-item is now a DIRECT
+        // snap item with no zone — give it a real one so it doesn't silently no-op
+        // while the detail form claims "Left" (invariant 4).
+        normalizeSnapPayloads()
+
         // Repoint selection to the parent middle item.
         selection = SlotSelection(band: .middle, itemID: parentID, subItemID: nil)
     }
@@ -308,6 +328,7 @@ final class MenuEditorModel {
         middle = RingMenuItem.sampleItems
         selection = nil
         enforceInnerInvariants()
+        normalizeSnapPayloads()
     }
 
     // MARK: - Merge
@@ -352,6 +373,31 @@ final class MenuEditorModel {
     private func enforceInnerInvariants() {
         for index in inner.indices where inner[index].subItems != nil {
             inner[index].subItems = nil
+        }
+    }
+
+    /// Give a DIRECT `.windowSnap` item a real zone when its payload is missing or
+    /// invalid (invariant 4). A wedge whose sub-items were all deleted — or a
+    /// hand-edited config — otherwise ends up a `.windowSnap` with an empty
+    /// `actionData` that `ActionService` silently no-ops on, while the detail form
+    /// misleadingly shows "Left". Setting a real zone makes the runtime match the
+    /// UI. Parent markers (items that STILL carry sub-items) are skipped: their
+    /// `actionData` is never executed, and rewriting it would needlessly churn the
+    /// on-disk sample config (whose Snap parent legitimately has an empty payload).
+    private func normalizeSnapPayloads() {
+        func fix(_ item: inout RingMenuItem) {
+            guard item.actionType == .windowSnap,
+                  !item.hasSubItems,
+                  SnapZone(rawValue: item.actionData) == nil else { return }
+            item.actionData = SnapZone.left.rawValue
+        }
+        for i in inner.indices { fix(&inner[i]) }
+        for i in middle.indices {
+            fix(&middle[i])
+            if var subs = middle[i].subItems {
+                for j in subs.indices { fix(&subs[j]) }
+                middle[i].subItems = subs
+            }
         }
     }
 

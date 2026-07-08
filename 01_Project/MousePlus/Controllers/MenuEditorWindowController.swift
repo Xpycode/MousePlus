@@ -19,6 +19,18 @@ final class MenuEditorWindowController: NSObject, NSWindowDelegate {
 
     private var saveTask: Task<Void, Never>?
 
+    /// True when the working model holds edits not yet persisted. Two jobs:
+    /// (1) the reopen flush uses it instead of `await`-ing `saveTask` — a debounce
+    /// task cancelled by the next edit *completes* its await without ever saving,
+    /// so "awaited" ≠ "saved"; and (2) `refreshFromDisk` refuses to overwrite the
+    /// model from disk while it's `true`, so local edits win over a stale read and
+    /// a no-op reopen/close doesn't rewrite the file.
+    private var isDirty = false
+
+    /// Set once we've reported a failed write, so a persistently unwritable disk
+    /// doesn't fire an alert on every debounce tick. Cleared on the next success.
+    private var saveFailureAlerted = false
+
     /// True once the one long-lived observation chain has been armed. The chain
     /// survives window close (it observes the model, not the window), so arming
     /// again on reopen would stack a second concurrent chain per open/close cycle.
@@ -85,10 +97,17 @@ final class MenuEditorWindowController: NSObject, NSWindowDelegate {
 
     // MARK: - Load
 
-    /// Reload the model + merge base from disk. Awaits any in-flight save first:
-    /// on a close→reopen inside the debounce window, reading the file before the
-    /// close-flush lands would load stale rings — and the autosave chain would
-    /// then write those stale rings back over the flushed edit.
+    /// Reload the merge base from disk and, when safe, the working rings.
+    ///
+    /// First `flushPendingSave()` — deterministically, because a debounce task
+    /// cancelled by a fresh edit completes its `await` WITHOUT writing, so we can't
+    /// just `await saveTask.value` and assume the edit landed (that was the bug: a
+    /// reopen inside the debounce window would then read stale rings and revert the
+    /// unsaved edit). After flushing, `baseConfig` is always refreshed so
+    /// Settings-side triggers/appearance flow in. The working rings are reloaded
+    /// only on the first populate, or when the editor has NO unsaved edits and disk
+    /// genuinely differs (an external/hand edit) — otherwise a reopen would clear
+    /// selection, dismiss an open sheet, and churn the file for nothing.
     ///
     /// `load()` returns a default `Configuration` when the file is simply absent
     /// (fresh install — defaults are correct); it THROWS only when the file
@@ -97,18 +116,32 @@ final class MenuEditorWindowController: NSObject, NSWindowDelegate {
     /// the user's real (recoverable) file 400ms later. Instead, lock saves out
     /// and tell the user.
     private func refreshFromDisk() async {
-        if let pending = saveTask {
-            await pending.value
-        }
+        await flushPendingSave()
         do {
             let cfg = try await configService.load()
             baseConfig = cfg
-            model.load(from: cfg)
+            if !isObservingModel {
+                // First populate for this window — always load.
+                model.load(from: cfg)
+            } else if !isDirty, cfg.inner != model.inner || cfg.middle != model.middle {
+                // Adopt an external change only when we have nothing unsaved to lose.
+                model.load(from: cfg)
+            }
             loadState = .loaded
             observeForAutosave()
         } catch {
             loadState = .failed
             presentLoadFailure(error)
+        }
+    }
+
+    /// Persist any unsaved edits BEFORE reading the file back, without relying on
+    /// the debounce task (which may have been cancelled and thus never saved).
+    private func flushPendingSave() async {
+        saveTask?.cancel()
+        saveTask = nil
+        if isDirty {
+            await saveNow()
         }
     }
 
@@ -154,6 +187,7 @@ final class MenuEditorWindowController: NSObject, NSWindowDelegate {
     }
 
     private func scheduleSave() {
+        isDirty = true
         saveTask?.cancel()
         saveTask = Task { @MainActor in
             try? await Task.sleep(for: .milliseconds(400))
@@ -167,29 +201,78 @@ final class MenuEditorWindowController: NSObject, NSWindowDelegate {
     /// Mirrors `RingAppearanceSettingsView.scheduleSave`'s read-modify-write: the
     /// merge base is re-read at save time (not the window-open `baseConfig`
     /// snapshot), so triggers/appearance/behavior edited in Settings while this
-    /// window is open are never clobbered by a stale snapshot. (If that fresh
-    /// read fails, fall back to `baseConfig` — the last config this controller
-    /// knew to be good — rather than dropping to sample defaults.)
+    /// window is open are never clobbered by a stale snapshot.
+    ///
+    /// A THROW from that fresh read means the file exists but no longer decodes
+    /// (e.g. a hand-edit in progress). We must NOT fall back to an in-memory config
+    /// and overwrite it — that would destroy a recoverable file, the exact wipe the
+    /// load-time gate protects against. So we lock saving (`.failed`) and tell the
+    /// user, same as at open. An ABSENT file returns defaults (fresh install) and is
+    /// safe to merge into. A failed WRITE is surfaced too, never silently dropped —
+    /// otherwise an unwritable disk loses the whole session behind a saved-looking UI.
     private func saveNow() async {
         guard loadState == .loaded else { return }
-        let base = (try? await configService.load()) ?? baseConfig
+
+        let base: Configuration
+        do {
+            base = try await configService.load()
+        } catch {
+            loadState = .failed
+            presentLoadFailure(error)
+            return
+        }
+
         let merged = model.merged(into: base)
+        do {
+            try await configService.save(merged)
+        } catch {
+            presentSaveFailure(error)
+            return
+        }
+
         baseConfig = merged
-        try? await configService.save(merged)
+        isDirty = false
+        saveFailureAlerted = false
         AppDelegate.applyMenuItems?(merged)
+    }
+
+    /// Warn that a write failed (disk full / permissions), once per failure streak.
+    private func presentSaveFailure(_ error: Error) {
+        guard !saveFailureAlerted else { return }
+        saveFailureAlerted = true
+        let alert = NSAlert()
+        alert.alertStyle = .warning
+        alert.messageText = "Couldn't Save Your Menu Changes"
+        alert.informativeText = """
+        Your latest edits couldn't be written to disk \
+        (\(error.localizedDescription)) They're still shown here, but may be lost \
+        when you quit. Check that ~/Library/Application Support/MousePlus is \
+        writable, then make another edit to retry.
+        """
+        if let window {
+            alert.beginSheetModal(for: window)
+        } else {
+            alert.runModal()
+        }
     }
 
     // MARK: - NSWindowDelegate
 
     func windowWillClose(_ notification: Notification) {
-        // Cancel any pending debounced save and flush one final save so an edit
-        // that landed inside the debounce window is never lost. The flush lives
-        // in `saveTask` so a quick reopen's `refreshFromDisk` can await it.
-        // (`saveNow` itself refuses to run unless a load succeeded, so closing
-        // before the first load — or after a failed one — never writes.)
+        // Cancel any pending debounced save and, ONLY if there are unsaved edits,
+        // flush one final save so an edit that landed inside the debounce window is
+        // never lost. The flush lives in `saveTask` so a quick reopen's
+        // `flushPendingSave` can await/replace it. A clean close writes nothing —
+        // no gratuitous rewrite of a file that hasn't changed. (`saveNow` also
+        // refuses to run unless a load succeeded, so closing before the first load
+        // — or after a failed one — never writes.)
         saveTask?.cancel()
-        saveTask = Task { @MainActor in
-            await self.saveNow()
+        if isDirty {
+            saveTask = Task { @MainActor in
+                await self.saveNow()
+            }
+        } else {
+            saveTask = nil
         }
         window = nil
     }
