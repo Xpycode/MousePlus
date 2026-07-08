@@ -577,3 +577,23 @@ mirror (~1.5–2d) → app switcher (~1.5–2d) → system toggles (~3.5–4d). 
 **Consequences:** A known-invalid icon string can reach disk, but it round-trips harmlessly (the renderer substitutes the placeholder) and the editor keeps showing it red until fixed. Any future icon-render site that draws a user-supplied name must also route through `SFSymbol.resolved()` — the guarantee is per-call-site, not global. If icon rendering ever centralizes (e.g. a single `RingGlyph` view), fold the resolve into it.
 
 ---
+
+## App-shell access for a menu-bar-only app: global ⌥⌘, Settings hotkey + decode-tolerant `TriggersConfig` (2026-07-08)
+
+**Context:** MousePlus is `LSUIElement` (no dock icon). The "Identify Input" diagnostic window was being auto-opened at every launch purely as a workaround for the M1 Max invisible-menu-bar-icon mystery — on that Mac it was the *only* doorway to Settings (via its embedded "Settings…" button). Removing that debug auto-open (it's a developer surface) would strand the M1 Max with no way into Preferences. So a reliable, always-present Settings entry point was needed first, and adding it meant introducing a new field to the on-disk `TriggersConfig`.
+
+**Options Considered (Settings entry point):**
+1. **Relaunch-opens-Settings** — `applicationShouldHandleReopen(_:hasVisibleWindows:)`; double-clicking the running app opens Preferences. Standard menu-bar-app idiom, zero new UI.
+2. **Dedicated global hotkey** (default ⌥⌘,) via a `KeyboardTriggerMonitor`, rebindable in Settings ▸ Triggers.
+3. **Chase the root-cause** invisible-`NSStatusItem` bug on the M1 Max. Open-ended, higher risk.
+
+**Decision:** Option 2 (user's choice) — a rebindable global hotkey, shipped **bound** to ⌥⌘,. Explicitly **not** plain ⌘,. Separately, `TriggersConfig` gains a custom **decode-tolerant** `init(from:)`.
+
+**Rationale:**
+- **Why ⌥⌘, not ⌘,:** `NSEvent.addGlobalMonitorForEvents` is *observe-only* — it never consumes the event. A global `⌘,` watcher would therefore open MousePlus Settings *on top of* whatever the frontmost app does with `⌘,` (nearly every app maps it to its own Preferences). ⌥⌘, is rarely bound, so no double-fire.
+- **Why decode-tolerant:** `TriggersConfig` relied on *synthesized* `Codable`, which throws `keyNotFound` for any missing key. Naively adding `openSettings` would make **every existing `config.json` fail to decode** — the same synthesized-`Codable` data-loss class the persistence-safety decision (2026-07-07) already fights. `decodeIfPresent ?? default` per field is the project's established tolerance pattern (`Configuration`, `AppearanceConfig` both do it).
+- **Ships bound (unlike ring triggers):** the ring triggers ship unbound by design (onboarding sets them); the Settings hotkey is a *safety net*, so a default-off value would defeat its purpose. Via the decode default, existing users inherit ⌥⌘, automatically.
+
+**Consequences:** Any future field added to an evolving on-disk `Codable` model must use per-field `decodeIfPresent`-with-default — do **not** rely on synthesized `Codable` for models that gain keys over time (reusable gotcha; cookbook candidate). Reaching Settings *from the HUD itself* (a ring wedge) is still a gap — the user's actual instinct was to look for a Settings icon in the ring — so the next step is a new `ActionType.openSettings` that drops a Settings wedge into the menu. The global monitor is re-armed after the Accessibility grant (global monitors don't retroactively start firing) and on rebind, mirroring `setupTriggers`/`applyTriggers`.
+
+---

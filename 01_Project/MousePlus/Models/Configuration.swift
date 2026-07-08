@@ -100,26 +100,64 @@ enum TriggerBinding: Codable, Equatable, Sendable {
     }
 }
 
-/// Both trigger slots — keyboard and mouse button — each independently configurable.
+/// Trigger slots — the ring's keyboard + mouse-button triggers, plus a global
+/// "open Settings" hotkey — each independently configurable.
 struct TriggersConfig: Codable, Sendable, Equatable {
     var keyboard: TriggerBinding
     var mouseButton: TriggerBinding
 
-    init(keyboard: TriggerBinding = .none, mouseButton: TriggerBinding = .none) {
+    /// Global shortcut that opens Settings/Preferences from anywhere. Unlike the ring
+    /// triggers (which ship **unbound** and are set via onboarding / the Triggers tab),
+    /// this ships **bound** to ⌥⌘, so a menu-bar-only app is always reachable even when
+    /// the status-item icon fails to render (the M1 Max mystery) — it's the fallback
+    /// way into Settings once the "Identify Input" auto-open was removed.
+    var openSettings: TriggerBinding
+
+    init(
+        keyboard: TriggerBinding = .none,
+        mouseButton: TriggerBinding = .none,
+        openSettings: TriggerBinding = TriggersConfig.defaultOpenSettings
+    ) {
         self.keyboard = keyboard
         self.mouseButton = mouseButton
+        self.openSettings = openSettings
     }
 
-    /// Ships **unbound** — no trigger is set out of the box. The user picks a
-    /// trigger explicitly: via first-launch onboarding (D1, W5) or the Triggers
-    /// settings tab (W4). A saved `config.json` always overrides this at load,
-    /// so this only governs a truly fresh install / a config missing the
-    /// `triggers` key.
+    /// Decode-tolerant. `TriggersConfig` previously relied on synthesized `Codable`,
+    /// which would throw `keyNotFound` on the new `openSettings` key — making every
+    /// existing `config.json` (no such key) fail to decode and take the whole
+    /// configuration down with it. Each field is `decodeIfPresent`-ed with a default
+    /// instead, so old configs still load AND existing users inherit the ⌥⌘, hotkey.
+    private enum CodingKeys: String, CodingKey { case keyboard, mouseButton, openSettings }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        keyboard = try c.decodeIfPresent(TriggerBinding.self, forKey: .keyboard) ?? .none
+        mouseButton = try c.decodeIfPresent(TriggerBinding.self, forKey: .mouseButton) ?? .none
+        openSettings = try c.decodeIfPresent(TriggerBinding.self, forKey: .openSettings) ?? TriggersConfig.defaultOpenSettings
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        try c.encode(keyboard, forKey: .keyboard)
+        try c.encode(mouseButton, forKey: .mouseButton)
+        try c.encode(openSettings, forKey: .openSettings)
+    }
+
+    /// Out-of-the-box global Settings hotkey: ⌥⌘, (comma = keyCode 43). Mode is
+    /// irrelevant — the monitor reacts only to key-down.
+    static let defaultOpenSettings: TriggerBinding = .keyboard(
+        keyCode: 43,                       // comma
+        modifiers: (1 << 19) | (1 << 20),  // ⌥ option (1<<19) | ⌘ command (1<<20)
+        mode: .holdRelease
+    )
+
+    /// Ring triggers ship **unbound** (set via onboarding / the Triggers tab); the
+    /// Settings hotkey ships bound. A saved `config.json` always overrides all of this
+    /// at load, so this governs only a fresh install / a config missing these keys.
     ///
-    /// (Previously this hard-coded an F5 tap-toggle + middle-click hold-release
-    /// test pair so both interaction modes were live without onboarding; removed
-    /// 2026-05-31 now that the Triggers tab exists and onboarding is the intended
-    /// binding path.)
+    /// (The ring triggers previously hard-coded an F5 + middle-click test pair; removed
+    /// 2026-05-31 once the Triggers tab + onboarding became the intended binding path.)
     static let `default` = TriggersConfig()
 }
 

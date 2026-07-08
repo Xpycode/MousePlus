@@ -20,7 +20,7 @@ struct TriggersSettingsView: View {
 
     @State private var permissions = PermissionsService()
 
-    private enum Slot { case keyboard, mouse }
+    private enum Slot { case keyboard, mouse, openSettings }
 
     var body: some View {
         Form {
@@ -34,6 +34,13 @@ struct TriggersSettingsView: View {
 
             Section("Mouse Button Trigger") {
                 bindingRow(slot: .mouse, binding: $triggers.mouseButton)
+            }
+
+            Section("Open Settings Shortcut") {
+                bindingRow(slot: .openSettings, binding: $triggers.openSettings)
+                Text("Opens this Settings window from anywhere — a reliable way in when the menu bar icon isn't showing. Defaults to ⌥⌘,.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
             }
 
             if interceptionWarning {
@@ -88,7 +95,7 @@ struct TriggersSettingsView: View {
 
         HStack {
             if isRecording {
-                Text(slot == .keyboard ? "Press a key… (Esc to cancel)" : "Press a button… (Esc to cancel)")
+                Text(slot == .mouse ? "Press a button… (Esc to cancel)" : "Press a key… (Esc to cancel)")
                     .foregroundStyle(.secondary)
             } else {
                 Text(binding.wrappedValue.displayString)
@@ -104,7 +111,7 @@ struct TriggersSettingsView: View {
                 } else {
                     interceptionWarning = false
                     recordingSlot = slot
-                    recorder.record(slot == .keyboard ? .keyboard : .mouseButton)
+                    recorder.record(slot == .mouse ? .mouseButton : .keyboard)
                 }
             }
 
@@ -114,15 +121,19 @@ struct TriggersSettingsView: View {
             .disabled(!binding.wrappedValue.isActive || isRecording)
         }
 
-        Picker("Mode", selection: Binding(
-            get: { binding.wrappedValue.mode },
-            set: { binding.wrappedValue = binding.wrappedValue.withMode($0) }
-        )) {
-            Text("Hold-release").tag(TriggerMode.holdRelease)
-            Text("Tap-toggle").tag(TriggerMode.tapToggle)
+        // The Settings hotkey fires once on key-down — hold-release vs tap-toggle is
+        // meaningless for it, so the mode picker is only shown for the ring triggers.
+        if slot != .openSettings {
+            Picker("Mode", selection: Binding(
+                get: { binding.wrappedValue.mode },
+                set: { binding.wrappedValue = binding.wrappedValue.withMode($0) }
+            )) {
+                Text("Hold-release").tag(TriggerMode.holdRelease)
+                Text("Tap-toggle").tag(TriggerMode.tapToggle)
+            }
+            .pickerStyle(.segmented)
+            .disabled(!binding.wrappedValue.isActive)
         }
-        .pickerStyle(.segmented)
-        .disabled(!binding.wrappedValue.isActive)
     }
 
     private var permissionBanner: some View {
@@ -153,13 +164,15 @@ struct TriggersSettingsView: View {
 
         switch outcome {
         case let .captured(captured):
-            // Preserve the slot's currently-selected mode; the recorder only knows the key/button.
-            let current = slot == .keyboard ? triggers.keyboard : triggers.mouseButton
-            let merged = captured.withMode(current.mode)
-            if slot == .keyboard {
-                triggers.keyboard = merged
-            } else {
-                triggers.mouseButton = merged
+            switch slot {
+            case .keyboard:
+                // Preserve the slot's mode; the recorder only knows the key/button.
+                triggers.keyboard = captured.withMode(triggers.keyboard.mode)
+            case .mouse:
+                triggers.mouseButton = captured.withMode(triggers.mouseButton.mode)
+            case .openSettings:
+                // Mode is irrelevant for the Settings hotkey — store the raw capture.
+                triggers.openSettings = captured
             }
         case .timedOut:
             interceptionWarning = true

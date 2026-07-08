@@ -134,6 +134,16 @@ struct GeneralSettingsView: View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
+
+            Section("Diagnostics") {
+                Text("Identify Input inspects raw mouse and keyboard events — handy for finding a button's number or checking why a trigger isn't detected.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+
+                Button("Open Identify Input…") {
+                    AppDelegate.showIdentifyInput?()
+                }
+            }
         }
         .formStyle(.grouped)
         .padding()

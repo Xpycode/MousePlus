@@ -43,6 +43,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// Settings → app bridge: opens the standalone Menu Items editor window.
     @MainActor static var showMenuEditor: (() -> Void)?
 
+    /// Settings → app bridge: opens the "Identify Input" diagnostic window. No longer
+    /// auto-opened at launch — reachable from Settings → General → Diagnostics and the
+    /// menu bar (see the M1 Max menu-bar-icon mystery in `PROJECT_STATE.md`).
+    @MainActor static var showIdentifyInput: (() -> Void)?
+
     private var menuBarController: MenuBarController?
     private var ringWindowController: RingWindowController?
     private var triggerService: TriggerService?
@@ -52,6 +57,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var onboardingWindowController: OnboardingWindowController?
     private var inputRecorderWindowController: InputRecorderWindowController?
     private var menuEditorWindowController: MenuEditorWindowController?
+
+    /// Global "open Settings" hotkey (default ⌥⌘,). The reliable way into Preferences
+    /// for a menu-bar-only app when the status-item icon is missing (M1 Max bug).
+    private var settingsHotkeyMonitor: KeyboardTriggerMonitor?
 
     private var ringViewModel = RingViewModel()
     private var dismissMonitor: DismissMonitor?
@@ -65,7 +74,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         if permissionsService.isGranted {
             setupTriggers()
-            showInputRecorder()  // menu-bar-icon bug workaround: auto-open diagnostic at launch
+            applySettingsHotkey(configuration.triggers.openSettings)  // reliable way into Settings
         } else {
             showPermissionOnboarding()
         }
@@ -86,7 +95,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         permissionsService.onGranted = { [weak self] in
             guard let self else { return }
             self.setupTriggers()
-            self.showInputRecorder()  // menu-bar-icon bug workaround: auto-open diagnostic
+            self.applySettingsHotkey(self.configuration.triggers.openSettings)  // re-arm after grant
         }
 
         controller.show(service: permissionsService) { [weak self] in
@@ -180,6 +189,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             guard let self else { return }
             self.configuration.triggers = triggers
             self.triggerService?.updateConfig(triggers)
+            self.applySettingsHotkey(triggers.openSettings)  // live-apply a rebound Settings hotkey
         }
 
         // Live-apply menu-item edits from the Menu Items editor into the shared ring.
@@ -195,6 +205,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // Open the standalone Menu Items editor from the Settings launcher.
         AppDelegate.showMenuEditor = { [weak self] in self?.showMenuEditor() }
 
+        // Open the "Identify Input" diagnostic from Settings / menu bar (no longer auto-opened).
+        AppDelegate.showIdentifyInput = { [weak self] in self?.showInputRecorder() }
+
         Task {
             if let config = try? await configService?.load() {
                 configuration = config
@@ -202,6 +215,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 // Now that the saved triggers are loaded, snap the live monitors to them
                 // (setupTriggers may have started with the default before load finished).
                 triggerService?.updateConfig(config.triggers)
+                applySettingsHotkey(config.triggers.openSettings)
             }
         }
     }
@@ -304,9 +318,31 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         Self.openSettingsAction?()
     }
 
+    /// (Re)bind the global "open Settings" hotkey to `binding`. A `.keyboard` binding
+    /// arms a `KeyboardTriggerMonitor` that opens Settings on key-down; any other
+    /// binding (including `.none`) tears the monitor down. Re-armed after the
+    /// Accessibility grant and after a rebind in the Triggers tab — the same pattern
+    /// `setupTriggers`/`applyTriggers` use for the ring triggers.
+    private func applySettingsHotkey(_ binding: TriggerBinding) {
+        settingsHotkeyMonitor?.stop()
+        guard case let .keyboard(keyCode, modifiers, _) = binding else {
+            settingsHotkeyMonitor = nil
+            return
+        }
+        let monitor = settingsHotkeyMonitor ?? KeyboardTriggerMonitor()
+        settingsHotkeyMonitor = monitor
+        monitor.start(
+            keyCode: keyCode,
+            modifiers: modifiers,
+            onDown: { [weak self] in self?.showSettings() },
+            onUp: {}
+        )
+    }
+
     func applicationWillTerminate(_ notification: Notification) {
         triggerEventTask?.cancel()
         triggerService?.stop()
+        settingsHotkeyMonitor?.stop()
         menuBarController?.remove()
     }
 }
