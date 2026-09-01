@@ -68,7 +68,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         Self.openSettingsRouteAction?(route)
     }
     private lazy var actionResultRouter = ActionResultRouter { [weak self] failure in
-        await MainActor.run { self?.actionErrorHUDController.show(failure) }
+        await MainActor.run { [weak self] in
+            self?.actionErrorHUDController.show(failure)
+        }
     }
     private lazy var ringViewModel = RingViewModel(actionResultRouter: actionResultRouter)
     private var dismissMonitor: DismissMonitor?

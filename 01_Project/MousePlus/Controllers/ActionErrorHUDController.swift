@@ -30,6 +30,7 @@ final class ActionErrorHUDController: NSObject {
             position(panel)
             panel.orderFrontRegardless()
         }
+        let displayDuration = displayDuration
         dismissalTask = Task { [weak self] in
             try? await Task.sleep(for: displayDuration)
             guard !Task.isCancelled else { return }
