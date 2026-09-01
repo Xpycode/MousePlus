@@ -4,15 +4,13 @@ import SwiftUI
 /// Edits a menu item's action type and its type-specific data payload.
 ///
 /// Drops into a `Form`/`VStack`. The top control is an action-type `Picker`
-/// (clipboard is never offered), and below it a control whose shape depends on
+/// and below it a control whose shape depends on
 /// the selected `ActionType`:
 /// - `.appSwitch` — shows the chosen app + a "Choose…" button (presents `AppPickerSheet`).
 /// - `.custom`    — multiline command field with an empty-command warning.
 /// - `.windowSnap`— `SnapZone` picker, stored as the zone's `rawValue`.
 /// - `.menuBar` / `.systemToggle` / `.screenshot` — disabled "coming soon" placeholder.
 ///
-/// Note: the dropped `.clipboard` value is *not* a real enum case (it decodes to
-/// `.custom`), so it is never offered in the picker and never reaches the switch.
 struct ActionDataEditor: View {
     @Binding var item: RingMenuItem
 
@@ -21,13 +19,14 @@ struct ActionDataEditor: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            // 1. Action type picker.
-            //
-            // The legacy `.clipboard` value isn't a real enum case here — it's mapped
-            // to `.custom` during decode (see `ActionType.init(from:)`), so it can never
-            // appear in `allCases` and needs no explicit filtering.
+            // Keep an existing unavailable value visible, but offer only supported
+            // actions as replacements.
             Picker("Action", selection: $item.actionType) {
-                ForEach(ActionType.allCases, id: \.self) { type in
+                if !item.actionType.isSelectable {
+                    Text(item.actionType.displayName).tag(item.actionType)
+                    Divider()
+                }
+                ForEach(ActionType.selectableCases, id: \.self) { type in
                     Text(type.displayName).tag(type)
                 }
             }
@@ -49,9 +48,7 @@ struct ActionDataEditor: View {
             customControl
         case .windowSnap:
             windowSnapControl
-        case .menuBar, .systemToggle, .screenshot:
-            // `.clipboard` is intentionally absent — it decodes to `.custom`, so it
-            // can never reach this switch.
+        case .menuBar, .systemToggle, .screenshot, .sendKeystroke, .unavailable:
             comingSoonControl
         }
     }

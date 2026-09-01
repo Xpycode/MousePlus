@@ -41,6 +41,12 @@ actor ActionService {
             // HUD Feature E — not yet implemented.
             throw ActionError.notImplemented(.screenshot)
 
+        case .sendKeystroke:
+            throw ActionError.notImplemented(.sendKeystroke)
+
+        case .unavailable:
+            throw ActionError.notImplemented(item.actionType)
+
         case .custom:
             try await runCommand(item.actionData)
         }
