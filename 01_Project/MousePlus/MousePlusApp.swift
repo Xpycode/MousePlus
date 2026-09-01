@@ -4,11 +4,12 @@ import SwiftUI
 struct MousePlusApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
     @Environment(\.openSettings) private var openSettings
+    @State private var settingsSelection: SettingsSection? = .general
 
     var body: some Scene {
         // Settings window (opened from menu bar)
         Settings {
-            SettingsView()
+            SettingsView(selection: $settingsSelection)
                 .environmentObject(appDelegate.settingsActionContextProvider)
         }
     }

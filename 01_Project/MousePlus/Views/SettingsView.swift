@@ -1,30 +1,24 @@
 import SwiftUI
+import MacUIKitSettings
 
 /// Settings/Preferences view
 struct SettingsView: View {
+    @Binding var selection: SettingsSection?
+
     var body: some View {
-        TabView {
-            GeneralSettingsView()
-                .tabItem {
-                    Label("General", systemImage: "gear")
-                }
-
-            TriggersSettingsView()
-                .tabItem {
-                    Label("Triggers", systemImage: "cursorarrow.click.2")
-                }
-
-            RingAppearanceSettingsView()
-                .tabItem {
-                    Label("Ring Appearance", systemImage: "circle.dashed")
-                }
-
-            MenuSettingsView()
-                .tabItem {
-                    Label("Menu Items", systemImage: "circle.hexagongrid")
-                }
+        SettingsSidebarShell(selection: $selection, searchable: false) { section in
+            switch section {
+            case .general:
+                GeneralSettingsView()
+            case .triggers:
+                TriggersSettingsView()
+            case .ringAppearance:
+                RingAppearanceSettingsView()
+            case .menuItems:
+                MenuSettingsView()
+            }
         }
-        .frame(width: 460, height: 460)
+        .frame(minWidth: 1120, minHeight: 680)
     }
 }
 
@@ -174,5 +168,6 @@ struct MenuSettingsView: View {
 }
 
 #Preview {
-    SettingsView()
+    @Previewable @State var selection: SettingsSection? = .general
+    SettingsView(selection: $selection)
 }
