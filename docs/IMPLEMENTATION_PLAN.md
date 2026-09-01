@@ -147,27 +147,27 @@ Run `BUILD` after every implementation task. Tasks with tests also run their foc
 
 ### Wave 5 — Editor actions, Test Action, recovery, accessibility
 
-- [ ] **5.1 Migrate editor controls and unavailable actions** → editor views, symbol/app pickers
+- [x] **5.1 Migrate editor controls and unavailable actions** → editor views, symbol/app pickers
   - Depends on: 1.1, 1.4, 3.1, 4.3
   - Success: supported types alone are selectable; unavailable types stay visible/lossless; model invariants handle payload switches; app controls use wrappers; invalid symbols persist and announce placeholder.
   - Backpressure: switch/round-trip tests; forbidden-control audit with shared exceptions only; `BUILD`.
 
-- [ ] **5.2 Integrate ShortcutKit recording** → `ActionDataEditor.swift`, new `KeystrokePayload+ShortcutKit.swift`, tests
+- [x] **5.2 Integrate ShortcutKit recording** → `ActionDataEditor.swift`, new `KeystrokePayload+ShortcutKit.swift`, tests
   - Depends on: 0.2, 1.2, 5.1
   - Success: sticky layout-aware candidate; Save/Cancel/Clear affect selected item only; teardown preserves committed data; ordinary conflicts warn; proven unusable/reserved conflicts block visibly; no trigger registration.
   - Backpressure: adapter/conflict and package tests; `BUILD`; manual record/cancel/section-switch.
 
-- [ ] **5.3 Add flush-before-Test Action** → new `TestActionControl.swift`, `MenuItemsPane.swift`, coordinator/router
+- [x] **5.3 Add flush-before-Test Action** → new `TestActionControl.swift`, `MenuItemsPane.swift`, coordinator/router
   - Depends on: 2.2, 3.2–3.4, 5.1
   - Success: validation/context disable reasons appear; dirty edits flush first; save failure prevents execution; contextual target is named; results persist until edit/retry/dismiss.
   - Backpressure: ordering/failure integration tests; `BUILD`; live app/custom/snap tests.
 
-- [ ] **5.4 Add status, reset/undo/restore, and close UI** → new `WorkspaceStatusView.swift`, `CloseBarrier.swift`, Menu Items and Settings window bridge
+- [x] **5.4 Add status, reset/undo/restore, and close UI** → new `WorkspaceStatusView.swift`, `CloseBarrier.swift`, Menu Items and Settings window bridge
   - Depends on: 2.3, 1.4
   - Success: all visible states render text; reset names scope/backup; Undo/Restore are discoverable; Retry/Discard/Cancel gates close.
   - Backpressure: UI-state tests; temporary corrupt/unwritable harness (not real config); `BUILD`.
 
-- [ ] **5.5 Complete workspace accessibility** → Settings/editor views, wrappers, new UI tests
+- [x] **5.5 Complete workspace accessibility** → Settings/editor views, wrappers, new UI tests
   - Depends on: 4.1–5.4
   - Success: identifiers/labels expose wedge band/position/label/action/selection; state isn't color-only; every required operation is keyboard reachable with focus.
   - Backpressure: UI tests plus manual Full Keyboard Access/VoiceOver audit; `BUILD`.
@@ -247,7 +247,7 @@ Run `BUILD` after every implementation task. Tasks with tests also run their foc
 | 2 | 2026-09-01 | 2026-09-01 | 2.1 `9dd165b`; 2.2 `5a5d2ae`; 2.3 `711fb9d`. Focused Wave 2 persistence/coordinator/state suites passed 21/21; independent workspace build remained blocked by the sandboxed Xcode/CoreSimulator workspace-detection failure. |
 | 3 | 2026-09-01 | 2026-09-01 | 3.1 `76df64e`; 3.2 `a29eed7`; 3.3 `53bcc32`; 3.4 `183bb5f`. Shared validation/results, awaited and injectable action execution, safe Settings target capture, and presentation-neutral routing landed. Focused Wave 3 suites passed 17/17; full plan passed 55 unit tests + 1 UI test; unsigned Debug build succeeded. |
 | 4 | 2026-09-01 | 2026-09-01 | 4.1 `79f51bc`; 4.2 `5c105cc`; 4.3 `2a2e720`; 4.4 `4c53d3b`. Unified resizable sidebar, coordinator-backed panes, embedded UUID-safe Menu Items workspace, and standalone-editor retirement landed. F7/F8/F15 + identity regressions passed 5/5; full plan passed 60 unit tests + 1 UI test; unsigned Debug build and writer/reference audits succeeded. Live resize, keyboard navigation, and rebind/appearance checks remain in the final user-driven gate. |
-| 5 | | | |
+| 5 | 2026-09-01 | 2026-09-01 | 5.1 `7441c25`; 5.2 `ba4a67b`; 5.3 `c15a3ab`; 5.4 `917273a`; 5.5 `4312801`. Editor controls/unavailable values, inline ShortcutKit recording, flush-before-Test, visible persistence/recovery/close states, and accessibility semantics landed. Full MousePlus unit/UI test plan and unsigned Debug build passed; live recorder, Full Keyboard Access, and VoiceOver checks remain in the final user-driven gate. |
 | 6 | | | |
 | 7 | | | |
 
