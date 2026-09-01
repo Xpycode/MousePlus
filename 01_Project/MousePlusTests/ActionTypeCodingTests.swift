@@ -19,7 +19,7 @@ final class ActionTypeCodingTests: XCTestCase {
     }
 
     func testSelectableCasesAreSeparateFromKnownDecodableCases() {
-        XCTAssertFalse(ActionType.selectableCases.contains(.sendKeystroke))
+        XCTAssertTrue(ActionType.selectableCases.contains(.sendKeystroke))
         XCTAssertFalse(ActionType.selectableCases.contains(.menuBar))
         XCTAssertFalse(ActionType.selectableCases.contains(.systemToggle))
         XCTAssertFalse(ActionType.selectableCases.contains(.screenshot))

@@ -20,7 +20,7 @@ enum ActionType: Codable, Hashable, CaseIterable {
 
     /// Actions offered when creating or changing an action in the editor.
     static let selectableCases: [ActionType] = [
-        .appSwitch, .windowSnap, .custom,
+        .appSwitch, .windowSnap, .sendKeystroke, .custom,
     ]
 
     init(rawValue: String) {

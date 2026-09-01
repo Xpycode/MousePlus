@@ -1,4 +1,5 @@
 import AppKit
+import ShortcutKit
 import SwiftUI
 
 /// Edits a menu item's action type and its type-specific data payload.
@@ -17,6 +18,8 @@ struct ActionDataEditor: View {
     /// Drives the `AppPickerSheet` presentation for `.appSwitch`.
     @State private var showingAppPicker = false
     @State private var commandFocused = false
+    @State private var keystrokeCandidate: CustomKeyboardShortcut?
+    private let keystrokeConflicts = KeystrokeConflictChecker()
 
     private var offeredActionTypes: [ActionType] {
         item.actionType.isSelectable
@@ -51,9 +54,59 @@ struct ActionDataEditor: View {
             customControl
         case .windowSnap:
             windowSnapControl
-        case .menuBar, .systemToggle, .screenshot, .sendKeystroke, .unavailable:
+        case .sendKeystroke:
+            sendKeystrokeControl
+        case .menuBar, .systemToggle, .screenshot, .unavailable:
             comingSoonControl
         }
+    }
+
+    // MARK: - Send keystroke
+
+    @ViewBuilder
+    private var sendKeystrokeControl: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            ShortcutRecorder(
+                shortcut: keystrokeBinding,
+                title: "Keystroke",
+                onCandidateChange: { keystrokeCandidate = $0 },
+                isCommitEnabled: { assessment(for: $0)?.severity != .blocked }
+            )
+
+            if case let .unresolvedLegacy(value) = item.keystrokePayload {
+                Label("The legacy shortcut “\(value)” can't be interpreted safely. Record it again.", systemImage: "exclamationmark.circle.fill")
+                    .foregroundStyle(.red)
+                    .accessibilityLabel("Can't use legacy shortcut. Record it again.")
+            } else if let conflictCaption {
+                Label(conflictCaption.message, systemImage: conflictCaption.severity == .blocked ? "exclamationmark.circle.fill" : "exclamationmark.triangle.fill")
+                    .foregroundStyle(conflictCaption.severity == .blocked ? .red : .orange)
+                    .accessibilityLabel((conflictCaption.severity == .blocked ? "Can't save. " : "Warning. ") + conflictCaption.message)
+            }
+        }
+        .font(.caption)
+    }
+
+    private var keystrokeBinding: Binding<CustomKeyboardShortcut> {
+        Binding(
+            get: { item.keystrokePayload?.shortcutKitValue ?? .none },
+            set: { shortcut in
+                // ShortcutRecorder writes only from Save or Clear. Candidate and
+                // Cancel paths never touch the selected item's committed payload.
+                item.keystrokePayload = KeystrokePayload(shortcutKitValue: shortcut)
+            }
+        )
+    }
+
+    private var conflictCaption: KeystrokeConflictAssessment? {
+        if let keystrokeCandidate { return assessment(for: keystrokeCandidate) }
+        guard let shortcut = item.keystrokePayload?.shortcutKitValue,
+              !shortcut.isUnbound
+        else { return nil }
+        return assessment(for: shortcut)
+    }
+
+    private func assessment(for shortcut: CustomKeyboardShortcut) -> KeystrokeConflictAssessment? {
+        keystrokeConflicts.assessment(for: shortcut)
     }
 
     // MARK: - App Switch
