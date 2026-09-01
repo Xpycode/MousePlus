@@ -2,38 +2,12 @@
 //  MenuEditorView.swift
 //  MousePlus
 //
-//  Assembles the legacy dedicated Menu Items editor window content.
-//
-//  This is a PURE composition view: it mutates the supplied `MenuEditorModel`
-//  and invokes `onDone()`. It owns no persistence, no services, no timers,
-//  and no AppDelegate calls — loading, debounced saving, and live-apply are
-//  the responsibility of the window controller that hosts this view.
+//  Reusable, persistence-neutral Menu Items editor workspace.
 //
 
 import SwiftUI
 
-struct MenuEditorView: View {
-    /// The editor state. Bound so band/selection/item edits flow back out.
-    @Bindable var model: MenuEditorModel
-
-    /// Invoked when the user dismisses the editor via the Done button.
-    var onDone: () -> Void
-
-    var body: some View {
-        MenuEditorWorkspace(
-            model: model,
-            onReset: { model.resetToDefaults() },
-            trailingToolbar: {
-                Button("Done") { onDone() }
-                    .keyboardShortcut(.defaultAction)
-            }
-        )
-        .frame(minWidth: 900, minHeight: 600)
-    }
-}
-
-/// Reusable, persistence-neutral editor composition shared by the embedded
-/// Settings pane and the legacy editor window until task 4.4 retires it.
+/// Reusable, persistence-neutral editor composition embedded in Settings.
 struct MenuEditorWorkspace<TrailingToolbar: View>: View {
     @Bindable var model: MenuEditorModel
     var onReset: () -> Void

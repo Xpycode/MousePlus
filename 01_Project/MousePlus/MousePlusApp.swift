@@ -39,11 +39,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     /// Settings → live ring bridge: pushes edited menu items (inner + middle rings)
     /// into the shared ring view model so edits apply without restarting (also persisted
-    /// to disk by the editor, so the next open reflects it regardless).
+    /// to disk by the Settings workspace coordinator).
     @MainActor static var applyMenuItems: ((Configuration) -> Void)?
-
-    /// Settings → app bridge: opens the standalone Menu Items editor window.
-    @MainActor static var showMenuEditor: (() -> Void)?
 
     /// Settings → app bridge: opens the "Identify Input" diagnostic window. No longer
     /// auto-opened at launch — reachable from Settings → General → Diagnostics and the
@@ -58,7 +55,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var permissionsService = PermissionsService()
     private var onboardingWindowController: OnboardingWindowController?
     private var inputRecorderWindowController: InputRecorderWindowController?
-    private var menuEditorWindowController: MenuEditorWindowController?
 
     /// Global "open Settings" hotkey (default ⌥⌘,). The reliable way into Preferences
     /// for a menu-bar-only app when the status-item icon is missing (M1 Max bug).
@@ -136,13 +132,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         inputRecorderWindowController?.show()
     }
 
-    private func showMenuEditor() {
-        if menuEditorWindowController == nil {
-            menuEditorWindowController = MenuEditorWindowController()
-        }
-        menuEditorWindowController?.show()
-    }
-
     private func setupTriggers() {
         let service = TriggerService()
         triggerService = service
@@ -204,9 +193,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             // Drop any stale expansion/selection so the next ring open reflects the new items cleanly.
             self.ringViewModel.reset()
         }
-
-        // Open the standalone Menu Items editor from the Settings launcher.
-        AppDelegate.showMenuEditor = { [weak self] in self?.showMenuEditor() }
 
         // Open the "Identify Input" diagnostic from Settings / menu bar (no longer auto-opened).
         AppDelegate.showIdentifyInput = { [weak self] in self?.showInputRecorder() }
