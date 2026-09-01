@@ -8,7 +8,7 @@ struct RingMenuItem: Identifiable, Codable, Hashable {
     var actionType: ActionType
     var actionData: String    // App bundle ID, command, etc.
     var subItems: [RingMenuItem]?
-    var keyboardShortcut: String?
+    var keystrokePayload: KeystrokePayload?
 
     init(
         id: UUID = UUID(),
@@ -17,7 +17,7 @@ struct RingMenuItem: Identifiable, Codable, Hashable {
         actionType: ActionType,
         actionData: String = "",
         subItems: [RingMenuItem]? = nil,
-        keyboardShortcut: String? = nil
+        keystrokePayload: KeystrokePayload? = nil
     ) {
         self.id = id
         self.label = label
@@ -25,12 +25,48 @@ struct RingMenuItem: Identifiable, Codable, Hashable {
         self.actionType = actionType
         self.actionData = actionData
         self.subItems = subItems
-        self.keyboardShortcut = keyboardShortcut
+        self.keystrokePayload = keystrokePayload
     }
 
     var hasSubItems: Bool {
         guard let subItems else { return false }
         return !subItems.isEmpty
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case id, label, icon, actionType, actionData, subItems, keystrokePayload
+        case keyboardShortcut
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(UUID.self, forKey: .id)
+        label = try container.decode(String.self, forKey: .label)
+        icon = try container.decode(String.self, forKey: .icon)
+        actionType = try container.decode(ActionType.self, forKey: .actionType)
+        actionData = try container.decodeIfPresent(String.self, forKey: .actionData) ?? ""
+        subItems = try container.decodeIfPresent([RingMenuItem].self, forKey: .subItems)
+
+        if let canonical = try container.decodeIfPresent(KeystrokePayload.self, forKey: .keystrokePayload) {
+            keystrokePayload = canonical
+        } else if let legacy = try container.decodeIfPresent(String.self, forKey: .keyboardShortcut),
+                  !legacy.isEmpty {
+            keystrokePayload = .migratingLegacy(legacy)
+        } else {
+            keystrokePayload = nil
+        }
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(id, forKey: .id)
+        try container.encode(label, forKey: .label)
+        try container.encode(icon, forKey: .icon)
+        try container.encode(actionType, forKey: .actionType)
+        try container.encode(actionData, forKey: .actionData)
+        try container.encodeIfPresent(subItems, forKey: .subItems)
+        try container.encodeIfPresent(keystrokePayload, forKey: .keystrokePayload)
+        // `keyboardShortcut` is decode-only and intentionally retired.
     }
 }
 
