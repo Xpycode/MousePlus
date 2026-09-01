@@ -125,22 +125,22 @@ Run `BUILD` after every implementation task. Tasks with tests also run their foc
 
 ### Wave 4 — Unified workspace and pane migration
 
-- [ ] **4.1 Replace TabView with approved sidebar shell** → `SettingsView.swift`, new `SettingsSection.swift`, `MousePlusApp.swift`
+- [x] **4.1 Replace TabView with approved sidebar shell** → `SettingsView.swift`, new `SettingsSection.swift`, `MousePlusApp.swift`
   - Depends on: 0.2, 2.2, 1.4
   - Success: four panes appear in order through `SettingsSidebarShell(searchable: false)`; General is initial; selection lives for the scene; minimum size fits shell+editor; primary layout uses `HSplitView`, never `NavigationSplitView`.
   - Backpressure: `BUILD`; launched keyboard/mouse navigation at minimum and larger sizes.
 
-- [ ] **4.2 Migrate General, Triggers, and Ring Appearance** → new Settings pane files, `TriggersSettingsView.swift`, remove superseded code
+- [x] **4.2 Migrate General, Triggers, and Ring Appearance** → new Settings pane files, `TriggersSettingsView.swift`, remove superseded code
   - Depends on: 4.1
   - Success: panes bind through coordinator, use AppKit wrappers, preserve recorder/permission behavior, and contain no independent config service/fallback writer/debounce/live apply.
   - Backpressure: integration tests; writer `rg` audit; `BUILD`; live rebind/appearance check.
 
-- [ ] **4.3 Embed Menu Items workspace** → `MenuEditorView.swift`, `RingPreviewSelector.swift`, `SlotEditorForm.swift`, new `MenuItemsPane.swift`
+- [x] **4.3 Embed Menu Items workspace** → `MenuEditorView.swift`, `RingPreviewSelector.swift`, `SlotEditorForm.swift`, new `MenuItemsPane.swift`
   - Depends on: 4.1
   - Success: preview/form share draggable split; chrome remains visible; detail alone scrolls; selection stays UUID-based; pane minima work within shell.
   - Backpressure: F7/F8/F15 plus identity regression tests; `BUILD`; resize/selection check.
 
-- [ ] **4.4 Retire the second editor path** → `MousePlusApp.swift`, Settings files, delete `MenuEditorWindowController.swift`
+- [x] **4.4 Retire the second editor path** → `MousePlusApp.swift`, Settings files, delete `MenuEditorWindowController.swift`
   - Depends on: 4.3
   - Success: no product path launches another editor; persistence ownership lives only in coordinator.
   - Backpressure: `rg "MenuEditorWindowController|showMenuEditor|Open Menu Editor"` has no product references; `BUILD`.
@@ -246,7 +246,7 @@ Run `BUILD` after every implementation task. Tasks with tests also run their foc
 | 1 | 2026-09-01 | 2026-09-01 | 1.1 `34ec954`; 1.2 `0916596`; 1.3 `507f0c7`; 1.4 `7546235`. Unsigned Debug build and full MousePlus test plan passed (18 unit tests + 1 UI test); signed build unavailable because this machine lacks the configured certificate. |
 | 2 | 2026-09-01 | 2026-09-01 | 2.1 `9dd165b`; 2.2 `5a5d2ae`; 2.3 `711fb9d`. Focused Wave 2 persistence/coordinator/state suites passed 21/21; independent workspace build remained blocked by the sandboxed Xcode/CoreSimulator workspace-detection failure. |
 | 3 | 2026-09-01 | 2026-09-01 | 3.1 `76df64e`; 3.2 `a29eed7`; 3.3 `53bcc32`; 3.4 `183bb5f`. Shared validation/results, awaited and injectable action execution, safe Settings target capture, and presentation-neutral routing landed. Focused Wave 3 suites passed 17/17; full plan passed 55 unit tests + 1 UI test; unsigned Debug build succeeded. |
-| 4 | | | |
+| 4 | 2026-09-01 | 2026-09-01 | 4.1 `79f51bc`; 4.2 `5c105cc`; 4.3 `2a2e720`; 4.4 `4c53d3b`. Unified resizable sidebar, coordinator-backed panes, embedded UUID-safe Menu Items workspace, and standalone-editor retirement landed. F7/F8/F15 + identity regressions passed 5/5; full plan passed 60 unit tests + 1 UI test; unsigned Debug build and writer/reference audits succeeded. Live resize, keyboard navigation, and rebind/appearance checks remain in the final user-driven gate. |
 | 5 | | | |
 | 6 | | | |
 | 7 | | | |
