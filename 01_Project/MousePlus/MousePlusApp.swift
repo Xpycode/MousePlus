@@ -9,6 +9,7 @@ struct MousePlusApp: App {
         // Settings window (opened from menu bar)
         Settings {
             SettingsView()
+                .environmentObject(appDelegate.settingsActionContextProvider)
         }
     }
 
@@ -64,6 +65,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private var ringViewModel = RingViewModel()
     private var dismissMonitor: DismissMonitor?
+    let settingsActionContextProvider = SettingsActionContextProvider()
 
     /// Loaded config; drives dismiss behavior. Sensible default until load completes.
     private var configuration = Configuration()
@@ -314,6 +316,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func showSettings() {
+        settingsActionContextProvider.recordFrontmostApplicationBeforeSettingsActivation()
         NSApp.activate(ignoringOtherApps: true)
         Self.openSettingsAction?()
     }
