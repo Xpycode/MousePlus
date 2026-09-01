@@ -1,18 +1,9 @@
 import SwiftUI
 
-/// Settings → Triggers tab (W4).
-///
-/// Lets the user bind the ring to a keyboard shortcut and/or a mouse button, each
-/// with its own interpretation mode (hold-release vs tap-toggle). Recording uses
-/// `TriggerRecorderService` ("press the trigger you want"); a recorder timeout
-/// surfaces the vendor-interception warning. Edits persist to `Configuration.triggers`
-/// (debounced) and live-apply to the running `TriggerService` via `AppDelegate.applyTriggers`.
+/// Trigger recording and permission polling remain local UI concerns. Durable
+/// edits flow exclusively through the workspace coordinator.
 struct TriggersSettingsView: View {
-    private let configService = ConfigurationService()
-
-    @State private var triggers: TriggersConfig = .default
-    @State private var loaded = false
-    @State private var saveTask: Task<Void, Never>?
+    let coordinator: SettingsWorkspaceCoordinator
 
     @State private var recorder = TriggerRecorderService()
     @State private var recordingSlot: Slot?
@@ -20,7 +11,17 @@ struct TriggersSettingsView: View {
 
     @State private var permissions = PermissionsService()
 
-    private enum Slot { case keyboard, mouse, openSettings }
+    private enum Slot {
+        case keyboard, mouse, openSettings
+
+        var identifier: String {
+            switch self {
+            case .keyboard: "keyboard"
+            case .mouse: "mouse"
+            case .openSettings: "openSettings"
+            }
+        }
+    }
 
     var body: some View {
         Form {
@@ -29,15 +30,15 @@ struct TriggersSettingsView: View {
             }
 
             Section("Keyboard Trigger") {
-                bindingRow(slot: .keyboard, binding: $triggers.keyboard)
+                bindingRow(slot: .keyboard, binding: triggerBinding(\.keyboard))
             }
 
             Section("Mouse Button Trigger") {
-                bindingRow(slot: .mouse, binding: $triggers.mouseButton)
+                bindingRow(slot: .mouse, binding: triggerBinding(\.mouseButton))
             }
 
             Section("Open Settings Shortcut") {
-                bindingRow(slot: .openSettings, binding: $triggers.openSettings)
+                bindingRow(slot: .openSettings, binding: triggerBinding(\.openSettings))
                 Text("Opens this Settings window from anywhere — a reliable way in when the menu bar icon isn't showing. Defaults to ⌥⌘,.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
@@ -66,17 +67,6 @@ struct TriggersSettingsView: View {
         }
         .formStyle(.grouped)
         .padding()
-        .task {
-            guard !loaded else { return }
-            if let config = try? await configService.load() {
-                triggers = config.triggers
-            }
-            loaded = true
-        }
-        .onChange(of: triggers) { _, newValue in
-            guard loaded else { return }
-            scheduleSave(newValue)
-        }
         .onChange(of: recorder.outcome) { _, outcome in
             handleRecorderOutcome(outcome)
         }
@@ -105,7 +95,11 @@ struct TriggersSettingsView: View {
 
             Spacer()
 
-            Button(isRecording ? "Cancel" : "Record") {
+            AppKitButton(
+                title: isRecording ? "Cancel" : "Record",
+                isEnabled: coordinator.isLoaded,
+                accessibilityIdentifier: "triggers.\(slot.identifier).record"
+            ) {
                 if isRecording {
                     recorder.cancel()
                 } else {
@@ -115,24 +109,28 @@ struct TriggersSettingsView: View {
                 }
             }
 
-            Button("Clear") {
+            AppKitButton(
+                title: "Clear",
+                isEnabled: binding.wrappedValue.isActive && !isRecording && coordinator.isLoaded,
+                accessibilityIdentifier: "triggers.\(slot.identifier).clear"
+            ) {
                 binding.wrappedValue = .none
             }
-            .disabled(!binding.wrappedValue.isActive || isRecording)
         }
 
         // The Settings hotkey fires once on key-down — hold-release vs tap-toggle is
         // meaningless for it, so the mode picker is only shown for the ring triggers.
         if slot != .openSettings {
-            Picker("Mode", selection: Binding(
-                get: { binding.wrappedValue.mode },
-                set: { binding.wrappedValue = binding.wrappedValue.withMode($0) }
-            )) {
-                Text("Hold-release").tag(TriggerMode.holdRelease)
-                Text("Tap-toggle").tag(TriggerMode.tapToggle)
-            }
-            .pickerStyle(.segmented)
-            .disabled(!binding.wrappedValue.isActive)
+            AppKitSegmentedControl(
+                labels: ["Hold-release", "Tap-toggle"],
+                selection: Binding(
+                    get: { binding.wrappedValue.mode == .holdRelease ? 0 : 1 },
+                    set: { binding.wrappedValue = binding.wrappedValue.withMode($0 == 0 ? .holdRelease : .tapToggle) }
+                ),
+                isEnabled: binding.wrappedValue.isActive && coordinator.isLoaded,
+                accessibilityLabel: "Trigger mode",
+                accessibilityIdentifier: "triggers.\(slot.identifier).mode"
+            )
         }
     }
 
@@ -145,10 +143,12 @@ struct TriggersSettingsView: View {
                     Text("MousePlus needs Accessibility access to detect your trigger system-wide.")
                         .font(.caption)
                         .foregroundStyle(.secondary)
-                    Button("Open System Settings…") {
+                    AppKitButton(
+                        title: "Open System Settings…",
+                        accessibilityIdentifier: "triggers.openAccessibilitySettings"
+                    ) {
                         permissions.openAccessibilitySettings()
                     }
-                    .controlSize(.small)
                 }
             } icon: {
                 Image(systemName: "lock.shield")
@@ -167,12 +167,14 @@ struct TriggersSettingsView: View {
             switch slot {
             case .keyboard:
                 // Preserve the slot's mode; the recorder only knows the key/button.
-                triggers.keyboard = captured.withMode(triggers.keyboard.mode)
+                let current = coordinator.configuration.triggers.keyboard
+                setTrigger(\.keyboard, captured.withMode(current.mode))
             case .mouse:
-                triggers.mouseButton = captured.withMode(triggers.mouseButton.mode)
+                let current = coordinator.configuration.triggers.mouseButton
+                setTrigger(\.mouseButton, captured.withMode(current.mode))
             case .openSettings:
                 // Mode is irrelevant for the Settings hotkey — store the raw capture.
-                triggers.openSettings = captured
+                setTrigger(\.openSettings, captured)
             }
         case .timedOut:
             interceptionWarning = true
@@ -184,26 +186,17 @@ struct TriggersSettingsView: View {
         recorder.outcome = nil
     }
 
-    // MARK: - Persistence
-
-    /// Debounced save: load the full config, swap in the edited triggers, persist,
-    /// then live-apply to the running `TriggerService`.
-    private func scheduleSave(_ newTriggers: TriggersConfig) {
-        saveTask?.cancel()
-        saveTask = Task {
-            try? await Task.sleep(for: .milliseconds(300))
-            guard !Task.isCancelled else { return }
-            var config = (try? await configService.load()) ?? Configuration()
-            config.triggers = newTriggers
-            try? await configService.save(config)
-            await MainActor.run {
-                AppDelegate.applyTriggers?(newTriggers)
-            }
-        }
+    private func triggerBinding(_ keyPath: WritableKeyPath<TriggersConfig, TriggerBinding>) -> Binding<TriggerBinding> {
+        Binding(
+            get: { coordinator.configuration.triggers[keyPath: keyPath] },
+            set: { setTrigger(keyPath, $0) }
+        )
     }
-}
 
-#Preview {
-    TriggersSettingsView()
-        .frame(width: 460, height: 460)
+    private func setTrigger(
+        _ keyPath: WritableKeyPath<TriggersConfig, TriggerBinding>,
+        _ value: TriggerBinding
+    ) {
+        coordinator.edit([.triggers]) { $0.triggers[keyPath: keyPath] = value }
+    }
 }
