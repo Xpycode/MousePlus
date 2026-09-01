@@ -106,20 +106,20 @@ Run `BUILD` after every implementation task. Tasks with tests also run their foc
 
 ### Wave 3 — Shared action contract and feedback plumbing (parallel after Waves 1–2)
 
-- [ ] **3.1 Define validation and execution results** → new `ActionValidation.swift`, `ActionExecutionResult.swift`, tests
+- [x] **3.1 Define validation and execution results** → new `ActionValidation.swift`, `ActionExecutionResult.swift`, tests
   - Success: editor/runtime share validation for containers, supported payloads, unresolved legacy, known unavailable, unknown unavailable, and missing context; every invalid result has user-facing text.
   - Backpressure: table-driven validation tests; `BUILD`.
 
-- [ ] **3.2 Upgrade ActionService completion semantics** → `ActionService.swift`, new injected process/workspace seams, tests
+- [x] **3.2 Upgrade ActionService completion semantics** → `ActionService.swift`, new injected process/workspace seams, tests
   - Depends on: 1.3, 3.1
   - Success: service validates, invokes keystrokes, awaits command exit/non-zero status, checks app activation/launch, and returns structured results without UI coupling.
   - Backpressure: tests cover launch error, non-zero exit, activation failure, unavailable/invalid payload, permission denial; `BUILD`.
 
-- [ ] **3.3 Capture a safe Settings test target** → new `SettingsActionContextProvider.swift`, `MousePlusApp.swift`, tests
+- [x] **3.3 Capture a safe Settings test target** → new `SettingsActionContextProvider.swift`, `MousePlusApp.swift`, tests
   - Success: external app is recorded before Settings activation and refreshed after focus round-trip; target name/PID/current screens or an unavailable reason are exposed; MousePlus is excluded.
   - Backpressure: tests cover first open, focus return, terminated/stale target, MousePlus-only state; `BUILD`.
 
-- [ ] **3.4 Add presentation-neutral result routing** → new `ActionResultRouter.swift`, tests
+- [x] **3.4 Add presentation-neutral result routing** → new `ActionResultRouter.swift`, tests
   - Success: Settings retains per-item Test results; runtime failures emit message+settings route; runtime successes emit nothing.
   - Backpressure: async routing/replacement/dismissal tests; `BUILD`.
 
@@ -245,7 +245,7 @@ Run `BUILD` after every implementation task. Tasks with tests also run their foc
 | 0 | 2026-09-01 | 2026-09-01 | 0.1: clean pushed zPackages revision `b4ad72a5dd84666e875b19afadd6de13b93fabcb`, focused tests 125/125. 0.2: exact pin + cold/cached builds, commit `369ba7e`. 0.3: real unit target + sentinel, commit `63c9433`. Full unit/UI plan passed with ad-hoc signing. |
 | 1 | 2026-09-01 | 2026-09-01 | 1.1 `34ec954`; 1.2 `0916596`; 1.3 `507f0c7`; 1.4 `7546235`. Unsigned Debug build and full MousePlus test plan passed (18 unit tests + 1 UI test); signed build unavailable because this machine lacks the configured certificate. |
 | 2 | 2026-09-01 | 2026-09-01 | 2.1 `9dd165b`; 2.2 `5a5d2ae`; 2.3 `711fb9d`. Focused Wave 2 persistence/coordinator/state suites passed 21/21; independent workspace build remained blocked by the sandboxed Xcode/CoreSimulator workspace-detection failure. |
-| 3 | | | |
+| 3 | 2026-09-01 | 2026-09-01 | 3.1 `76df64e`; 3.2 `a29eed7`; 3.3 `53bcc32`; 3.4 `183bb5f`. Shared validation/results, awaited and injectable action execution, safe Settings target capture, and presentation-neutral routing landed. Focused Wave 3 suites passed 17/17; full plan passed 55 unit tests + 1 UI test; unsigned Debug build succeeded. |
 | 4 | | | |
 | 5 | | | |
 | 6 | | | |
