@@ -16,6 +16,7 @@ private func configureAccessibility(
 
 struct AppKitButton: NSViewRepresentable {
     let title: String
+    var systemImageName: String? = nil
     var isEnabled = true
     var accessibilityLabel: String? = nil
     var accessibilityIdentifier: String? = nil
@@ -32,6 +33,10 @@ struct AppKitButton: NSViewRepresentable {
     func updateNSView(_ button: NSButton, context: Context) {
         context.coordinator.action = action
         button.title = title
+        button.image = systemImageName.flatMap {
+            NSImage(systemSymbolName: $0, accessibilityDescription: accessibilityLabel ?? title)
+        }
+        button.imagePosition = title.isEmpty ? .imageOnly : .imageLeading
         button.isEnabled = isEnabled
         configureAccessibility(button, label: accessibilityLabel ?? title, identifier: accessibilityIdentifier)
     }
@@ -75,6 +80,7 @@ struct AppKitPopup: NSViewRepresentable {
     let options: [String]
     @Binding var selection: Int
     var isEnabled = true
+    var disabledOptions: Set<Int> = []
     var accessibilityLabel: String
     var accessibilityIdentifier: String? = nil
 
@@ -94,6 +100,9 @@ struct AppKitPopup: NSViewRepresentable {
             popup.addItems(withTitles: options)
         }
         popup.selectItem(at: options.indices.contains(selection) ? selection : -1)
+        for index in options.indices {
+            popup.item(at: index)?.isEnabled = !disabledOptions.contains(index)
+        }
         popup.isEnabled = isEnabled
         configureAccessibility(popup, label: accessibilityLabel, identifier: accessibilityIdentifier)
     }

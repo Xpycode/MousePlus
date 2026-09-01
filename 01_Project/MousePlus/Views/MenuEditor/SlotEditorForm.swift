@@ -19,6 +19,7 @@ import SwiftUI
 struct SlotEditorForm: View {
 
     @Bindable var model: MenuEditorModel
+    @State private var labelFocused = false
 
     var body: some View {
         Group {
@@ -100,7 +101,12 @@ struct SlotEditorForm: View {
 
                 // Inner top-level slots render no labels, so don't offer the field.
                 if !isInnerTopLevel {
-                    TextField("Label", text: item.label)
+                    AppKitTextField(
+                        text: item.label,
+                        isFocused: $labelFocused,
+                        placeholder: "Label",
+                        accessibilityLabel: "Label"
+                    )
                 }
             }
 
@@ -157,45 +163,43 @@ struct SlotEditorForm: View {
                     .foregroundStyle(.secondary)
             } else {
                 ForEach(subItems) { sub in
-                    HStack {
-                        // Tapping the row selects the sub-item for editing.
-                        Button {
+                    HStack(spacing: 8) {
+                        Image(systemName: SFSymbol.resolved(sub.icon))
+                            .frame(width: 18)
+                            .accessibilityHidden(true)
+                        AppKitSelectableRow(
+                            title: sub.label.isEmpty ? "(no label)" : sub.label,
+                            subtitle: sub.actionType.displayName,
+                            isSelected: model.selection?.subItemID == sub.id,
+                            accessibilityLabel: "Sub-item \(sub.label.isEmpty ? "without label" : sub.label)"
+                        ) {
                             model.selection = SlotSelection(
                                 band: .middle,
                                 itemID: parentID,
                                 subItemID: sub.id
                             )
-                        } label: {
-                            HStack {
-                                Image(systemName: SFSymbol.resolved(sub.icon))
-                                    .frame(width: 18)
-                                Text(sub.label.isEmpty ? "(no label)" : sub.label)
-                                    .foregroundStyle(sub.label.isEmpty ? .secondary : .primary)
-                                Spacer()
-                            }
-                            .contentShape(Rectangle())
                         }
-                        .buttonStyle(.plain)
 
                         // Inline delete for this sub-item.
-                        Button {
+                        AppKitButton(
+                            title: "",
+                            systemImageName: "minus.circle",
+                            accessibilityLabel: "Remove \(sub.label.isEmpty ? "sub-item" : sub.label)"
+                        ) {
                             model.removeSubItem(sub.id, fromMiddle: parentID)
-                        } label: {
-                            Image(systemName: "minus.circle")
-                                .foregroundStyle(.red)
                         }
-                        .buttonStyle(.borderless)
                         .help("Remove this sub-item")
                     }
                 }
             }
 
-            Button {
+            AppKitButton(
+                title: "Add Sub-item",
+                systemImageName: "plus",
+                isEnabled: !model.subItemsAtCap(for: parentID)
+            ) {
                 model.addSubItem(toMiddle: parentID)
-            } label: {
-                Label("Add Sub-item", systemImage: "plus")
             }
-            .disabled(model.subItemsAtCap(for: parentID))
 
             if model.subItemsAtCap(for: parentID) {
                 Text("Maximum sub-items reached.")
@@ -213,27 +217,31 @@ struct SlotEditorForm: View {
             // Reorder is only meaningful for top-level slots (sub-item reorder is
             // out of scope for v1), so hide the move buttons when editing a sub-item.
             if !isSubItem, let sel = model.selection, let id = sel.itemID {
-                Button {
+                AppKitButton(
+                    title: "Move Earlier",
+                    systemImageName: "chevron.left"
+                ) {
                     model.moveItem(id: id, in: sel.band, by: -1)
-                } label: {
-                    Label("Move", systemImage: "chevron.left")
                 }
                 .help("Move slot earlier")
 
-                Button {
+                AppKitButton(
+                    title: "Move Later",
+                    systemImageName: "chevron.right"
+                ) {
                     model.moveItem(id: id, in: sel.band, by: 1)
-                } label: {
-                    Label("Move", systemImage: "chevron.right")
                 }
                 .help("Move slot later")
             }
 
             Spacer()
 
-            Button(role: .destructive) {
+            AppKitButton(
+                title: "Delete",
+                systemImageName: "trash",
+                accessibilityLabel: "Delete this slot"
+            ) {
                 model.removeSelectedItem()
-            } label: {
-                Label("Delete", systemImage: "trash")
             }
             .help("Delete this slot")
         }

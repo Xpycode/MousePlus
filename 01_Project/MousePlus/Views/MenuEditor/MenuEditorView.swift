@@ -63,12 +63,11 @@ struct MenuEditorWorkspace<TrailingToolbar: View>: View {
     private var topBar: some View {
         HStack {
             // Band selector — also retargets where "Add" inserts.
-            Picker("Band", selection: $model.activeBand) {
-                Text("Inner").tag(EditorBand.inner)
-                Text("Middle").tag(EditorBand.middle)
-            }
-            .pickerStyle(.segmented)
-            .labelsHidden()
+            AppKitSegmentedControl(
+                labels: ["Inner", "Middle"],
+                selection: activeBandSelection,
+                accessibilityLabel: "Ring band"
+            )
             .frame(maxWidth: 220)
 
             Spacer()
@@ -87,10 +86,12 @@ struct MenuEditorWorkspace<TrailingToolbar: View>: View {
             // Add to the active band; disabled (with an inline note) when THAT
             // band is full — the cap is per-band, so a full middle ring must
             // not block adding inner items (and vice versa).
-            Button(addButtonTitle) {
+            AppKitButton(
+                title: addButtonTitle,
+                isEnabled: !model.atCap(for: model.activeBand)
+            ) {
                 model.addItem(to: model.activeBand)
             }
-            .disabled(model.atCap(for: model.activeBand))
 
             if model.atCap(for: model.activeBand) {
                 Text("Max 8 spokes")
@@ -100,7 +101,7 @@ struct MenuEditorWorkspace<TrailingToolbar: View>: View {
 
             Spacer()
 
-            Button("Reset to Defaults…") {
+            AppKitButton(title: "Reset to Defaults…") {
                 showResetConfirm = true
             }
 
@@ -114,5 +115,12 @@ struct MenuEditorWorkspace<TrailingToolbar: View>: View {
         case .inner: return "Add Inner Item"
         case .middle: return "Add Middle Item"
         }
+    }
+
+    private var activeBandSelection: Binding<Int> {
+        Binding(
+            get: { model.activeBand == .inner ? 0 : 1 },
+            set: { model.activeBand = $0 == 0 ? .inner : .middle }
+        )
     }
 }

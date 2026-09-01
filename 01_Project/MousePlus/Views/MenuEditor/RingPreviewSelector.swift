@@ -129,16 +129,15 @@ struct RingPreviewSelector: View {
             // other band, hint at shared-spoke alignment.
             let isSpokeActive = isSpokeSelected(spoke: i)
 
-            Button {
+            AppKitButton(
+                title: "",
+                accessibilityLabel: slotAccessibilityLabel(item: item, band: band, position: i, selected: isSelected)
+            ) {
                 model.activeBand = band
                 model.selection = SlotSelection(band: band, itemID: item.id, subItemID: nil)
-            } label: {
-                Circle()
-                    .fill(Color.clear)
-                    .frame(width: hotspotSize, height: hotspotSize)
-                    .contentShape(Circle())
             }
-            .buttonStyle(.plain)
+            .frame(width: hotspotSize, height: hotspotSize)
+            .opacity(0.02)
             .overlay {
                 if isSelected {
                     Circle()
@@ -161,24 +160,26 @@ struct RingPreviewSelector: View {
             // TOP of the last real wedge's hotspot (stealing its clicks). A band
             // full to N gets no in-ring ghost — the toolbar "Add" button covers it.
             // (`i < n` also implies the band is under the 8-item cap, since n ≤ 8.)
-            Button {
+            AppKitButton(
+                title: "",
+                accessibilityLabel: "Add \(band == .inner ? "inner" : "middle") item at position \(i + 1)"
+            ) {
                 model.activeBand = band
                 model.addItem(to: band) // appends at end == fills this spoke
-            } label: {
+            }
+            .frame(width: hotspotSize, height: hotspotSize)
+            .opacity(0.02)
+            .overlay {
                 Circle()
-                    .strokeBorder(
-                        style: StrokeStyle(lineWidth: 1.5, dash: [4, 3])
-                    )
+                    .strokeBorder(style: StrokeStyle(lineWidth: 1.5, dash: [4, 3]))
                     .foregroundStyle(.secondary)
-                    .frame(width: hotspotSize, height: hotspotSize)
+                    .allowsHitTesting(false)
                     .overlay {
                         Image(systemName: "plus")
                             .font(.system(size: 14, weight: .semibold))
                             .foregroundStyle(.secondary)
                     }
-                    .contentShape(Circle())
             }
-            .buttonStyle(.plain)
             .position(pos)
             .help("Add item")
         }
@@ -207,32 +208,20 @@ struct RingPreviewSelector: View {
                     HStack(spacing: 6) {
                         ForEach(subs) { sub in
                             let isSelected = (model.selection?.subItemID == sub.id)
-                            Button {
+                            AppKitSelectableRow(
+                                title: sub.label.isEmpty ? "Item" : sub.label,
+                                subtitle: sub.actionType.displayName,
+                                isSelected: isSelected,
+                                accessibilityLabel: "Sub-item \(sub.label.isEmpty ? "without label" : sub.label)"
+                            ) {
                                 model.activeBand = .middle
                                 model.selection = SlotSelection(
                                     band: .middle,
                                     itemID: parent.id,
                                     subItemID: sub.id
                                 )
-                            } label: {
-                                Label(
-                                    sub.label.isEmpty ? "Item" : sub.label,
-                                    systemImage: SFSymbol.resolved(sub.icon)
-                                )
-                                .labelStyle(.titleAndIcon)
-                                .font(.caption2)
-                                .padding(.horizontal, 6)
-                                .padding(.vertical, 3)
-                                .background(
-                                    RoundedRectangle(cornerRadius: 5)
-                                        .fill(isSelected ? Color.accentColor.opacity(0.25) : Color.secondary.opacity(0.12))
-                                )
-                                .overlay(
-                                    RoundedRectangle(cornerRadius: 5)
-                                        .stroke(isSelected ? Color.accentColor : Color.clear, lineWidth: 1.5)
-                                )
                             }
-                            .buttonStyle(.plain)
+                            .frame(minWidth: 80, minHeight: 30)
                         }
                     }
                     .padding(.bottom, 4)
@@ -261,6 +250,18 @@ struct RingPreviewSelector: View {
         // Re-assert items in case reset/expand touched ordering expectations.
         preview.innerItems = model.inner
         preview.middleItems = model.middle
+    }
+
+    private func slotAccessibilityLabel(
+        item: RingMenuItem,
+        band: EditorBand,
+        position: Int,
+        selected: Bool
+    ) -> String {
+        let bandName = band == .inner ? "Inner" : "Middle"
+        let label = item.label.isEmpty ? "unlabeled" : item.label
+        let symbolState = SFSymbol.isValid(item.icon) ? "" : ", invalid symbol; placeholder shown"
+        return "\(bandName) item \(position + 1), \(label), \(item.actionType.displayName), \(selected ? "selected" : "not selected")\(symbolState)"
     }
 
     // MARK: - Selection helpers

@@ -36,6 +36,7 @@ struct AppPickerSheet: View {
 
     @State private var entries: [AppEntry] = []
     @State private var searchText: String = ""
+    @State private var searchFocused = false
 
     /// The SF Symbol suggested for app-launch ring items. The real app icon is
     /// rendered later via a future IconSource; for now the ring shows a symbol.
@@ -56,25 +57,26 @@ struct AppPickerSheet: View {
                 .padding(.top, 16)
                 .padding(.bottom, 8)
 
-            TextField("Search applications…", text: $searchText)
-                .textFieldStyle(.roundedBorder)
+            AppKitTextField(
+                text: $searchText,
+                isFocused: $searchFocused,
+                placeholder: "Search applications…",
+                accessibilityLabel: "Search applications"
+            )
                 .padding(.horizontal, 16)
                 .padding(.bottom, 8)
 
             List(filteredEntries) { entry in
                 appRow(entry)
-                    .contentShape(Rectangle())
-                    .onTapGesture { pick(entry) }
             }
             .listStyle(.inset)
 
             Divider()
 
             HStack {
-                Button("Other…") { chooseOther() }
+                AppKitButton(title: "Other…") { chooseOther() }
                 Spacer()
-                Button("Cancel", role: .cancel) { onCancel() }
-                    .keyboardShortcut(.cancelAction)
+                AppKitButton(title: "Cancel", action: onCancel)
             }
             .padding(16)
         }
@@ -89,9 +91,14 @@ struct AppPickerSheet: View {
         HStack(spacing: 10) {
             AppIconView(path: entry.url.path)
                 .frame(width: 26, height: 26)
-            Text(entry.name)
-                .lineLimit(1)
-            Spacer()
+            AppKitSelectableRow(
+                title: entry.name,
+                subtitle: entry.id,
+                isSelected: false,
+                accessibilityLabel: "Choose \(entry.name)"
+            ) {
+                pick(entry)
+            }
         }
         .padding(.vertical, 2)
     }

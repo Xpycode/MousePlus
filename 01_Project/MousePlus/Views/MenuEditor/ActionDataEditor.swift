@@ -16,21 +16,24 @@ struct ActionDataEditor: View {
 
     /// Drives the `AppPickerSheet` presentation for `.appSwitch`.
     @State private var showingAppPicker = false
+    @State private var commandFocused = false
+
+    private var offeredActionTypes: [ActionType] {
+        item.actionType.isSelectable
+            ? ActionType.selectableCases
+            : [item.actionType] + ActionType.selectableCases
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             // Keep an existing unavailable value visible, but offer only supported
             // actions as replacements.
-            Picker("Action", selection: $item.actionType) {
-                if !item.actionType.isSelectable {
-                    Text(item.actionType.displayName).tag(item.actionType)
-                    Divider()
-                }
-                ForEach(ActionType.selectableCases, id: \.self) { type in
-                    Text(type.displayName).tag(type)
-                }
-            }
-            .pickerStyle(.menu)
+            AppKitPopup(
+                options: offeredActionTypes.map(actionOptionTitle),
+                selection: actionSelection,
+                disabledOptions: item.actionType.isSelectable ? [] : [0],
+                accessibilityLabel: "Action type"
+            )
 
             // 2. Type-aware data control.
             dataControl
@@ -66,7 +69,7 @@ struct ActionDataEditor: View {
 
                 Spacer()
 
-                Button("Choose…") {
+                AppKitButton(title: "Choose…") {
                     showingAppPicker = true
                 }
             }
@@ -114,9 +117,12 @@ struct ActionDataEditor: View {
     @ViewBuilder
     private var customControl: some View {
         VStack(alignment: .leading, spacing: 4) {
-            TextField("Command", text: $item.actionData, axis: .vertical)
-                .lineLimit(2...5)
-                .textFieldStyle(.roundedBorder)
+            AppKitMultilineTextField(
+                text: $item.actionData,
+                isFocused: $commandFocused,
+                accessibilityLabel: "Command"
+            )
+            .frame(minHeight: 52, maxHeight: 110)
 
             if item.actionData.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                 Text("Command is empty")
@@ -134,17 +140,11 @@ struct ActionDataEditor: View {
 
     @ViewBuilder
     private var windowSnapControl: some View {
-        Picker("Snap to", selection: snapZoneBinding) {
-            ForEach(SnapZone.allCases, id: \.self) { zone in
-                Label {
-                    Text(zone.displayName)
-                } icon: {
-                    Image(systemName: zone.systemImage)
-                }
-                .tag(zone)
-            }
-        }
-        .pickerStyle(.menu)
+        AppKitPopup(
+            options: SnapZone.allCases.map(\.displayName),
+            selection: snapZoneSelection,
+            accessibilityLabel: "Snap to"
+        )
     }
 
     /// Maps `item.actionData` (a `SnapZone.rawValue`) ⇄ `SnapZone`.
@@ -156,6 +156,32 @@ struct ActionDataEditor: View {
             get: { SnapZone(rawValue: item.actionData) ?? .left },
             set: { item.actionData = $0.rawValue }
         )
+    }
+
+    private var snapZoneSelection: Binding<Int> {
+        Binding(
+            get: { SnapZone.allCases.firstIndex(of: snapZoneBinding.wrappedValue) ?? 0 },
+            set: { index in
+                guard SnapZone.allCases.indices.contains(index) else { return }
+                snapZoneBinding.wrappedValue = SnapZone.allCases[index]
+            }
+        )
+    }
+
+    private var actionSelection: Binding<Int> {
+        Binding(
+            get: { offeredActionTypes.firstIndex(of: item.actionType) ?? 0 },
+            set: { index in
+                guard offeredActionTypes.indices.contains(index) else { return }
+                let selected = offeredActionTypes[index]
+                guard selected.isSelectable else { return }
+                item.actionType = selected
+            }
+        )
+    }
+
+    private func actionOptionTitle(_ type: ActionType) -> String {
+        type.isSelectable ? type.displayName : "\(type.displayName) — Unavailable"
     }
 
     // MARK: - Coming soon (not-yet-implemented action types)
@@ -174,7 +200,7 @@ struct ActionDataEditor: View {
             .background(.quaternary, in: RoundedRectangle(cornerRadius: 6))
             .disabled(true)
 
-            Text("This action type isn't implemented yet.")
+            Text("\(item.actionType.displayName) isn't available in this version. Its saved value and payload will remain unchanged until you choose a supported action.")
                 .font(.caption)
                 .foregroundStyle(.secondary)
         }

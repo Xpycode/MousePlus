@@ -353,9 +353,17 @@ final class MenuEditorModel {
     /// i.e. the write left the *old type's* payload behind (an action-type picker
     /// change). A caller that deliberately sets type + payload together is untouched.
     private static func normalizingTypeSwitch(old: RingMenuItem, new: RingMenuItem) -> RingMenuItem {
-        guard old.actionType != new.actionType, old.actionData == new.actionData else { return new }
+        guard old.actionType != new.actionType else { return new }
         var item = new
-        item.actionData = defaultActionData(for: new.actionType)
+        // A picker changes only the type, so any payload owned by the previous
+        // type must not follow it. Keep an explicitly supplied replacement,
+        // which lets import/migration code set type and payload atomically.
+        if old.actionData == new.actionData {
+            item.actionData = defaultActionData(for: new.actionType)
+        }
+        if old.keystrokePayload == new.keystrokePayload {
+            item.keystrokePayload = nil
+        }
         return item
     }
 

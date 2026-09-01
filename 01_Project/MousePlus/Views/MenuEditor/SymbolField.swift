@@ -25,6 +25,7 @@ struct SymbolField: View {
 
     /// Whether the curated-grid popover is presented.
     @State private var isPickerPresented = false
+    @State private var fieldFocused = false
 
     /// `true` when the current name is empty (not yet set) or names a real symbol.
     ///
@@ -44,18 +45,21 @@ struct SymbolField: View {
             HStack(spacing: 8) {
                 preview
 
-                TextField("SF Symbol name", text: $symbolName)
-                    .textFieldStyle(.roundedBorder)
-                    .foregroundStyle(showsError ? Color.red : Color.primary)
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 6)
-                            .stroke(showsError ? Color.red : Color.clear, lineWidth: 1)
-                    )
+                AppKitTextField(
+                    text: $symbolName,
+                    isFocused: $fieldFocused,
+                    placeholder: "SF Symbol name",
+                    accessibilityLabel: showsError
+                        ? "SF Symbol name, invalid value \(symbolName); placeholder shown"
+                        : "SF Symbol name"
+                )
 
-                Button {
+                AppKitButton(
+                    title: "",
+                    systemImageName: "square.grid.2x2",
+                    accessibilityLabel: "Browse symbols"
+                ) {
                     isPickerPresented.toggle()
-                } label: {
-                    Image(systemName: "square.grid.2x2")
                 }
                 .help("Browse symbols")
                 .popover(isPresented: $isPickerPresented, arrowEdge: .bottom) {
@@ -92,6 +96,8 @@ struct SymbolField: View {
         }
         .font(.title2)
         .frame(width: 24, height: 24)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(previewAccessibilityLabel)
     }
 
     /// The scrollable, sectioned curated-symbol grid shown in the popover.
@@ -103,16 +109,15 @@ struct SymbolField: View {
                 ForEach(CuratedSymbols.categories) { category in
                     Section {
                         ForEach(category.symbols, id: \.self) { sym in
-                            Button {
+                            AppKitButton(
+                                title: "",
+                                systemImageName: sym,
+                                accessibilityLabel: sym
+                            ) {
                                 symbolName = sym
                                 isPickerPresented = false
-                            } label: {
-                                Image(systemName: sym)
-                                    .font(.title3)
-                                    .frame(width: 44, height: 44)
-                                    .contentShape(Rectangle())
                             }
-                            .buttonStyle(.plain)
+                            .frame(width: 44, height: 44)
                             .help(sym)
                         }
                     } header: {
@@ -139,6 +144,12 @@ struct SymbolField: View {
     /// handled by ``isValid``, not a statement about symbol validity.
     static func isValidSymbol(_ name: String) -> Bool {
         SFSymbol.isValid(name)
+    }
+
+    private var previewAccessibilityLabel: String {
+        if symbolName.isEmpty { return "No SF Symbol selected; placeholder shown" }
+        if showsError { return "Invalid SF Symbol \(symbolName); placeholder shown" }
+        return "SF Symbol \(symbolName)"
     }
 }
 
