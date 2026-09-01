@@ -12,8 +12,6 @@
 <!-- Active work. Populated by /plan or /execute. Keep focused (3-7 tasks). -->
 <!-- When done: /log moves to tasks-archive.md -->
 
-- [x] Wave 3: unify action validation, completion results, contextual targets, and error routing
-- [x] Wave 4: replace tabbed Settings, migrate panes, embed Menu Items, and retire the second editor
 - [ ] Waves 5–6: add recorder/Test/recovery/accessibility UI and complete runtime live-apply/error integration
 - [ ] Wave 7: pass automated, adversarial, accessibility, and reduced T12 live gates
 
