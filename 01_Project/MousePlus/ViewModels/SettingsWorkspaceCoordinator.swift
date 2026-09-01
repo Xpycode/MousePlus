@@ -97,6 +97,11 @@ final class SettingsWorkspaceCoordinator {
     /// Synchronizes mutations made directly through the workspace-owned editor model.
     func menuItemsDidChange() {
         guard isLoaded else { return }
+        // SwiftUI observation also reports coordinator-driven model loads (initial
+        // load, reset, restore). Treat an identical model/config pair as a no-op
+        // so merely revealing the pane cannot manufacture a dirty save.
+        guard configuration.inner != menuEditorModel.inner ||
+                configuration.middle != menuEditorModel.middle else { return }
         configuration = menuEditorModel.merged(into: configuration)
         markDirty([.menuItems])
         scheduleSave()

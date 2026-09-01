@@ -28,6 +28,10 @@ struct SlotEditorForm: View {
                 emptyState
             }
         }
+        // Slot-scoped controls (focus, popovers, and local AppKit field state)
+        // must be recreated when identity changes, rather than bleeding into the
+        // item that happens to occupy the same array position.
+        .id(model.selection)
     }
 
     // MARK: - Current binding resolution

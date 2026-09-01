@@ -2,7 +2,7 @@
 //  MenuEditorView.swift
 //  MousePlus
 //
-//  Assembles the dedicated Menu Items editor window content.
+//  Assembles the legacy dedicated Menu Items editor window content.
 //
 //  This is a PURE composition view: it mutates the supplied `MenuEditorModel`
 //  and invokes `onDone()`. It owns no persistence, no services, no timers,
@@ -19,7 +19,26 @@ struct MenuEditorView: View {
     /// Invoked when the user dismisses the editor via the Done button.
     var onDone: () -> Void
 
-    /// Drives the "Reset to Defaults" confirmation dialog.
+    var body: some View {
+        MenuEditorWorkspace(
+            model: model,
+            onReset: { model.resetToDefaults() },
+            trailingToolbar: {
+                Button("Done") { onDone() }
+                    .keyboardShortcut(.defaultAction)
+            }
+        )
+        .frame(minWidth: 900, minHeight: 600)
+    }
+}
+
+/// Reusable, persistence-neutral editor composition shared by the embedded
+/// Settings pane and the legacy editor window until task 4.4 retires it.
+struct MenuEditorWorkspace<TrailingToolbar: View>: View {
+    @Bindable var model: MenuEditorModel
+    var onReset: () -> Void
+    @ViewBuilder var trailingToolbar: () -> TrailingToolbar
+
     @State private var showResetConfirm = false
 
     var body: some View {
@@ -53,14 +72,13 @@ struct MenuEditorView: View {
             bottomToolbar
         }
         .padding(16)
-        .frame(minWidth: 900, minHeight: 600)
         .confirmationDialog(
             "Reset both rings to the default items? This can't be undone.",
             isPresented: $showResetConfirm,
             titleVisibility: .visible
         ) {
             Button("Reset to Defaults", role: .destructive) {
-                model.resetToDefaults()
+                onReset()
             }
             Button("Cancel", role: .cancel) {}
         }
@@ -112,10 +130,7 @@ struct MenuEditorView: View {
                 showResetConfirm = true
             }
 
-            Button("Done") {
-                onDone()
-            }
-            .keyboardShortcut(.defaultAction)
+            trailingToolbar()
         }
     }
 

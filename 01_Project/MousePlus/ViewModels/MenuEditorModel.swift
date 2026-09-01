@@ -25,7 +25,7 @@ enum EditorBand: Hashable {
 ///
 /// - `subItemID == nil` → a top-level slot in `band`.
 /// - `subItemID != nil` → a sub-item (outer arc) of the middle item `itemID`.
-struct SlotSelection: Equatable {
+struct SlotSelection: Hashable {
     /// The band the (top-level) slot lives in. Sub-items always belong to `.middle`.
     var band: EditorBand
 
