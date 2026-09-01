@@ -597,3 +597,33 @@ mirror (~1.5–2d) → app switcher (~1.5–2d) → system toggles (~3.5–4d). 
 **Consequences:** Any future field added to an evolving on-disk `Codable` model must use per-field `decodeIfPresent`-with-default — do **not** rely on synthesized `Codable` for models that gain keys over time (reusable gotcha; cookbook candidate). Reaching Settings *from the HUD itself* (a ring wedge) is still a gap — the user's actual instinct was to look for a Settings icon in the ring — so the next step is a new `ActionType.openSettings` that drops a Settings wedge into the menu. The global monitor is re-armed after the Accessibility grant (global monitors don't retroactively start firing) and on rebind, mirroring `setupTriggers`/`applyTriggers`.
 
 ---
+
+## 2026-09-01 - Unified Sidebar Settings Workspace
+
+**Context:** Menu Editor live verification repeatedly stalled because the current configuration flow is split across a small `460 × 460` tabbed Settings window and a second standalone editor. The editor cannot record first-class keystrokes, cannot test an action in place, and does not show save or execution results. Default inner actions appear configured but are inert empty commands. A survey of ClipSmart, Penumbra, QuickStatsPanel, QuickScreenShot, LaunchAway, and the shared `MacUIKitSettings` package showed that the newer app pattern is a sidebar Settings workspace with consistent pane chrome, inline recorders, contextual feedback, and deep-linkable sections.
+
+**Options Considered:**
+1. **Unified sidebar Settings workspace** — use `MacUIKitSettings.SettingsSidebarShell`; embed the existing side-by-side ring preview and selected-item editor in the Menu Items pane; integrate ShortcutKit recording, Test Action, and persistence status directly.
+2. **Sidebar Settings plus dedicated editor** — modernize the Settings shell but retain the second editor window, adding summaries, backups, and shared status infrastructure.
+
+**Decision:** Option 1. MousePlus will move toward one resizable sidebar Settings workspace. The Menu Items pane is the primary configuration surface, not a launcher for another window.
+
+**Rationale:** Editing a ring item is one continuous job: select a wedge, configure its action, record input, test it, and see whether it saved. Keeping those steps in one window removes the context switch that made T12 cumbersome. It also aligns MousePlus with the shared Settings architecture already emerging across the app portfolio and provides a natural home for Settings search and deep links later. The existing side-by-side editor can be reused inside a wider pane, so the decision changes the shell and workflow more than the editor's core model.
+
+**Consequences:**
+- Adopt `MacUIKitSettings` for the sidebar shell and stabilize/pin the relevant `ShortcutKit` revision before MousePlus integration.
+- The Menu Items pane must accommodate the ring preview and detail form at roughly editor-window scale; the Settings window becomes a workspace rather than a compact preferences panel.
+- Add a first-class Send Keystroke action with inline ShortcutKit recording, Test Action, visible Saving/Saved/Failed state, and surfaced execution errors.
+- Centralize or otherwise harden configuration writes so decode/write failures cannot silently overwrite data or masquerade as saved state.
+- Hide or clearly separate unimplemented action types instead of letting users configure silent no-ops.
+- Retire the standalone Menu Editor as the target UX after migration; preserve its controller only as temporary transition scaffolding if the plan needs staged builds.
+- Replace the old large manual T12 gate with automated model/persistence coverage plus a short final live smoke test.
+- Preserve unknown action-type raw values losslessly; tolerant decode may not collapse them to `.custom` and destroy them on the next save.
+- Test Action flushes successfully before execution; contextual tests name a previously frontmost external app; custom commands report non-zero exit rather than launch-only success.
+- A failed close flush offers Retry / Discard Changes / Cancel Close; Reset uses a durable atomic pre-reset backup with session Undo and post-relaunch Restore.
+- The shared shell and ShortcutKit recorder are narrow UI-control exceptions. Package integration pins an exact clean revision. Ordinary shortcut conflicts warn; only reliably unusable/reserved combinations block with a reason.
+- Legacy `keyboardShortcut` data migrates into one canonical payload (unparseable text remains losslessly unresolved and requires re-recording), and new encodes retire the old field.
+- Live-ring failures use a brief non-activating error HUD with a route to the relevant Settings item; successes remain silent.
+- Sequence completed through planning: specification approved and `IMPLEMENTATION_PLAN.md` regenerated on 2026-09-01; coding starts with its dependency/test gate.
+
+---
