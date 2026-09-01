@@ -627,3 +627,44 @@ mirror (~1.5–2d) → app switcher (~1.5–2d) → system toggles (~3.5–4d). 
 - Sequence completed through planning: specification approved and `IMPLEMENTATION_PLAN.md` regenerated on 2026-09-01; coding starts with its dependency/test gate.
 
 ---
+
+## 2026-09-01 - Send Keystroke canonical payload, posting, defaults, and permission stance
+
+**Context:** `SEND_KEYSTROKE_PLAN.md` originally proposed encoding a shortcut as a numeric
+`"<keyCode>:<modifiers>"` string in `RingMenuItem.actionData`. The unified Settings implementation
+landed before that proposed format shipped and introduced a typed keystroke model, ShortcutKit
+recording, structured execution results, and testable Core Graphics boundaries. This decision
+records the implemented architecture while retaining the plan's researched posting and default
+behavior. Live delivery and first-run permission checks were still outstanding at audit time.
+
+**Decision:**
+
+1. **The canonical persisted value is `RingMenuItem.keystrokePayload`, not `actionData`.** A typed
+   `KeystrokePayload` owns key code and chord modifiers, masks unsupported modifier bits, and bridges
+   to ShortcutKit. Codable migration accepts supported legacy representations, preserves ambiguous
+   legacy text as unresolved rather than guessing, and new encodes retire the old
+   `keyboardShortcut` field. The plan's numeric `actionData` string was never shipped and is
+   superseded; `actionData` remains for action types whose contracts use it.
+2. **Keyboard events use a private Core Graphics source and explicit flags on both key-down and
+   key-up, posted session-wide at `.cghidEventTap`.** The service retains the researched 50 ms
+   pre-delay and 10 ms down/up gap. Session-wide HID posting is required for other applications'
+   global hotkeys; targeted PID posting would not prove that headline behavior. The posting boundary
+   is injected so permission denial, ordering, timing, flags, tap, source, and cancellation cleanup
+   are covered without synthesizing verification input.
+3. **Mission Control remains a custom action:** `open -b com.apple.exposelauncher`. Copy, Paste, and
+   Spotlight use typed Send Keystroke payloads in fresh defaults. Mission Control is not modeled as
+   an ordinary key chord because the public CGEvent keyboard path does not provide the required
+   system/consumer-key behavior.
+4. **Posting permission is preflighted at execution time and failures are surfaced as structured
+   action results.** Settings also exposes a denied-only Keystroke Posting row: refresh/preflight
+   never prompts, while an explicit Request Access click calls `CGRequestPostEventAccess()` and
+   refreshes status. T7 still must observe the real prompt/denial on a stable signed build; the UI
+   does not assume Accessibility automatically satisfies posting access.
+
+**Consequences:** Keystroke UI and runtime code must read/write the typed payload and must not revive
+the never-shipped numeric `actionData` schema. Saved configurations continue to win over fresh
+defaults. Automated tests establish event construction and persistence behavior, but do not replace
+the remaining user-driven checks for cross-application delivery, TextEdit Copy/Paste, Spotlight,
+physically held modifier contamination, editor/relaunch behavior, or first-run TCC handling.
+
+---

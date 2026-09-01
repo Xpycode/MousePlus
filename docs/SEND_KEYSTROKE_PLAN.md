@@ -5,6 +5,21 @@
 UI arm (T5) edits `ActionDataEditor.swift`, which lives on that branch.
 **Estimated effort:** ~1–1.5 dev-days.
 
+> **Implementation status (audited 2026-09-01):** The later unified Settings work superseded this
+> plan's proposed `actionData = "<keyCode>:<modifiers>"` storage contract before that contract
+> shipped. Send Keystroke now uses the typed, canonical `RingMenuItem.keystrokePayload`, including
+> lossless handling of unresolved legacy values; `actionData` is not the keystroke payload. T1–T5
+> are implemented and strengthened by typed coding/migration, an injectable and tested posting
+> boundary, structured action results, ShortcutKit recording/conflict handling, executable fresh
+> defaults, and automated model/persistence coverage. T6 was completed in the follow-up audit: a
+> dedicated Settings status row preflights posting access without prompting and calls
+> `CGRequestPostEventAccess()` only from an explicit user click. T7 remains open:
+> automated tests cover construction and orchestration, but the QuickStatsPanel, TextEdit,
+> Spotlight, held-modifier, editor/relaunch, and first-run TCC checks still require user-driven live
+> verification. The sections below remain the original research and implementation plan; where they
+> disagree with this note, the shipped typed model is authoritative. No live checks are claimed by
+> this audit.
+
 Naming pinned: **`ActionType.sendKeystroke`** (raw `"sendKeystroke"`). Supersedes the drifting names
 in older docs — `.keyStroke` (sessions/2026-07-08.md), `.keyShortcut` (APP_COMMANDS_PLAN.md §3). Those
 docs stand, but this spelling wins.
