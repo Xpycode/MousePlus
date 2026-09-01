@@ -69,7 +69,7 @@ final class MousePlusTests: XCTestCase {
         XCTAssertTrue(poster.events.isEmpty)
     }
 
-    func testCancellationBetweenEventsDoesNotPostKeyUp() async {
+    func testCancellationBetweenEventsPostsCleanupKeyUp() async {
         let poster = RecordingEventPoster(hasAccess: true)
         let service = KeystrokeService(
             poster: poster,
@@ -85,7 +85,8 @@ final class MousePlusTests: XCTestCase {
             XCTFail("Unexpected error: \(error)")
         }
 
-        XCTAssertEqual(poster.events.map(\.keyDown), [true])
+        XCTAssertEqual(poster.events.map(\.keyDown), [true, false])
+        XCTAssertEqual(poster.events.map(\.flags), [.maskCommand, .maskCommand])
     }
 }
 

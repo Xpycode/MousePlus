@@ -93,13 +93,28 @@ final class MenuEditorModel {
         normalizeSnapPayloads()
     }
 
-    /// Replace the working rings from a full configuration and clear selection.
-    func load(from config: Configuration) {
+    /// Replace the working rings from a full configuration.
+    ///
+    /// Save reconciliation preserves the selected UUID when it still exists so
+    /// an autosave cannot tear down the active editor form (and its keyboard
+    /// focus). Initial/recovery loads keep the default clearing behavior.
+    func load(from config: Configuration, preservingSelection: Bool = false) {
+        let previousSelection = preservingSelection ? selection : nil
         inner = config.inner
         middle = config.middle
-        selection = nil
         enforceInnerInvariants()
         normalizeSnapPayloads()
+        selection = previousSelection.flatMap(validSelection)
+    }
+
+    private func validSelection(_ selection: SlotSelection) -> SlotSelection? {
+        let items = selection.band == .inner ? inner : middle
+        guard let itemID = selection.itemID,
+              let parent = items.first(where: { $0.id == itemID }) else { return nil }
+        guard let subItemID = selection.subItemID else { return selection }
+        guard selection.band == .middle,
+              parent.subItems?.contains(where: { $0.id == subItemID }) == true else { return nil }
+        return selection
     }
 
     // MARK: Computed

@@ -162,6 +162,34 @@ final class SettingsWorkspaceCoordinatorTests: XCTestCase {
         XCTAssertEqual(recorder.events.count, 1)
     }
 
+    func testSuccessfulAutosavePreservesSelectedMenuItemIdentity() async throws {
+        let persistence = RecordingConfigurationPersistence(Configuration())
+        let coordinator = makeCoordinator(persistence)
+        await coordinator.load()
+        let itemID = try XCTUnwrap(coordinator.menuEditorModel.middle.first?.id)
+        coordinator.menuEditorModel.selection = SlotSelection(
+            band: .middle,
+            itemID: itemID,
+            subItemID: nil
+        )
+
+        let binding = try XCTUnwrap(
+            coordinator.menuEditorModel.binding(forItem: itemID, band: .middle)
+        )
+        var edited = binding.wrappedValue
+        edited.label = "Still selected after save"
+        binding.wrappedValue = edited
+        coordinator.menuItemsDidChange()
+
+        let flushed = await coordinator.flush()
+        XCTAssertTrue(flushed)
+        XCTAssertEqual(coordinator.menuEditorModel.selection?.itemID, itemID)
+        XCTAssertEqual(
+            coordinator.menuEditorModel.middle.first(where: { $0.id == itemID })?.label,
+            "Still selected after save"
+        )
+    }
+
     func testOverlappingFlushSharesInFlightFailureWithoutImplicitRetry() async {
         let persistence = RecordingConfigurationPersistence(Configuration())
         let coordinator = makeCoordinator(persistence)

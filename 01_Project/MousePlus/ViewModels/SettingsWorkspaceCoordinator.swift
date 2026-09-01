@@ -312,7 +312,7 @@ final class SettingsWorkspaceCoordinator {
                 dirtyFields.remove(field)
             }
             configuration = mergingUnsavedFields(from: configuration, into: merged)
-            menuEditorModel.load(from: configuration)
+            menuEditorModel.load(from: configuration, preservingSelection: true)
             // The runtime receives the exact complete snapshot that was made durable,
             // never a field fragment or the still-dirty editor configuration.
             liveApply(merged)

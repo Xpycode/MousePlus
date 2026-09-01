@@ -54,8 +54,22 @@ actor KeystrokeService {
             tap: .cghidEventTap
         )
 
-        try await clock.sleep(for: Self.keyDownToKeyUpDelay)
-        try Task.checkCancellation()
+        do {
+            try await clock.sleep(for: Self.keyDownToKeyUpDelay)
+            try Task.checkCancellation()
+        } catch {
+            // Once key-down has reached the system, cancellation must not leave
+            // the key (and its modifier flags) logically held in the target app.
+            // Best-effort release preserves the original cancellation/error.
+            try? poster.postKeyboardEvent(
+                keyCode: keyCode,
+                keyDown: false,
+                flags: flags,
+                sourceStateID: .privateState,
+                tap: .cghidEventTap
+            )
+            throw error
+        }
         try poster.postKeyboardEvent(
             keyCode: keyCode,
             keyDown: false,
