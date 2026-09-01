@@ -71,19 +71,19 @@ Run `BUILD` after every implementation task. Tasks with tests also run their foc
 
 ### Wave 1 — Model, keystroke, and control foundations (parallel after Wave 0)
 
-- [ ] **1.1 Preserve action types losslessly** → `Models/ActionType.swift`, `ActionDataEditor.swift`, `MousePlusTests/ActionTypeCodingTests.swift`
+- [x] **1.1 Preserve action types losslessly** → `Models/ActionType.swift`, `ActionDataEditor.swift`, `MousePlusTests/ActionTypeCodingTests.swift`
   - Success: known cases include `sendKeystroke`; unknown strings decode unavailable and re-encode unchanged; selectable supported cases are separate from all decodable values.
   - Backpressure: round-trip tests cover known, legacy `clipboard`, and arbitrary future values; `BUILD`.
 
-- [ ] **1.2 Define canonical keystroke payload and migration** → new `Models/KeystrokePayload.swift`, `RingMenuItem.swift`, payload tests
+- [x] **1.2 Define canonical keystroke payload and migration** → new `Models/KeystrokePayload.swift`, `RingMenuItem.swift`, payload tests
   - Success: payload represents key+modifiers or an unresolved legacy string; non-empty `keyboardShortcut` migrates only without canonical data; new encodes omit the legacy field and never guess an executable chord.
   - Backpressure: fixtures cover canonical, masking, canonical-wins, parseable/unresolved legacy, missing field, nested sub-items; `BUILD`.
 
-- [ ] **1.3 Implement injectable keystroke posting** → new `KeystrokeService.swift`, `CGEventPosting.swift`, service tests
+- [x] **1.3 Implement injectable keystroke posting** → new `KeystrokeService.swift`, `CGEventPosting.swift`, service tests
   - Success: private source posts down/up with explicit flags to `.cghidEventTap`, approved delays, and post-event preflight; injected poster/clock verifies behavior without real input.
   - Backpressure: tests assert permission failure, event order, flags, tap, cancellation; `BUILD`.
 
-- [ ] **1.4 Add app-owned AppKit control wrappers** → new `Views/AppKitControls/`
+- [x] **1.4 Add app-owned AppKit control wrappers** → new `Views/AppKitControls/`
   - Success: wrappers cover buttons, checkbox, popup, segmented control, slider, single/multiline fields, and selectable rows with enabled/focus/accessibility bindings.
   - Backpressure: wrapper harness compiles; coordinator callbacks remain main-thread safe; `BUILD`.
 
@@ -243,7 +243,7 @@ Run `BUILD` after every implementation task. Tasks with tests also run their foc
 | Wave | Started | Completed | Commits / evidence |
 |---|---|---|---|
 | 0 | 2026-09-01 | 2026-09-01 | 0.1: clean pushed zPackages revision `b4ad72a5dd84666e875b19afadd6de13b93fabcb`, focused tests 125/125. 0.2: exact pin + cold/cached builds, commit `369ba7e`. 0.3: real unit target + sentinel, commit `63c9433`. Full unit/UI plan passed with ad-hoc signing. |
-| 1 | | | |
+| 1 | 2026-09-01 | 2026-09-01 | 1.1 `34ec954`; 1.2 `0916596`; 1.3 `507f0c7`; 1.4 `7546235`. Unsigned Debug build and full MousePlus test plan passed (18 unit tests + 1 UI test); signed build unavailable because this machine lacks the configured certificate. |
 | 2 | | | |
 | 3 | | | |
 | 4 | | | |

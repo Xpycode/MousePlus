@@ -12,7 +12,7 @@
 <!-- Active work. Populated by /plan or /execute. Keep focused (3-7 tasks). -->
 <!-- When done: /log moves to tasks-archive.md -->
 
-- [ ] Wave 1: add lossless action/keystroke models, posting service, and AppKit control wrappers
+- [x] Wave 1: add lossless action/keystroke models, posting service, and AppKit control wrappers
 - [ ] Wave 2: build and verify the single safe configuration coordinator with backup and close barriers
 - [ ] Wave 3: unify action validation, completion results, contextual targets, and error routing
 - [ ] Wave 4: replace tabbed Settings, migrate panes, embed Menu Items, and retire the second editor
