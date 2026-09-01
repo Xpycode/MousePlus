@@ -68,6 +68,53 @@ final class ActionServiceTests: XCTestCase {
         XCTAssertEqual(calls.first?.1, CGEventFlags.maskCommand)
     }
 
+    func testValidKeystrokeIsForwardedAndCompletes() async {
+        let keystrokes = KeystrokeStub()
+        let service = ActionService(keystrokeService: keystrokes)
+        let modifiers = (1 << 18) | (1 << 19) | (1 << 20)
+
+        let result = await service.execute(item(
+            .sendKeystroke,
+            payload: .key(keyCode: 12, modifiers: UInt(modifiers))
+        ))
+
+        XCTAssertEqual(result, .completed)
+        let calls = await keystrokes.calls
+        XCTAssertEqual(calls.count, 1)
+        XCTAssertEqual(calls.first?.0, 12)
+        XCTAssertEqual(
+            calls.first?.1,
+            [.maskControl, .maskAlternate, .maskCommand]
+        )
+    }
+
+    func testMissingKeystrokePayloadIsRejectedWithoutSending() async {
+        let keystrokes = KeystrokeStub()
+        let service = ActionService(keystrokeService: keystrokes)
+
+        let result = await service.execute(item(.sendKeystroke))
+
+        XCTAssertFalse(result.isSuccess)
+        XCTAssertTrue(result.userFacingText.contains("needs action details"))
+        let calls = await keystrokes.calls
+        XCTAssertTrue(calls.isEmpty)
+    }
+
+    func testUnresolvedLegacyKeystrokeIsRejectedWithoutSending() async {
+        let keystrokes = KeystrokeStub()
+        let service = ActionService(keystrokeService: keystrokes)
+
+        let result = await service.execute(item(
+            .sendKeystroke,
+            payload: .unresolvedLegacy("⌘C")
+        ))
+
+        XCTAssertFalse(result.isSuccess)
+        XCTAssertTrue(result.userFacingText.contains("Record it again"))
+        let calls = await keystrokes.calls
+        XCTAssertTrue(calls.isEmpty)
+    }
+
     private func item(
         _ type: ActionType,
         data: String = "",
