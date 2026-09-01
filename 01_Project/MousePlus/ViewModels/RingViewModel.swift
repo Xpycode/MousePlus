@@ -51,7 +51,16 @@ final class RingViewModel {
     /// actions target the user's app and not MousePlus. `nil` if none.
     var frontmostPID: pid_t?
 
-    private let actionService = ActionService()
+    private let actionService: ActionService
+    private let actionResultRouter: ActionResultRouter
+
+    init(
+        actionService: ActionService = ActionService(),
+        actionResultRouter: ActionResultRouter = ActionResultRouter()
+    ) {
+        self.actionService = actionService
+        self.actionResultRouter = actionResultRouter
+    }
 
     /// Pure UI callback the owner (AppDelegate) sets to dismiss the panel after a
     /// *closing* commit (a direct/outer action fired). NOT invoked when a commit
@@ -136,7 +145,8 @@ final class RingViewModel {
         let context = ActionContext(frontmostPID: frontmostPID,
                                     screenLayout: ScreenLayout.capture())
         Task {
-            _ = await actionService.execute(item, context: context)
+            let result = await actionService.execute(item, context: context)
+            await actionResultRouter.routeRuntimeResult(result, for: item.id)
         }
         reset()
         requestClose?()

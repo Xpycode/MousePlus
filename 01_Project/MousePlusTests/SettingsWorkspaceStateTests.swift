@@ -161,7 +161,7 @@ final class SettingsWorkspaceStateTests: XCTestCase {
         SettingsWorkspaceCoordinator(
             persistence: persistence,
             debounceClock: RecoveryLongClock(),
-            liveApply: { _, _ in recorder.count += 1 }
+            liveApply: { _ in recorder.count += 1 }
         )
     }
 

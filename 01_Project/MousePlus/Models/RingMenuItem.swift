@@ -76,10 +76,30 @@ extension RingMenuItem {
     /// Inner band — symbol-only quick actions (labels are not rendered in the inner ring,
     /// but kept for accessibility / settings UI). Independent of `sampleItems` (middle band).
     static let sampleInnerItems: [RingMenuItem] = [
-        RingMenuItem(label: "Copy", icon: "doc.on.doc", actionType: .custom, actionData: ""),
-        RingMenuItem(label: "Paste", icon: "doc.on.clipboard", actionType: .custom, actionData: ""),
-        RingMenuItem(label: "Mission Control", icon: "rectangle.3.group", actionType: .custom, actionData: ""),
-        RingMenuItem(label: "Spotlight", icon: "magnifyingglass", actionType: .custom, actionData: ""),
+        RingMenuItem(
+            label: "Copy",
+            icon: "doc.on.doc",
+            actionType: .sendKeystroke,
+            keystrokePayload: .key(keyCode: 8, modifiers: 1 << 20)
+        ),
+        RingMenuItem(
+            label: "Paste",
+            icon: "doc.on.clipboard",
+            actionType: .sendKeystroke,
+            keystrokePayload: .key(keyCode: 9, modifiers: 1 << 20)
+        ),
+        RingMenuItem(
+            label: "Mission Control",
+            icon: "rectangle.3.group",
+            actionType: .custom,
+            actionData: "open -b com.apple.exposelauncher"
+        ),
+        RingMenuItem(
+            label: "Spotlight",
+            icon: "magnifyingglass",
+            actionType: .sendKeystroke,
+            keystrokePayload: .key(keyCode: 49, modifiers: 1 << 20)
+        ),
     ]
 
     static let sampleItems: [RingMenuItem] = [

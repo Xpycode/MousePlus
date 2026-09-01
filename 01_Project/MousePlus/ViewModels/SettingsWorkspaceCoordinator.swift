@@ -34,7 +34,7 @@ final class SettingsWorkspaceCoordinator {
 
     private let persistence: any ConfigurationPersisting
     private let debounceClock: any WorkspaceDebounceClock
-    private let liveApply: @MainActor (Configuration, Set<Field>) -> Void
+    private let liveApply: @MainActor (Configuration) -> Void
     private var debounceTask: Task<Void, Never>?
     private var saveTask: Task<Bool, Never>?
     private var saveTaskID: UUID?
@@ -56,7 +56,7 @@ final class SettingsWorkspaceCoordinator {
         debounceClock: any WorkspaceDebounceClock = ContinuousWorkspaceDebounceClock(
             duration: .milliseconds(300)
         ),
-        liveApply: @escaping @MainActor (Configuration, Set<Field>) -> Void = { _, _ in }
+        liveApply: @escaping @MainActor (Configuration) -> Void = { _ in }
     ) {
         self.persistence = persistence
         self.debounceClock = debounceClock
@@ -313,7 +313,9 @@ final class SettingsWorkspaceCoordinator {
             }
             configuration = mergingUnsavedFields(from: configuration, into: merged)
             menuEditorModel.load(from: configuration)
-            liveApply(merged, fields)
+            // The runtime receives the exact complete snapshot that was made durable,
+            // never a field fragment or the still-dirty editor configuration.
+            liveApply(merged)
 
             if dirtyFields.isEmpty {
                 status = .saved

@@ -4,7 +4,18 @@ import MacUIKitSettings
 /// Settings/Preferences view
 struct SettingsView: View {
     @Binding var selection: SettingsSection?
-    @State private var coordinator = SettingsWorkspaceCoordinator()
+    @Binding var requestedMenuItemID: UUID?
+    @State private var coordinator: SettingsWorkspaceCoordinator
+
+    init(
+        selection: Binding<SettingsSection?>,
+        requestedMenuItemID: Binding<UUID?> = .constant(nil),
+        liveApply: @escaping @MainActor (Configuration) -> Void = { _ in }
+    ) {
+        _selection = selection
+        _requestedMenuItemID = requestedMenuItemID
+        _coordinator = State(initialValue: SettingsWorkspaceCoordinator(liveApply: liveApply))
+    }
 
     var body: some View {
         SettingsSidebarShell(selection: $selection, searchable: false) { section in
@@ -16,7 +27,7 @@ struct SettingsView: View {
             case .ringAppearance:
                 RingAppearanceSettingsPane(coordinator: coordinator)
             case .menuItems:
-                MenuItemsPane(coordinator: coordinator)
+                MenuItemsPane(coordinator: coordinator, requestedItemID: $requestedMenuItemID)
             }
         }
         .frame(minWidth: 1120, minHeight: 680)

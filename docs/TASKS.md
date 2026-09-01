@@ -12,7 +12,7 @@
 <!-- Active work. Populated by /plan or /execute. Keep focused (3-7 tasks). -->
 <!-- When done: /log moves to tasks-archive.md -->
 
-- [ ] Wave 6: complete runtime live-apply/error integration and real default actions
+- [x] Wave 6: complete runtime live-apply/error integration and real default actions
 - [ ] Wave 7: pass automated, adversarial, accessibility, and reduced T12 live gates
 
 ---

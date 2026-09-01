@@ -96,6 +96,35 @@ final class SettingsWorkspaceCoordinatorTests: XCTestCase {
         XCTAssertEqual(coordinator.status, .saved)
     }
 
+    func testLiveApplyReceivesCompletePersistedRuntimeSnapshot() async throws {
+        var initial = Configuration()
+        initial.behavior.dismissOnEscape = false
+        let persistence = RecordingConfigurationPersistence(initial)
+        let recorder = LiveApplyRecorder()
+        let coordinator = makeCoordinator(persistence, recorder: recorder)
+        await coordinator.load()
+
+        coordinator.edit([.appearance]) { $0.appearance.deadZone = 51 }
+        let flushed = await coordinator.flush()
+        XCTAssertTrue(flushed)
+
+        let snapshot = try XCTUnwrap(recorder.events.last)
+        XCTAssertEqual(snapshot.appearance.deadZone, 51)
+        XCTAssertFalse(snapshot.behavior.dismissOnEscape)
+        XCTAssertEqual(snapshot.inner, initial.inner)
+        XCTAssertEqual(snapshot.middle, initial.middle)
+        XCTAssertEqual(snapshot.triggers, initial.triggers)
+        let persisted = await persistence.current
+        XCTAssertEqual(snapshot.appearance, persisted.appearance)
+        XCTAssertEqual(snapshot.behavior.holdToActivate, persisted.behavior.holdToActivate)
+        XCTAssertEqual(snapshot.behavior.tapToActivate, persisted.behavior.tapToActivate)
+        XCTAssertEqual(snapshot.behavior.dismissOnClickOutside, persisted.behavior.dismissOnClickOutside)
+        XCTAssertEqual(snapshot.behavior.dismissOnEscape, persisted.behavior.dismissOnEscape)
+        XCTAssertEqual(snapshot.inner, persisted.inner)
+        XCTAssertEqual(snapshot.middle, persisted.middle)
+        XCTAssertEqual(snapshot.triggers, persisted.triggers)
+    }
+
     func testNoOpClosePerformsNoPersistenceWork() async {
         let persistence = RecordingConfigurationPersistence(Configuration())
         let coordinator = makeCoordinator(persistence)
@@ -168,9 +197,7 @@ final class SettingsWorkspaceCoordinatorTests: XCTestCase {
         return SettingsWorkspaceCoordinator(
             persistence: persistence,
             debounceClock: LongWorkspaceDebounceClock(),
-            liveApply: { configuration, fields in
-                recorder.events.append((configuration, fields))
-            }
+            liveApply: { configuration in recorder.events.append(configuration) }
         )
     }
 
@@ -192,7 +219,7 @@ private struct LongWorkspaceDebounceClock: WorkspaceDebounceClock {
 
 @MainActor
 private final class LiveApplyRecorder {
-    var events: [(Configuration, Set<SettingsWorkspaceCoordinator.Field>)] = []
+    var events: [Configuration] = []
 }
 
 private enum TestFailure: Error {

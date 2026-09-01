@@ -10,12 +10,14 @@ import SwiftUI
 @MainActor
 struct MenuItemsPane: View {
     @Bindable var coordinator: SettingsWorkspaceCoordinator
+    @Binding var requestedItemID: UUID?
     @EnvironmentObject private var contextProvider: SettingsActionContextProvider
     @State private var testActionController: TestActionController
     @State private var showRestoreConfirm = false
 
-    init(coordinator: SettingsWorkspaceCoordinator) {
+    init(coordinator: SettingsWorkspaceCoordinator, requestedItemID: Binding<UUID?> = .constant(nil)) {
         self.coordinator = coordinator
+        _requestedItemID = requestedItemID
         _testActionController = State(initialValue: TestActionController(coordinator: coordinator))
     }
 
@@ -55,6 +57,29 @@ struct MenuItemsPane: View {
             }
             Button("Cancel", role: .cancel) {}
         }
+        .onAppear { selectRequestedItemIfAvailable() }
+        .onChange(of: requestedItemID) { _, _ in selectRequestedItemIfAvailable() }
+        .onChange(of: coordinator.isLoaded) { _, _ in selectRequestedItemIfAvailable() }
+    }
+
+    private func selectRequestedItemIfAvailable() {
+        guard coordinator.isLoaded, let requestedItemID else { return }
+        let model = coordinator.menuEditorModel
+        if model.inner.contains(where: { $0.id == requestedItemID }) {
+            model.activeBand = .inner
+            model.selection = SlotSelection(band: .inner, itemID: requestedItemID, subItemID: nil)
+        } else if model.middle.contains(where: { $0.id == requestedItemID }) {
+            model.activeBand = .middle
+            model.selection = SlotSelection(band: .middle, itemID: requestedItemID, subItemID: nil)
+        } else if let parent = model.middle.first(where: {
+            $0.subItems?.contains(where: { $0.id == requestedItemID }) == true
+        }) {
+            model.activeBand = .middle
+            model.selection = SlotSelection(band: .middle, itemID: parent.id, subItemID: requestedItemID)
+        } else {
+            return
+        }
+        self.requestedItemID = nil
     }
 
     private var selectedItem: RingMenuItem? {

@@ -174,17 +174,17 @@ Run `BUILD` after every implementation task. Tasks with tests also run their foc
 
 ### Wave 6 — Runtime integration
 
-- [ ] **6.1 Consolidate post-save live apply** → `MousePlusApp.swift`, coordinator
+- [x] **6.1 Consolidate post-save live apply** → `MousePlusApp.swift`, coordinator
   - Depends on: Waves 4–5
   - Success: one post-save callback updates full runtime configuration, rings, appearance, triggers, and Settings hotkey; old field callbacks are removed; failure changes nothing live.
   - Backpressure: runtime snapshot tests; obsolete-bridge `rg`; `BUILD`.
 
-- [ ] **6.2 Wire live-ring results and error HUD** → `RingViewModel.swift`, router, new `ActionErrorHUDController.swift`, app delegate
+- [x] **6.2 Wire live-ring results and error HUD** → `RingViewModel.swift`, router, new `ActionErrorHUDController.swift`, app delegate
   - Depends on: 3.2, 3.4
   - Success: no `try?` execution; failures show brief non-activating HUD with AppKit Open Settings route; success silent; ring dismissal unchanged.
   - Backpressure: router/controller tests; swallowed-error `rg`; `BUILD`; live unavailable/denied check.
 
-- [ ] **6.3 Make default inner actions real** → `RingMenuItem.swift`
+- [x] **6.3 Make default inner actions real** → `RingMenuItem.swift`
   - Depends on: 1.2, 3.2
   - Success: fresh defaults use keystrokes for Copy/Paste/Spotlight and approved Mission Control command; saved configs are not reseeded.
   - Backpressure: default fixture tests; `BUILD`; temporary fresh-config smoke.
@@ -248,7 +248,7 @@ Run `BUILD` after every implementation task. Tasks with tests also run their foc
 | 3 | 2026-09-01 | 2026-09-01 | 3.1 `76df64e`; 3.2 `a29eed7`; 3.3 `53bcc32`; 3.4 `183bb5f`. Shared validation/results, awaited and injectable action execution, safe Settings target capture, and presentation-neutral routing landed. Focused Wave 3 suites passed 17/17; full plan passed 55 unit tests + 1 UI test; unsigned Debug build succeeded. |
 | 4 | 2026-09-01 | 2026-09-01 | 4.1 `79f51bc`; 4.2 `5c105cc`; 4.3 `2a2e720`; 4.4 `4c53d3b`. Unified resizable sidebar, coordinator-backed panes, embedded UUID-safe Menu Items workspace, and standalone-editor retirement landed. F7/F8/F15 + identity regressions passed 5/5; full plan passed 60 unit tests + 1 UI test; unsigned Debug build and writer/reference audits succeeded. Live resize, keyboard navigation, and rebind/appearance checks remain in the final user-driven gate. |
 | 5 | 2026-09-01 | 2026-09-01 | 5.1 `7441c25`; 5.2 `ba4a67b`; 5.3 `c15a3ab`; 5.4 `917273a`; 5.5 `4312801`. Editor controls/unavailable values, inline ShortcutKit recording, flush-before-Test, visible persistence/recovery/close states, and accessibility semantics landed. Full MousePlus unit/UI test plan and unsigned Debug build passed; live recorder, Full Keyboard Access, and VoiceOver checks remain in the final user-driven gate. |
-| 6 | | | |
+| 6 | 2026-09-01 | 2026-09-01 | Consolidated durable full-snapshot live apply; live-ring failures now route to a four-second non-activating HUD with exact Menu Items routing; fresh Copy/Paste/Spotlight/Mission Control defaults execute real actions. Full unsigned MousePlus test plan and Debug build passed; obsolete-bridge and swallowed-error searches clean. |
 | 7 | | | |
 
 ---

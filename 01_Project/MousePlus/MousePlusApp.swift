@@ -5,11 +5,15 @@ struct MousePlusApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
     @Environment(\.openSettings) private var openSettings
     @State private var settingsSelection: SettingsSection? = .general
+    @State private var requestedMenuItemID: UUID?
 
     var body: some Scene {
         // Settings window (opened from menu bar)
         Settings {
-            SettingsView(selection: $settingsSelection)
+            SettingsView(selection: $settingsSelection,
+                         requestedMenuItemID: $requestedMenuItemID) { configuration in
+                AppDelegate.applyConfiguration?(configuration)
+            }
                 .environmentObject(appDelegate.settingsActionContextProvider)
         }
     }
@@ -19,6 +23,13 @@ struct MousePlusApp: App {
         AppDelegate.openSettingsAction = { [self] in
             openSettings()
         }
+        AppDelegate.openSettingsRouteAction = { [self] route in
+            if case .menuItem(let itemID) = route {
+                settingsSelection = .menuItems
+                requestedMenuItemID = itemID
+            }
+            openSettings()
+        }
     }
 }
 
@@ -26,21 +37,11 @@ struct MousePlusApp: App {
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
     static var openSettingsAction: (() -> Void)?
+    static var openSettingsRouteAction: ((ActionSettingsRoute) -> Void)?
 
-    /// Settings → live ring bridge: pushes an edited `AppearanceConfig` into the
-    /// shared ring view model so changes apply without restarting (also persisted
-    /// to disk by Settings, so the next open reflects it regardless).
-    @MainActor static var applyAppearance: ((AppearanceConfig) -> Void)?
-
-    /// Settings → live trigger bridge: pushes an edited `TriggersConfig` into the
-    /// running `TriggerService` so a rebind takes effect immediately (also persisted
-    /// to disk by Settings, so the next launch reflects it regardless).
-    @MainActor static var applyTriggers: ((TriggersConfig) -> Void)?
-
-    /// Settings → live ring bridge: pushes edited menu items (inner + middle rings)
-    /// into the shared ring view model so edits apply without restarting (also persisted
-    /// to disk by the Settings workspace coordinator).
-    @MainActor static var applyMenuItems: ((Configuration) -> Void)?
+    /// The sole Settings → runtime bridge. The workspace invokes it only after a
+    /// successful save and always supplies the complete durable configuration.
+    @MainActor static var applyConfiguration: ((Configuration) -> Void)?
 
     /// Settings → app bridge: opens the "Identify Input" diagnostic window. No longer
     /// auto-opened at launch — reachable from Settings → General → Diagnostics and the
@@ -60,7 +61,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// for a menu-bar-only app when the status-item icon is missing (M1 Max bug).
     private var settingsHotkeyMonitor: KeyboardTriggerMonitor?
 
-    private var ringViewModel = RingViewModel()
+    private lazy var actionErrorHUDController = ActionErrorHUDController { [weak self] route in
+        guard let self else { return }
+        self.settingsActionContextProvider.recordFrontmostApplicationBeforeSettingsActivation()
+        NSApp.activate(ignoringOtherApps: true)
+        Self.openSettingsRouteAction?(route)
+    }
+    private lazy var actionResultRouter = ActionResultRouter { [weak self] failure in
+        await MainActor.run { self?.actionErrorHUDController.show(failure) }
+    }
+    private lazy var ringViewModel = RingViewModel(actionResultRouter: actionResultRouter)
     private var dismissMonitor: DismissMonitor?
     let settingsActionContextProvider = SettingsActionContextProvider()
 
@@ -168,30 +178,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             self?.closeRing()
         }
 
-        // Live-apply appearance edits from the Settings window into the shared ring.
-        AppDelegate.applyAppearance = { [weak self] appearance in
-            guard let self else { return }
-            self.configuration.appearance = appearance
-            self.ringViewModel.appearance = appearance
-            self.ringViewModel.radii = appearance.bandRadii
-        }
-
-        // Live-apply trigger rebinds from the Triggers settings tab into the running monitors.
-        AppDelegate.applyTriggers = { [weak self] triggers in
-            guard let self else { return }
-            self.configuration.triggers = triggers
-            self.triggerService?.updateConfig(triggers)
-            self.applySettingsHotkey(triggers.openSettings)  // live-apply a rebound Settings hotkey
-        }
-
-        // Live-apply menu-item edits from the Menu Items editor into the shared ring.
-        AppDelegate.applyMenuItems = { [weak self] config in
+        AppDelegate.applyConfiguration = { [weak self] config in
             guard let self else { return }
             self.configuration = config
-            self.ringViewModel.innerItems = config.inner
-            self.ringViewModel.middleItems = config.middle
-            // Drop any stale expansion/selection so the next ring open reflects the new items cleanly.
-            self.ringViewModel.reset()
+            self.ringViewModel.load(from: config)
+            self.triggerService?.updateConfig(config.triggers)
+            self.applySettingsHotkey(config.triggers.openSettings)
         }
 
         // Open the "Identify Input" diagnostic from Settings / menu bar (no longer auto-opened).
@@ -312,7 +304,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// arms a `KeyboardTriggerMonitor` that opens Settings on key-down; any other
     /// binding (including `.none`) tears the monitor down. Re-armed after the
     /// Accessibility grant and after a rebind in the Triggers tab — the same pattern
-    /// `setupTriggers`/`applyTriggers` use for the ring triggers.
+    /// `setupTriggers`/`applyConfiguration` use for the ring triggers.
     private func applySettingsHotkey(_ binding: TriggerBinding) {
         settingsHotkeyMonitor?.stop()
         guard case let .keyboard(keyCode, modifiers, _) = binding else {
@@ -334,5 +326,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         triggerService?.stop()
         settingsHotkeyMonitor?.stop()
         menuBarController?.remove()
+        actionErrorHUDController.dismiss()
     }
 }
