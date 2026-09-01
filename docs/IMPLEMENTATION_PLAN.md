@@ -191,12 +191,12 @@ Run `BUILD` after every implementation task. Tasks with tests also run their foc
 
 ### Wave 7 — Final gates
 
-- [ ] **7.1 Run full automated and static gates** → whole project
+- [x] **7.1 Run full automated and static gates** → whole project
   - Depends on: Waves 0–6
   - Success: package/unit/UI tests, clean build, fixture round-trips, package revision, and control/reference searches pass without new warnings.
   - Backpressure: clean DerivedData build then full `TEST`; archive output in session log.
 
-- [ ] **7.2 Adversarial safety/accessibility review** → implementation diff and acceptance matrix
+- [x] **7.2 Adversarial safety/accessibility review** → implementation diff and acceptance matrix
   - Depends on: 7.1
   - Success: persistence races, forward compatibility, action side effects/context, view identity/lifecycle, keyboard/VoiceOver, and pin reproducibility are independently reviewed; findings fixed or user-accepted.
   - Backpressure: focused regressions, full `TEST`, `BUILD`.
@@ -249,7 +249,7 @@ Run `BUILD` after every implementation task. Tasks with tests also run their foc
 | 4 | 2026-09-01 | 2026-09-01 | 4.1 `79f51bc`; 4.2 `5c105cc`; 4.3 `2a2e720`; 4.4 `4c53d3b`. Unified resizable sidebar, coordinator-backed panes, embedded UUID-safe Menu Items workspace, and standalone-editor retirement landed. F7/F8/F15 + identity regressions passed 5/5; full plan passed 60 unit tests + 1 UI test; unsigned Debug build and writer/reference audits succeeded. Live resize, keyboard navigation, and rebind/appearance checks remain in the final user-driven gate. |
 | 5 | 2026-09-01 | 2026-09-01 | 5.1 `7441c25`; 5.2 `ba4a67b`; 5.3 `c15a3ab`; 5.4 `917273a`; 5.5 `4312801`. Editor controls/unavailable values, inline ShortcutKit recording, flush-before-Test, visible persistence/recovery/close states, and accessibility semantics landed. Full MousePlus unit/UI test plan and unsigned Debug build passed; live recorder, Full Keyboard Access, and VoiceOver checks remain in the final user-driven gate. |
 | 6 | 2026-09-01 | 2026-09-01 | Consolidated durable full-snapshot live apply; live-ring failures now route to a four-second non-activating HUD with exact Menu Items routing; fresh Copy/Paste/Spotlight/Mission Control defaults execute real actions. Full unsigned MousePlus test plan and Debug build passed; obsolete-bridge and swallowed-error searches clean. |
-| 7 | | | |
+| 7 | 2026-09-01 | | 7.1 `69a14bc`: exact package pin, 125 package tests, full app unit/UI plan, clean build, fixture/static audits; two new concurrency warnings fixed. 7.2 `05e5d0e`: independent six-lens review fixed autosave selection/focus loss and cancellation-time stuck-key risk, with regressions; full plan passed again. 7.3 signed Debug app launched; awaiting user-driven T12 confirmation. |
 
 ---
 *Plan: 29 tasks across 8 waves. Regenerate if architecture or approved scope changes.*
