@@ -42,6 +42,9 @@ struct ActionDataEditor: View {
             // 2. Type-aware data control.
             dataControl
         }
+        .onChange(of: item.id) { _, _ in keystrokeCandidate = nil }
+        .onChange(of: item.actionType) { _, _ in keystrokeCandidate = nil }
+        .onDisappear { keystrokeCandidate = nil }
     }
 
     // MARK: - Type-aware data control

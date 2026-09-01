@@ -10,6 +10,19 @@ struct TriggersSettingsView: View {
     @State private var interceptionWarning = false
 
     @State private var permissions = PermissionsService()
+    @State private var postEventPermissions: PostEventPermissionsState
+
+    @MainActor
+    init(coordinator: SettingsWorkspaceCoordinator) {
+        self.coordinator = coordinator
+        _postEventPermissions = State(initialValue: PostEventPermissionsState())
+    }
+
+    @MainActor
+    init(coordinator: SettingsWorkspaceCoordinator, postEventPermissions: PostEventPermissionsState) {
+        self.coordinator = coordinator
+        _postEventPermissions = State(initialValue: postEventPermissions)
+    }
 
     private enum Slot {
         case keyboard, mouse, openSettings
@@ -27,6 +40,10 @@ struct TriggersSettingsView: View {
         Form {
             if !permissions.isGranted {
                 permissionBanner
+            }
+
+            if !postEventPermissions.isGranted {
+                postEventPermissionRow
             }
 
             Section("Keyboard Trigger") {
@@ -70,7 +87,10 @@ struct TriggersSettingsView: View {
         .onChange(of: recorder.outcome) { _, outcome in
             handleRecorderOutcome(outcome)
         }
-        .onAppear { permissions.startPolling() }
+        .onAppear {
+            permissions.startPolling()
+            postEventPermissions.refresh()
+        }
         .onDisappear {
             permissions.stopPolling()
             recorder.cancel()
@@ -152,6 +172,29 @@ struct TriggersSettingsView: View {
                 }
             } icon: {
                 Image(systemName: "lock.shield")
+                    .foregroundStyle(.orange)
+            }
+        }
+    }
+
+    private var postEventPermissionRow: some View {
+        Section("Keystroke posting") {
+            Label {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Keystroke posting permission required")
+                        .font(.callout.weight(.semibold))
+                    Text("Allow MousePlus to send configured keystrokes to other apps.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    AppKitButton(
+                        title: "Request Access…",
+                        accessibilityIdentifier: "triggers.requestKeystrokePostingAccess"
+                    ) {
+                        postEventPermissions.requestFromUserAction()
+                    }
+                }
+            } icon: {
+                Image(systemName: "keyboard.badge.ellipsis")
                     .foregroundStyle(.orange)
             }
         }
