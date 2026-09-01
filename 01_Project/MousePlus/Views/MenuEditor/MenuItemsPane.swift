@@ -38,7 +38,7 @@ struct MenuItemsPane: View {
         )
         // Only the selected-item form inside MenuEditorWorkspace scrolls. The
         // band selector, preview, spoke count, and actions remain pinned.
-        .frame(minWidth: 790, minHeight: 600)
+        .frame(minWidth: 860, minHeight: 600)
         .onChange(of: coordinator.menuEditorModel.inner) { _, _ in
             dismissTestResultForEditedSelection()
             coordinator.menuItemsDidChange()

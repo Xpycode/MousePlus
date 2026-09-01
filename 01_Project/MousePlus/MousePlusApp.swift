@@ -110,7 +110,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
 
         controller.show(service: permissionsService) { [weak self] in
-            self?.onboardingWindowController = nil
+            guard let self else { return }
+            self.onboardingWindowController = nil
+            self.showSettings()
         }
 
         // Force polling so the grant is detected even if the SwiftUI view's

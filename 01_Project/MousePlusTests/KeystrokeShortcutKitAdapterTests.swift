@@ -16,6 +16,8 @@ final class KeystrokeShortcutKitAdapterTests: XCTestCase {
         XCTAssertEqual(payload, .key(keyCode: 8, modifiers: NSEvent.ModifierFlags([.command, .shift]).rawValue))
         XCTAssertEqual(payload?.shortcutKitValue.keyCode, 8)
         XCTAssertEqual(payload?.shortcutKitValue.modifiers, [.command, .shift])
+        XCTAssertFalse(payload?.shortcutKitValue.displayName.isEmpty ?? true)
+        XCTAssertNotEqual(payload?.shortcutKitValue.resolvedDisplayName, "None")
     }
 
     func testUnboundAndOutOfRangeValuesDoNotBecomePayloads() {

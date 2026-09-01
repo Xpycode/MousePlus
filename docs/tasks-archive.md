@@ -1,8 +1,10 @@
 # Completed Tasks
 
-**Total archived:** 5
+**Total archived:** 7
 **Last updated:** 2026-09-01
 
+- [x] (2026-09-01) Wave 7: pass automated, adversarial, accessibility, and reduced T12 live gates
+- [x] (2026-09-01) Wave 6: complete runtime live-apply/error integration and real default actions
 - [x] (2026-09-01) Wave 4: replace tabbed Settings, migrate panes, embed Menu Items, and retire the second editor
 - [x] (2026-09-01) Wave 3: unify action validation, completion results, contextual targets, and error routing
 - [x] (2026-09-01) Wave 2: build and verify the single safe configuration coordinator with backup and close barriers

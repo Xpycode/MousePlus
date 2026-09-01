@@ -47,9 +47,14 @@ struct RingPreviewSelector: View {
     /// Diameter of a hotspot / ghost button.
     private let hotspotSize: CGFloat = 44
 
+    /// Stable square reserved by the editor for the preview. Larger configured
+    /// ring radii are scaled down to fit instead of overflowing neighboring UI.
+    private let canvasSide: CGFloat = 448
+
     var body: some View {
         // The live ring is rendered in a square frame of side 2*r3, centered.
         let side = 2 * preview.radii.r3
+        let previewScale = min(1, canvasSide / side)
 
         ZStack {
             // 1. Live ring — display only, no interaction.
@@ -60,10 +65,18 @@ struct RingPreviewSelector: View {
             overlay(side: side)
         }
         .frame(width: side, height: side)
+        .scaleEffect(previewScale)
+        .frame(width: canvasSide, height: canvasSide)
         .onAppear { syncPreview() }
         .onChange(of: model.inner) { _, _ in syncPreview() }
         .onChange(of: model.middle) { _, _ in syncPreview() }
         .onChange(of: model.selection) { _, _ in syncPreview() }
+        // Selection is editor state, not a geometry transition. Prevent the
+        // render-only ring from interpolating between highlight/expansion states
+        // when the user clicks rapidly across bands.
+        .transaction { transaction in
+            transaction.animation = nil
+        }
     }
 
     // MARK: - Overlay
@@ -102,6 +115,24 @@ struct RingPreviewSelector: View {
 
             // Sub-item hotspots for an expanded middle slot (outer arc).
             subItemHotspots()
+
+            // An expanded outer arc otherwise has no explicit way back when the
+            // parent remains selected. Keep the control in the ring's dead zone,
+            // matching the visual language of drill-down navigation.
+            if expandedMiddleParent() != nil {
+                Button {
+                    model.selection = nil
+                } label: {
+                    Image(systemName: "chevron.backward.circle.fill")
+                        .font(.title2)
+                        .symbolRenderingMode(.hierarchical)
+                }
+                .buttonStyle(.plain)
+                .help("Close outer ring")
+                .accessibilityLabel("Close outer ring")
+                .accessibilityIdentifier("menuItems.outer.close")
+                .position(center)
+            }
         }
         .frame(width: side, height: side)
     }
@@ -136,7 +167,9 @@ struct RingPreviewSelector: View {
         )
 
         if i < items.count {
-            // Filled slot — transparent selectable button + selection highlight.
+            // Filled slot — the entire visible annular wedge is selectable.
+            // The former 44pt circular hotspot made clicks work only on/near the
+            // icon and left most of the pane inert.
             let item = items[i]
             let isSelected = isSlotSelected(band: band, itemID: item.id)
             let accessibility = RingWedgeAccessibility(
@@ -145,34 +178,40 @@ struct RingPreviewSelector: View {
                 position: i,
                 selected: isSelected
             )
-            // Faint companion highlight: when *this same spoke* is selected in the
-            // other band, hint at shared-spoke alignment.
-            let isSpokeActive = isSpokeSelected(spoke: i)
+            let angles = RadialGeometry.wedgeAngles(
+                band: geoBand,
+                index: i,
+                spokeCount: n,
+                expandedParentIndex: nil,
+                outerCount: 0
+            )
+            let radii = preview.radii
+            let shape = AnnularWedge(
+                startAngle: angles.start,
+                endAngle: angles.end,
+                innerRadius: geoBand == .inner ? radii.r0 : radii.r1,
+                outerRadius: geoBand == .inner ? radii.r1 : radii.r2
+            )
+            let side = 2 * radii.r3
 
-            AppKitButton(
-                title: "",
-                accessibilityLabel: accessibility.label,
-                accessibilityIdentifier: accessibility.identifier,
-                accessibilityValue: accessibility.value
-            ) {
+            Button {
                 model.activeBand = band
                 model.selection = SlotSelection(band: band, itemID: item.id, subItemID: nil)
+            } label: {
+                shape
+                    .fill(Color.white.opacity(0.001))
+                    .overlay {
+                        if isSelected {
+                            shape.stroke(Color.accentColor, lineWidth: 3)
+                        }
+                    }
             }
-            .frame(width: hotspotSize, height: hotspotSize)
-            .opacity(0.02)
-            .overlay {
-                if isSelected {
-                    Circle()
-                        .stroke(Color.accentColor, lineWidth: 3)
-                        .frame(width: hotspotSize, height: hotspotSize)
-                } else if isSpokeActive {
-                    // Shared-spoke hint on the non-selected band.
-                    Circle()
-                        .stroke(Color.accentColor.opacity(0.3), lineWidth: 2)
-                        .frame(width: hotspotSize, height: hotspotSize)
-                }
-            }
-            .position(pos)
+            .buttonStyle(.plain)
+            .contentShape(shape)
+            .frame(width: side, height: side)
+            .accessibilityLabel(accessibility.label)
+            .accessibilityValue(accessibility.value)
+            .accessibilityIdentifier(accessibility.identifier)
             .help(item.label.isEmpty ? "Empty" : item.label)
 
         } else if i == items.count, i < n {
@@ -213,49 +252,62 @@ struct RingPreviewSelector: View {
 
     /// Sub-item selection for the currently expanded middle slot.
     ///
-    /// The runtime outer band is a *localized arc* around the parent spoke, which
-    /// is awkward to reproduce pixel-for-pixel. For v1 correctness we render the
-    /// sub-item selection as a clearly labeled strip of small buttons below the
-    /// ring rather than geometric hotspots — every sub-item stays clickable and
-    /// the mapping is unambiguous.
+    /// Uses the same localized-arc geometry as `RingMenuView`, so each visible
+    /// outer wedge is directly clickable without a second button strip that can
+    /// overflow the preview canvas.
     @ViewBuilder
     private func subItemHotspots() -> some View {
-        if let (parent, _) = expandedMiddleParent() {
+        if let (parent, parentIndex) = expandedMiddleParent() {
             let subs = parent.subItems ?? []
-            if !subs.isEmpty {
-                VStack(spacing: 4) {
-                    Spacer()
-                    Text("Sub-items:")
-                        .font(.caption2)
-                        .foregroundStyle(.secondary)
-                    HStack(spacing: 6) {
-                        ForEach(Array(subs.enumerated()), id: \.element.id) { position, sub in
-                            let isSelected = (model.selection?.subItemID == sub.id)
-                            let accessibility = RingWedgeAccessibility(
-                                item: sub,
-                                band: "Outer",
-                                position: position,
-                                selected: isSelected
-                            )
-                            AppKitSelectableRow(
-                                title: sub.label.isEmpty ? "Item" : sub.label,
-                                subtitle: sub.actionType.displayName,
-                                isSelected: isSelected,
-                                accessibilityLabel: accessibility.label,
-                                accessibilityIdentifier: accessibility.identifier
-                            ) {
-                                model.activeBand = .middle
-                                model.selection = SlotSelection(
-                                    band: .middle,
-                                    itemID: parent.id,
-                                    subItemID: sub.id
-                                )
+            let spokeCount = preview.spokeCount
+            let radii = preview.radii
+            let side = 2 * radii.r3
+
+            ForEach(Array(subs.enumerated()), id: \.element.id) { position, sub in
+                let isSelected = model.selection?.subItemID == sub.id
+                let accessibility = RingWedgeAccessibility(
+                    item: sub,
+                    band: "Outer",
+                    position: position,
+                    selected: isSelected
+                )
+                let angles = RadialGeometry.wedgeAngles(
+                    band: .outer,
+                    index: position,
+                    spokeCount: spokeCount,
+                    expandedParentIndex: parentIndex,
+                    outerCount: subs.count
+                )
+                let shape = AnnularWedge(
+                    startAngle: angles.start,
+                    endAngle: angles.end,
+                    innerRadius: radii.r2,
+                    outerRadius: radii.r3
+                )
+
+                Button {
+                    model.activeBand = .middle
+                    model.selection = SlotSelection(
+                        band: .middle,
+                        itemID: parent.id,
+                        subItemID: sub.id
+                    )
+                } label: {
+                    shape
+                        .fill(Color.white.opacity(0.001))
+                        .overlay {
+                            if isSelected {
+                                shape.stroke(Color.accentColor, lineWidth: 3)
                             }
-                            .frame(minWidth: 80, minHeight: 30)
                         }
-                    }
-                    .padding(.bottom, 4)
                 }
+                .buttonStyle(.plain)
+                .contentShape(shape)
+                .frame(width: side, height: side)
+                .accessibilityLabel(accessibility.label)
+                .accessibilityValue(accessibility.value)
+                .accessibilityIdentifier(accessibility.identifier)
+                .help(sub.label.isEmpty ? "Outer item" : sub.label)
             }
         }
     }
@@ -268,6 +320,12 @@ struct RingPreviewSelector: View {
     /// `RingViewModel.reset()` only clears the outer band, so we always re-assign
     /// the inner/middle items afterwards to stay in sync.
     private func syncPreview() {
+        // The editor is a deterministic selector, not the runtime HUD. Runtime
+        // springs and the parent-centroid scale transition make outer arcs appear
+        // to fly in from whichever side owns the selected parent and make rapid
+        // slot selection feel jumpy. Keep the user's HUD preference untouched;
+        // disable animation only on this private render-only model.
+        preview.appearance.animationEnabled = false
         preview.innerItems = model.inner
         preview.middleItems = model.middle
 
@@ -302,15 +360,4 @@ struct RingPreviewSelector: View {
         return sel.band == band && sel.itemID == itemID && sel.subItemID == nil
     }
 
-    /// Whether the selected top-level slot lives on the given spoke index
-    /// (matched by the item's index within its band). Used for the faint
-    /// shared-spoke companion highlight.
-    private func isSpokeSelected(spoke i: Int) -> Bool {
-        guard let sel = model.selection, sel.subItemID == nil,
-              let id = sel.itemID else { return false }
-        let band = sel.band
-        let items = band == .inner ? model.inner : model.middle
-        guard let idx = items.firstIndex(where: { $0.id == id }) else { return false }
-        return idx == i
-    }
 }

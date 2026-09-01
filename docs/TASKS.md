@@ -6,14 +6,11 @@
 <!-- Ideas and future work. Added by /interview, user input, or discovered during development. -->
 <!-- Priority: top = highest, bottom = lowest -->
 
-- [ ] [Task description]
+- [ ] Add per-item tile and icon colors, including accessible contrast handling and a default/inherit option
 
 ## Current Sprint
 <!-- Active work. Populated by /plan or /execute. Keep focused (3-7 tasks). -->
 <!-- When done: /log moves to tasks-archive.md -->
-
-- [x] Wave 6: complete runtime live-apply/error integration and real default actions
-- [ ] Wave 7: pass automated, adversarial, accessibility, and reduced T12 live gates
 
 ---
 

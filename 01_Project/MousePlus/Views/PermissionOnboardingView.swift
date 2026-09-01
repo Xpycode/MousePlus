@@ -63,12 +63,12 @@ struct PermissionOnboardingView: View {
             Text("Permission granted")
                 .font(.headline)
 
-            Text("Open Settings from the menu bar to choose your trigger — a keyboard shortcut, a mouse button, or both.")
+            Text("Continue to Settings to choose your trigger — a keyboard shortcut, a mouse button, or both.")
                 .font(.body)
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
 
-            Button("Continue") { onDone() }
+            Button("Open Settings") { onDone() }
                 .buttonStyle(.borderedProminent)
                 .keyboardShortcut(.defaultAction)
         }

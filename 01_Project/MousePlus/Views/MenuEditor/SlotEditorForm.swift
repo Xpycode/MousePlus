@@ -33,6 +33,12 @@ struct SlotEditorForm: View {
         // must be recreated when identity changes, rather than bleeding into the
         // item that happens to occupy the same array position.
         .id(model.selection)
+        // Each selection intentionally rebuilds slot-scoped AppKit controls.
+        // Do not interpolate between forms with different intrinsic heights;
+        // that makes the inspector and its scrollbar visibly hop.
+        .transaction { transaction in
+            transaction.animation = nil
+        }
     }
 
     // MARK: - Current binding resolution

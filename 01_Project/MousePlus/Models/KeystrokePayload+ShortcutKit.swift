@@ -12,7 +12,16 @@ extension KeystrokePayload {
             return CustomKeyboardShortcut(
                 keyCode: Int(keyCode),
                 modifiers: flags,
-                displayName: ""
+                // ShortcutKit normally resolves the visible label from the live
+                // keyboard layout. Its recorder currently uses an empty stored
+                // label as an additional "unbound" signal, though, so retain a
+                // non-empty fallback for committed payloads. The resolved label
+                // still wins whenever layout translation succeeds.
+                displayName: TriggerBinding.keyboard(
+                    keyCode: keyCode,
+                    modifiers: modifiers & Self.modifierMask,
+                    mode: .holdRelease
+                ).displayString
             )
         case .unresolvedLegacy:
             return .none

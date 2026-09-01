@@ -19,26 +19,21 @@ struct MenuEditorWorkspace<TrailingToolbar: View>: View {
         VStack(spacing: 12) {
             topBar
 
-            // Ring preview (left) and the selected-slot detail form (right) sit
-            // side by side in a draggable split, so the fixed ~448pt ring no
-            // longer pushes the form below the fold. Matches the project's
-            // HSplitView shell convention.
-            HSplitView {
-                // Left pane: live, click-to-select ring preview. The ring is a
-                // fixed-size square, so centering it inside an expanding frame
-                // (default .center alignment) keeps it put; the pane min width
-                // stops the divider from clipping it when dragged left.
+            // Keep the preview in a fixed column. A resizable HSplitView lets
+            // the selected form's changing intrinsic size renegotiate both pane
+            // widths, which visibly shifts the ring as selections change.
+            HStack(spacing: 12) {
+                // The default ring is 448pt square. A stable 480pt column leaves
+                // breathing room without coupling its position to the form.
                 RingPreviewSelector(model: model)
-                    .frame(minWidth: 470, maxWidth: .infinity, maxHeight: .infinity)
-                    .padding(.trailing, 8)
+                    .frame(width: 480)
+                    .frame(maxHeight: .infinity)
 
-                // Right pane: detail form for the selected slot, scrollable so a
-                // tall form (long sub-item list) survives a short window height.
-                ScrollView {
-                    SlotEditorForm(model: model)
-                        .padding(.vertical, 4)
-                }
-                .frame(minWidth: 320, maxWidth: .infinity, maxHeight: .infinity)
+                // Right pane: `Form` already owns native scrolling. Wrapping it
+                // in another ScrollView can clip its leading labels.
+                SlotEditorForm(model: model)
+                    .padding(.vertical, 4)
+                    .frame(minWidth: 400, maxWidth: .infinity, maxHeight: .infinity)
             }
 
             Divider()
@@ -83,7 +78,7 @@ struct MenuEditorWorkspace<TrailingToolbar: View>: View {
     // MARK: - Bottom toolbar
 
     private var bottomToolbar: some View {
-        HStack(spacing: 12) {
+        HStack(alignment: .top, spacing: 12) {
             // Add to the active band; disabled (with an inline note) when THAT
             // band is full — the cap is per-band, so a full middle ring must
             // not block adding inner items (and vice versa).
@@ -112,6 +107,10 @@ struct MenuEditorWorkspace<TrailingToolbar: View>: View {
 
             trailingToolbar()
         }
+        // Test-action validation and result text appears below its button. Keep
+        // that feedback from changing the toolbar's reported height, which would
+        // otherwise shrink the editor row and move the vertically-centred ring.
+        .frame(height: 76, alignment: .top)
     }
 
     /// Label for the Add button, reflecting the active band.
