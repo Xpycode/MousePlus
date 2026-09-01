@@ -4,6 +4,19 @@ import Foundation
 protocol ConfigurationPersisting: Sendable {
     func loadResult() async throws -> ConfigurationService.LoadResult
     func save(_ configuration: Configuration) async throws
+    func hasBackup() async -> Bool
+    func createBackup() async throws
+    func loadBackup() async throws -> Configuration
+}
+
+enum ConfigurationRecoveryError: Error {
+    case unsupported
+}
+
+extension ConfigurationPersisting {
+    func hasBackup() async -> Bool { false }
+    func createBackup() async throws { throw ConfigurationRecoveryError.unsupported }
+    func loadBackup() async throws -> Configuration { throw ConfigurationRecoveryError.unsupported }
 }
 
 actor ConfigurationService: ConfigurationPersisting {
@@ -70,12 +83,12 @@ actor ConfigurationService: ConfigurationPersisting {
     }
 
     /// Whether a durable pre-reset recovery point is available.
-    func hasBackup() -> Bool {
+    func hasBackup() async -> Bool {
         fileManager.fileExists(atPath: store.backupURL.path)
     }
 
     /// Creates a validated backup without removing the previous backup first.
-    func createBackup() throws {
+    func createBackup() async throws {
         let data = try Data(contentsOf: store.configurationURL)
         _ = try JSONDecoder().decode(Configuration.self, from: data)
 
@@ -100,9 +113,13 @@ actor ConfigurationService: ConfigurationPersisting {
     /// Decodes the durable backup. Restoring is explicit and uses the normal
     /// atomic save path; the recovery point remains available afterward.
     func restoreBackup() async throws -> Configuration {
-        let configuration = try decode(at: store.backupURL)
+        let configuration = try await loadBackup()
         try await save(configuration)
         return configuration
+    }
+
+    func loadBackup() async throws -> Configuration {
+        try decode(at: store.backupURL)
     }
 
     private func decode(at url: URL) throws -> Configuration {

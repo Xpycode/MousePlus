@@ -39,11 +39,13 @@ final class SettingsWorkspaceCoordinator {
     private var saveTask: Task<Bool, Never>?
     private var saveTaskID: UUID?
     private var generations: [Field: UInt] = [:]
+    private var sessionUndoMenuItems: (inner: [RingMenuItem], middle: [RingMenuItem])?
 
     private(set) var configuration = Configuration()
     private(set) var status: Status = .idle
     private(set) var dirtyFields: Set<Field> = []
     private(set) var isLoaded = false
+    private(set) var workspaceState = SettingsWorkspaceState()
     let menuEditorModel = MenuEditorModel(
         inner: RingMenuItem.sampleInnerItems,
         middle: RingMenuItem.sampleItems
@@ -69,11 +71,15 @@ final class SettingsWorkspaceCoordinator {
             menuEditorModel.load(from: configuration)
             dirtyFields.removeAll()
             generations.removeAll()
+            sessionUndoMenuItems = nil
             isLoaded = true
             status = .saved
+            workspaceState.reset = .idle
+            workspaceState.durableBackupAvailable = await persistence.hasBackup()
         } catch {
             isLoaded = false
             status = .loadFailed(error.localizedDescription)
+            workspaceState.durableBackupAvailable = false
         }
     }
 
@@ -113,6 +119,124 @@ final class SettingsWorkspaceCoordinator {
     @discardableResult
     func teardown() async -> Bool {
         await flush()
+    }
+
+    /// Creates a durable recovery point before replacing only Menu Items.
+    @discardableResult
+    func resetMenuItems() async -> Bool {
+        guard isLoaded else { return false }
+        workspaceState.reset = .resetting
+
+        guard await flush() else {
+            workspaceState.reset = .failed(statusMessage)
+            return false
+        }
+
+        let previous = (inner: configuration.inner, middle: configuration.middle)
+        do {
+            try await persistence.createBackup()
+            workspaceState.durableBackupAvailable = true
+        } catch {
+            workspaceState.reset = .failed(error.localizedDescription)
+            return false
+        }
+
+        edit([.menuItems]) {
+            $0.inner = RingMenuItem.sampleInnerItems
+            $0.middle = RingMenuItem.sampleItems
+        }
+        guard await flush() else {
+            workspaceState.reset = .failed(statusMessage)
+            return false
+        }
+
+        sessionUndoMenuItems = previous
+        workspaceState.reset = .undoAvailable
+        return true
+    }
+
+    @discardableResult
+    func undoMenuItemsReset() async -> Bool {
+        guard let previous = sessionUndoMenuItems, isLoaded else { return false }
+        edit([.menuItems]) {
+            $0.inner = previous.inner
+            $0.middle = previous.middle
+        }
+        guard await flush() else {
+            workspaceState.reset = .failed(statusMessage)
+            return false
+        }
+        sessionUndoMenuItems = nil
+        workspaceState.reset = .idle
+        return true
+    }
+
+    /// Restores backed-up Menu Items through the same fresh-base safe-save path.
+    @discardableResult
+    func restoreMenuItemsFromBackup() async -> Bool {
+        guard isLoaded, workspaceState.durableBackupAvailable else { return false }
+        let backup: Configuration
+        do {
+            backup = try await persistence.loadBackup()
+        } catch {
+            workspaceState.reset = .failed(error.localizedDescription)
+            return false
+        }
+
+        edit([.menuItems]) {
+            $0.inner = backup.inner
+            $0.middle = backup.middle
+        }
+        guard await flush() else {
+            workspaceState.reset = .failed(statusMessage)
+            return false
+        }
+        workspaceState.reset = .idle
+        return true
+    }
+
+    /// Returns true only when the owning window may dismiss.
+    func requestClose() async -> Bool {
+        guard !dirtyFields.isEmpty else { return true }
+        workspaceState.closeBarrier = .flushing
+        if await flush() {
+            workspaceState.closeBarrier = .idle
+            return true
+        }
+        workspaceState.closeBarrier = .blocked(statusMessage)
+        return false
+    }
+
+    /// Resolves a failed close barrier. Cancel never dismisses or loses edits.
+    func resolveClose(_ choice: SettingsWorkspaceState.CloseChoice) async -> Bool {
+        switch choice {
+        case .retry:
+            workspaceState.closeBarrier = .flushing
+            if await retry() {
+                workspaceState.closeBarrier = .idle
+                return true
+            }
+            workspaceState.closeBarrier = .blocked(statusMessage)
+            return false
+        case .discardChanges:
+            await load()
+            if isLoaded {
+                workspaceState.closeBarrier = .idle
+                return true
+            }
+            workspaceState.closeBarrier = .blocked(statusMessage)
+            return false
+        case .cancelClose:
+            workspaceState.closeBarrier = .idle
+            return false
+        }
+    }
+
+    private var statusMessage: String {
+        switch status {
+        case .saveFailed(let message), .loadFailed(let message): message
+        default: "The latest changes could not be saved."
+        }
     }
 
     private func markDirty(_ fields: Set<Field>) {
