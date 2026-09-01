@@ -136,7 +136,7 @@ final class RingViewModel {
         let context = ActionContext(frontmostPID: frontmostPID,
                                     screenLayout: ScreenLayout.capture())
         Task {
-            try? await actionService.execute(item, context: context)
+            _ = await actionService.execute(item, context: context)
         }
         reset()
         requestClose?()

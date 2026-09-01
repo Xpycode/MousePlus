@@ -1,13 +1,8 @@
 import AppKit
 
-/// Context an action may need from the main actor at fire time — captured by the
-/// view model (which is `@MainActor`) and passed across the actor boundary as
-/// `Sendable` values (HUD_ACTIONS_PLAN §1, §B).
+/// Main-actor state captured before action execution and passed as values.
 struct ActionContext: Sendable {
-    /// Frontmost app PID captured at ring-open (window/menu actions target the
-    /// user's app, not our non-activating panel).
     var frontmostPID: pid_t?
-    /// Screen geometry snapshot for window snapping.
     var screenLayout: ScreenLayout?
 
     init(frontmostPID: pid_t? = nil, screenLayout: ScreenLayout? = nil) {
@@ -16,100 +11,146 @@ struct ActionContext: Sendable {
     }
 }
 
-/// Executes actions triggered from the ring menu.
-actor ActionService {
+protocol ActionProcessRunning: Sendable {
+    func run(command: String) async throws -> Int32
+}
 
-    private let windowService = WindowService()
-
-    func execute(_ item: RingMenuItem, context: ActionContext = .init()) async throws {
-        switch item.actionType {
-        case .appSwitch:
-            try await switchToApp(bundleID: item.actionData)
-
-        case .windowSnap:
-            try await snapWindow(item.actionData, context: context)
-
-        case .menuBar:
-            // HUD Feature A — not yet implemented.
-            throw ActionError.notImplemented(.menuBar)
-
-        case .systemToggle:
-            // HUD Feature D — not yet implemented.
-            throw ActionError.notImplemented(.systemToggle)
-
-        case .screenshot:
-            // HUD Feature E — not yet implemented.
-            throw ActionError.notImplemented(.screenshot)
-
-        case .sendKeystroke:
-            throw ActionError.notImplemented(.sendKeystroke)
-
-        case .unavailable:
-            throw ActionError.notImplemented(item.actionType)
-
-        case .custom:
-            try await runCommand(item.actionData)
-        }
-    }
-
-    // MARK: - Window snap (HUD Feature B)
-
-    private func snapWindow(_ rawZone: String, context: ActionContext) async throws {
-        guard let zone = SnapZone(rawValue: rawZone) else { return }   // parent marker / bad data → no-op
-        guard let pid = context.frontmostPID, let layout = context.screenLayout else {
-            throw ActionError.missingContext
-        }
-        try await windowService.snap(zone, pid: pid, layout: layout)
-    }
-
-    // MARK: - App switch
-
-    private func switchToApp(bundleID: String) async throws {
-        guard !bundleID.isEmpty else { return }
-
-        let workspace = NSWorkspace.shared
-
-        // Try to activate existing instance first
-        if let app = workspace.runningApplications.first(where: { $0.bundleIdentifier == bundleID }) {
-            app.activate()
-            return
-        }
-
-        // Launch if not running
-        guard let url = workspace.urlForApplication(withBundleIdentifier: bundleID) else {
-            throw ActionError.appNotFound(bundleID)
-        }
-
-        try await workspace.openApplication(at: url, configuration: .init())
-    }
-
-    private func runCommand(_ command: String) async throws {
-        guard !command.isEmpty else { return }
-
+struct SystemActionProcessRunner: ActionProcessRunning {
+    func run(command: String) async throws -> Int32 {
         let process = Process()
         process.executableURL = URL(fileURLWithPath: "/bin/zsh")
         process.arguments = ["-c", command]
 
-        try process.run()
+        return try await withCheckedThrowingContinuation { continuation in
+            process.terminationHandler = { process in
+                continuation.resume(returning: process.terminationStatus)
+            }
+            do {
+                try process.run()
+            } catch {
+                process.terminationHandler = nil
+                continuation.resume(throwing: error)
+            }
+        }
     }
 }
 
-enum ActionError: LocalizedError {
-    case appNotFound(String)
-    case commandFailed(String)
-    case missingContext
-    case notImplemented(ActionType)
+protocol ActionWorkspace: Sendable {
+    func activateOrLaunch(bundleIdentifier: String) async throws -> Bool
+}
+
+struct SystemActionWorkspace: ActionWorkspace {
+    @MainActor
+    func activateOrLaunch(bundleIdentifier: String) async throws -> Bool {
+        if let app = NSWorkspace.shared.runningApplications.first(where: {
+            $0.bundleIdentifier == bundleIdentifier
+        }) {
+            return app.activate()
+        }
+        guard let url = NSWorkspace.shared.urlForApplication(
+            withBundleIdentifier: bundleIdentifier
+        ) else {
+            throw ActionServiceError.applicationNotFound(bundleIdentifier)
+        }
+        return try await NSWorkspace.shared
+            .openApplication(at: url, configuration: .init())
+            .activate()
+    }
+}
+
+protocol ActionKeystrokeSending: Sendable {
+    func send(keyCode: UInt16, flags: CGEventFlags) async throws
+}
+
+extension KeystrokeService: ActionKeystrokeSending {}
+
+protocol ActionWindowSnapping: Sendable {
+    func snap(_ zone: SnapZone, pid: pid_t, layout: ScreenLayout) async throws
+}
+
+extension WindowService: ActionWindowSnapping {}
+
+/// Executes actions without knowing how their results will be presented.
+actor ActionService {
+    private let processRunner: any ActionProcessRunning
+    private let workspace: any ActionWorkspace
+    private let keystrokeService: any ActionKeystrokeSending
+    private let windowService: any ActionWindowSnapping
+
+    init(
+        processRunner: any ActionProcessRunning = SystemActionProcessRunner(),
+        workspace: any ActionWorkspace = SystemActionWorkspace(),
+        keystrokeService: any ActionKeystrokeSending = KeystrokeService(),
+        windowService: any ActionWindowSnapping = WindowService()
+    ) {
+        self.processRunner = processRunner
+        self.workspace = workspace
+        self.keystrokeService = keystrokeService
+        self.windowService = windowService
+    }
+
+    func execute(_ item: RingMenuItem, context: ActionContext = .init()) async -> ActionExecutionResult {
+        let validation = ActionValidation.validate(item, context: context)
+        guard validation.isValid else {
+            return ActionExecutionResult(validation: validation)
+        }
+
+        do {
+            switch item.actionType {
+            case .appSwitch:
+                guard try await workspace.activateOrLaunch(bundleIdentifier: item.actionData) else {
+                    throw ActionServiceError.activationFailed(item.actionData)
+                }
+            case .windowSnap:
+                try await windowService.snap(
+                    SnapZone(rawValue: item.actionData)!,
+                    pid: context.frontmostPID!,
+                    layout: context.screenLayout!
+                )
+            case .sendKeystroke:
+                guard case let .key(keyCode, modifiers)? = item.keystrokePayload else {
+                    return ActionExecutionResult(validation: validation)
+                }
+                try await keystrokeService.send(
+                    keyCode: keyCode,
+                    flags: CGEventFlags(rawValue: UInt64(modifiers))
+                )
+            case .custom:
+                let status = try await processRunner.run(command: item.actionData)
+                guard status == 0 else { throw ActionServiceError.commandExited(status) }
+            case .menuBar, .systemToggle, .screenshot, .unavailable:
+                return ActionExecutionResult(validation: validation)
+            }
+            return .completed
+        } catch {
+            return .failed(message: Self.message(for: error))
+        }
+    }
+
+    private static func message(for error: Error) -> String {
+        if let localized = error as? LocalizedError,
+           let description = localized.errorDescription,
+           !description.isEmpty {
+            return description
+        }
+        let description = error.localizedDescription
+        return description.isEmpty ? "The action could not be completed." : description
+    }
+}
+
+enum ActionServiceError: LocalizedError, Equatable {
+    case applicationNotFound(String)
+    case activationFailed(String)
+    case commandExited(Int32)
 
     var errorDescription: String? {
         switch self {
-        case .appNotFound(let bundleID):
-            "Application not found: \(bundleID)"
-        case .commandFailed(let command):
-            "Command failed: \(command)"
-        case .missingContext:
-            "Action is missing the context it needs (front app / screen layout)."
-        case .notImplemented(let type):
-            "\(type.displayName) is not implemented yet."
+        case .applicationNotFound(let bundleIdentifier):
+            "Application not found: \(bundleIdentifier)"
+        case .activationFailed:
+            "The application could not be activated."
+        case .commandExited(let status):
+            "The command exited with status \(status)."
         }
     }
 }
