@@ -1,7 +1,12 @@
 import Foundation
 
 /// Handles loading and saving configuration to disk
-actor ConfigurationService {
+protocol ConfigurationPersisting: Sendable {
+    func loadResult() async throws -> ConfigurationService.LoadResult
+    func save(_ configuration: Configuration) async throws
+}
+
+actor ConfigurationService: ConfigurationPersisting {
     enum LoadResult: Sendable {
         case defaults(Configuration)
         case loaded(Configuration)
