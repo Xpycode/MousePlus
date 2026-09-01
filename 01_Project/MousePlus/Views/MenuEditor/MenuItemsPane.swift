@@ -12,6 +12,7 @@ struct MenuItemsPane: View {
     @Bindable var coordinator: SettingsWorkspaceCoordinator
     @EnvironmentObject private var contextProvider: SettingsActionContextProvider
     @State private var testActionController: TestActionController
+    @State private var showRestoreConfirm = false
 
     init(coordinator: SettingsWorkspaceCoordinator) {
         self.coordinator = coordinator
@@ -30,7 +31,7 @@ struct MenuItemsPane: View {
                         controller: testActionController
                     )
                 }
-                saveStatus
+                recoveryAndStatus
             }
         )
         // Only the selected-item form inside MenuEditorWorkspace scrolls. The
@@ -43,6 +44,16 @@ struct MenuItemsPane: View {
         .onChange(of: coordinator.menuEditorModel.middle) { _, _ in
             dismissTestResultForEditedSelection()
             coordinator.menuItemsDidChange()
+        }
+        .confirmationDialog(
+            "Restore Menu Items from the pre-reset backup? Only inner and middle ring items will change.",
+            isPresented: $showRestoreConfirm,
+            titleVisibility: .visible
+        ) {
+            Button("Restore Menu Items") {
+                Task { _ = await coordinator.restoreMenuItemsFromBackup() }
+            }
+            Button("Cancel", role: .cancel) {}
         }
     }
 
@@ -68,26 +79,51 @@ struct MenuItemsPane: View {
         }
     }
 
+    private var recoveryAndStatus: some View {
+        HStack(spacing: 8) {
+            if coordinator.workspaceState.reset == .undoAvailable {
+                AppKitButton(
+                    title: "Undo Reset",
+                    accessibilityIdentifier: "menuItems.undoReset"
+                ) {
+                    Task { _ = await coordinator.undoMenuItemsReset() }
+                }
+            }
+            if coordinator.workspaceState.durableBackupAvailable {
+                AppKitButton(
+                    title: "Restore Backup…",
+                    accessibilityIdentifier: "menuItems.restoreBackup"
+                ) {
+                    showRestoreConfirm = true
+                }
+            }
+            resetStatus
+            WorkspaceStatusView(status: coordinator.status) {
+                Task {
+                    if case .loadFailed = coordinator.status {
+                        await coordinator.load()
+                    } else {
+                        _ = await coordinator.retry()
+                    }
+                }
+            }
+        }
+    }
+
     @ViewBuilder
-    private var saveStatus: some View {
-        switch coordinator.status {
-        case .idle:
+    private var resetStatus: some View {
+        switch coordinator.workspaceState.reset {
+        case .resetting:
+            Text("Resetting Menu Items…")
+                .foregroundStyle(.secondary)
+        case .failed(let message):
+            Text("Reset Failed: \(message)")
+                .font(.caption)
+                .foregroundStyle(.red)
+                .lineLimit(2)
+                .help(message)
+        case .idle, .undoAvailable:
             EmptyView()
-        case .loading:
-            Text("Loading…")
-                .foregroundStyle(.secondary)
-        case .saving:
-            Text("Saving…")
-                .foregroundStyle(.secondary)
-        case .saved:
-            Text("Saved")
-                .foregroundStyle(.secondary)
-        case .saveFailed:
-            Text("Save failed")
-                .foregroundStyle(.red)
-        case .loadFailed:
-            Text("Load failed")
-                .foregroundStyle(.red)
         }
     }
 }

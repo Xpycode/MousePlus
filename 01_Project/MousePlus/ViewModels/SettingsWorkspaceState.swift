@@ -14,7 +14,7 @@ struct SettingsWorkspaceState: Equatable {
         case blocked(String)
     }
 
-    enum CloseChoice: Sendable {
+    enum CloseChoice: Equatable, Sendable {
         case retry
         case discardChanges
         case cancelClose

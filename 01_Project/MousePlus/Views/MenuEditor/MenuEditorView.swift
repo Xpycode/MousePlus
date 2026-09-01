@@ -47,11 +47,11 @@ struct MenuEditorWorkspace<TrailingToolbar: View>: View {
         }
         .padding(16)
         .confirmationDialog(
-            "Reset both rings to the default items? This can't be undone.",
+            "Reset Menu Items only? Inner and middle ring items will be replaced with defaults. Triggers, appearance, and behavior will not change. A recoverable backup will be created first.",
             isPresented: $showResetConfirm,
             titleVisibility: .visible
         ) {
-            Button("Reset to Defaults", role: .destructive) {
+            Button("Reset Menu Items", role: .destructive) {
                 onReset()
             }
             Button("Cancel", role: .cancel) {}
@@ -101,7 +101,10 @@ struct MenuEditorWorkspace<TrailingToolbar: View>: View {
 
             Spacer()
 
-            AppKitButton(title: "Reset to Defaults…") {
+            AppKitButton(
+                title: "Reset Menu Items…",
+                accessibilityIdentifier: "menuItems.reset"
+            ) {
                 showResetConfirm = true
             }
 

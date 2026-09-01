@@ -20,6 +20,7 @@ struct SettingsView: View {
             }
         }
         .frame(minWidth: 1120, minHeight: 680)
+        .background(SettingsWindowCloseBarrier(coordinator: coordinator).frame(width: 0, height: 0))
         .task {
             guard !coordinator.isLoaded else { return }
             await coordinator.load()
