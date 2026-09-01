@@ -13,7 +13,7 @@
 <!-- When done: /log moves to tasks-archive.md -->
 
 - [x] Wave 1: add lossless action/keystroke models, posting service, and AppKit control wrappers
-- [ ] Wave 2: build and verify the single safe configuration coordinator with backup and close barriers
+- [x] Wave 2: build and verify the single safe configuration coordinator with backup and close barriers
 - [ ] Wave 3: unify action validation, completion results, contextual targets, and error routing
 - [ ] Wave 4: replace tabbed Settings, migrate panes, embed Menu Items, and retire the second editor
 - [ ] Waves 5–6: add recorder/Test/recovery/accessibility UI and complete runtime live-apply/error integration

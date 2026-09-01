@@ -89,17 +89,17 @@ Run `BUILD` after every implementation task. Tasks with tests also run their foc
 
 ### Wave 2 — Safe persistence boundary (sequential core)
 
-- [ ] **2.1 Make configuration storage injectable and recoverable** → new `ConfigurationStore.swift`, `ConfigurationService.swift`, filesystem tests
+- [x] **2.1 Make configuration storage injectable and recoverable** → new `ConfigurationStore.swift`, `ConfigurationService.swift`, filesystem tests
   - Depends on: Wave 1 models
   - Success: production/temp stores share APIs; missing-file defaults differ from decode failure; save is atomic; backup is created beside config without destroying the previous backup first; restore/discovery are explicit.
   - Backpressure: tests cover absent, valid, corrupt, unwritable, backup-replacement failure, restore; `BUILD`.
 
-- [ ] **2.2 Build the workspace configuration coordinator** → new `SettingsWorkspaceCoordinator.swift`, coordinator tests
+- [x] **2.2 Build the workspace configuration coordinator** → new `SettingsWorkspaceCoordinator.swift`, coordinator tests
   - Depends on: 2.1
   - Success: one observable coordinator owns configuration/editor model, load/save state, dirty fields, serialized debounce/flush, retry, and post-save live apply; cancelled debounce is never called saved; every save revalidates a decoded base.
   - Backpressure: deterministic tests cover rapid edits, teardown, overlapping panes, mid-session corruption, failed write/retry, no-op close, live-apply-after-success; `BUILD`.
 
-- [ ] **2.3 Add reset, restore, and close-barrier state machines** → coordinator, new `SettingsWorkspaceState.swift`, tests
+- [x] **2.3 Add reset, restore, and close-barrier state machines** → coordinator, new `SettingsWorkspaceState.swift`, tests
   - Depends on: 2.2
   - Success: Reset changes menu items only after backup; Undo/Restore use normal save; failed close flush exposes Retry/Discard/Cancel and cannot dismiss otherwise.
   - Backpressure: transition tests cover every acceptance branch and relaunch; `BUILD`.
@@ -244,7 +244,7 @@ Run `BUILD` after every implementation task. Tasks with tests also run their foc
 |---|---|---|---|
 | 0 | 2026-09-01 | 2026-09-01 | 0.1: clean pushed zPackages revision `b4ad72a5dd84666e875b19afadd6de13b93fabcb`, focused tests 125/125. 0.2: exact pin + cold/cached builds, commit `369ba7e`. 0.3: real unit target + sentinel, commit `63c9433`. Full unit/UI plan passed with ad-hoc signing. |
 | 1 | 2026-09-01 | 2026-09-01 | 1.1 `34ec954`; 1.2 `0916596`; 1.3 `507f0c7`; 1.4 `7546235`. Unsigned Debug build and full MousePlus test plan passed (18 unit tests + 1 UI test); signed build unavailable because this machine lacks the configured certificate. |
-| 2 | | | |
+| 2 | 2026-09-01 | 2026-09-01 | 2.1 `9dd165b`; 2.2 `5a5d2ae`; 2.3 `711fb9d`. Focused Wave 2 persistence/coordinator/state suites passed 21/21; independent workspace build remained blocked by the sandboxed Xcode/CoreSimulator workspace-detection failure. |
 | 3 | | | |
 | 4 | | | |
 | 5 | | | |
