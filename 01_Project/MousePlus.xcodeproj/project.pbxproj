@@ -12,6 +12,13 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
+		8BF000012E66B00100A00001 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 8BC265542DEDD3F400F279A4 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 8BC2655B2DEDD3F400F279A4;
+			remoteInfo = MousePlus;
+		};
 		8BC265752DEDD3F500F279A4 /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
 			containerPortal = 8BC265542DEDD3F400F279A4 /* Project object */;
@@ -24,6 +31,7 @@
 /* Begin PBXFileReference section */
 		8BC2655C2DEDD3F400F279A4 /* MousePlus.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = MousePlus.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		8BC265742DEDD3F500F279A4 /* MousePlus.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = MousePlus.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		8BF000022E66B00100A00001 /* MousePlusTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = MousePlusTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
@@ -58,6 +66,11 @@
 			path = MousePlusUITests;
 			sourceTree = "<group>";
 		};
+		8BF000032E66B00100A00001 /* MousePlusTests */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = MousePlusTests;
+			sourceTree = "<group>";
+		};
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -71,6 +84,13 @@
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 		8BC265712DEDD3F500F279A4 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		8BF000042E66B00100A00001 /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -93,6 +113,7 @@
 				8B90D1BC2DEE373300FBD189 /* Config */,
 				8BC2655E2DEDD3F400F279A4 /* MousePlus */,
 				8BC265772DEDD3F500F279A4 /* MousePlusUITests */,
+				8BF000032E66B00100A00001 /* MousePlusTests */,
 				8B90D1462DEDD44A00FBD189 /* Frameworks */,
 				8BC2655D2DEDD3F400F279A4 /* Products */,
 			);
@@ -103,6 +124,7 @@
 			children = (
 				8BC2655C2DEDD3F400F279A4 /* MousePlus.app */,
 				8BC265742DEDD3F500F279A4 /* MousePlus.xctest */,
+				8BF000022E66B00100A00001 /* MousePlusTests.xctest */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -158,6 +180,29 @@
 			productReference = 8BC265742DEDD3F500F279A4 /* MousePlus.xctest */;
 			productType = "com.apple.product-type.bundle.ui-testing";
 		};
+		8BF000052E66B00100A00001 /* MousePlusTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 8BF0000A2E66B00100A00001 /* Build configuration list for PBXNativeTarget "MousePlusTests" */;
+			buildPhases = (
+				8BF000062E66B00100A00001 /* Sources */,
+				8BF000042E66B00100A00001 /* Frameworks */,
+				8BF000072E66B00100A00001 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				8BF000082E66B00100A00001 /* PBXTargetDependency */,
+			);
+			fileSystemSynchronizedGroups = (
+				8BF000032E66B00100A00001 /* MousePlusTests */,
+			);
+			name = MousePlusTests;
+			packageProductDependencies = (
+			);
+			productName = MousePlusTests;
+			productReference = 8BF000022E66B00100A00001 /* MousePlusTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -173,6 +218,10 @@
 						CreatedOnToolsVersion = 16.3;
 					};
 					8BC265732DEDD3F500F279A4 = {
+						CreatedOnToolsVersion = 16.3;
+						TestTargetID = 8BC2655B2DEDD3F400F279A4;
+					};
+					8BF000052E66B00100A00001 = {
 						CreatedOnToolsVersion = 16.3;
 						TestTargetID = 8BC2655B2DEDD3F400F279A4;
 					};
@@ -197,6 +246,7 @@
 			targets = (
 				8BC2655B2DEDD3F400F279A4 /* MousePlus */,
 				8BC265732DEDD3F500F279A4 /* MousePlusUITests */,
+				8BF000052E66B00100A00001 /* MousePlusTests */,
 			);
 		};
 /* End PBXProject section */
@@ -210,6 +260,13 @@
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 		8BC265722DEDD3F500F279A4 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		8BF000072E66B00100A00001 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -233,6 +290,13 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		8BF000062E66B00100A00001 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXTargetDependency section */
@@ -240,6 +304,11 @@
 			isa = PBXTargetDependency;
 			target = 8BC2655B2DEDD3F400F279A4 /* MousePlus */;
 			targetProxy = 8BC265752DEDD3F500F279A4 /* PBXContainerItemProxy */;
+		};
+		8BF000082E66B00100A00001 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 8BC2655B2DEDD3F400F279A4 /* MousePlus */;
+			targetProxy = 8BF000012E66B00100A00001 /* PBXContainerItemProxy */;
 		};
 /* End PBXTargetDependency section */
 
@@ -369,6 +438,40 @@
 			};
 			name = Release;
 		};
+		8BF0000B2E66B00100A00001 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CODE_SIGN_STYLE = Automatic;
+				DEAD_CODE_STRIPPING = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.xpycode.MousePlusTests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_VERSION = 5.0;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/MousePlus.app/Contents/MacOS/MousePlus";
+			};
+			name = Debug;
+		};
+		8BF0000C2E66B00100A00001 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CODE_SIGN_STYLE = Automatic;
+				DEAD_CODE_STRIPPING = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.xpycode.MousePlusTests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_VERSION = 5.0;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/MousePlus.app/Contents/MacOS/MousePlus";
+			};
+			name = Release;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -395,6 +498,15 @@
 			buildConfigurations = (
 				8BC265852DEDD3F500F279A4 /* Debug */,
 				8BC265862DEDD3F500F279A4 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		8BF0000A2E66B00100A00001 /* Build configuration list for PBXNativeTarget "MousePlusTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				8BF0000B2E66B00100A00001 /* Debug */,
+				8BF0000C2E66B00100A00001 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;

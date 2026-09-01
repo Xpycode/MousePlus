@@ -25,9 +25,9 @@
     },
     {
       "target" : {
-        "containerPath" : "container:MousePlusPackage",
-        "identifier" : "MousePlusFeatureTests",
-        "name" : "MousePlusFeatureTests"
+        "containerPath" : "container:MousePlus.xcodeproj",
+        "identifier" : "8BF000052E66B00100A00001",
+        "name" : "MousePlusTests"
       }
     }
   ],
