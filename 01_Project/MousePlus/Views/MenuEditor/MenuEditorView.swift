@@ -66,7 +66,8 @@ struct MenuEditorWorkspace<TrailingToolbar: View>: View {
             AppKitSegmentedControl(
                 labels: ["Inner", "Middle"],
                 selection: activeBandSelection,
-                accessibilityLabel: "Ring band"
+                accessibilityLabel: "Ring band",
+                accessibilityIdentifier: "menuItems.band"
             )
             .frame(maxWidth: 220)
 
@@ -88,7 +89,8 @@ struct MenuEditorWorkspace<TrailingToolbar: View>: View {
             // not block adding inner items (and vice versa).
             AppKitButton(
                 title: addButtonTitle,
-                isEnabled: !model.atCap(for: model.activeBand)
+                isEnabled: !model.atCap(for: model.activeBand),
+                accessibilityIdentifier: "menuItems.add.\(model.activeBand == .inner ? "inner" : "middle")"
             ) {
                 model.addItem(to: model.activeBand)
             }

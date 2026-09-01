@@ -116,12 +116,15 @@ struct MenuItemsPane: View {
         case .resetting:
             Text("Resetting Menu Items…")
                 .foregroundStyle(.secondary)
+                .accessibilityIdentifier("menuItems.reset.status")
         case .failed(let message):
             Text("Reset Failed: \(message)")
                 .font(.caption)
                 .foregroundStyle(.red)
                 .lineLimit(2)
                 .help(message)
+                .accessibilityLabel("Reset Failed: \(message)")
+                .accessibilityIdentifier("menuItems.reset.status")
         case .idle, .undoAvailable:
             EmptyView()
         }

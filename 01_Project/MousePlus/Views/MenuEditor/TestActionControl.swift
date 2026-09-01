@@ -14,7 +14,9 @@ struct TestActionControl: View {
             HStack(spacing: 8) {
                 AppKitButton(
                     title: controller.isRunning ? "Testing…" : "Test Action",
-                    isEnabled: presentation.isEnabled
+                    isEnabled: presentation.isEnabled,
+                    accessibilityIdentifier: "menuItems.testAction",
+                    accessibilityValue: presentation.explanation ?? (controller.isRunning ? "Testing" : "Ready")
                 ) {
                     Task { @MainActor in
                         await controller.test(item, contextAvailability: contextAvailability)
@@ -45,12 +47,14 @@ struct TestActionControl: View {
                     Text(result.result.userFacingText)
                         .font(.caption)
                         .foregroundStyle(result.result.isSuccess ? .green : .red)
-                    AppKitButton(title: "Dismiss") {
+                    AppKitButton(title: "Dismiss", accessibilityIdentifier: "menuItems.testAction.dismiss") {
                         Task { @MainActor in await controller.dismissResult() }
                     }
                 }
             }
         }
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("menuItems.testAction.status")
         .task(id: item.id) {
             await controller.restoreResult(for: item.id)
         }

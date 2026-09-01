@@ -35,7 +35,8 @@ struct ActionDataEditor: View {
                 options: offeredActionTypes.map(actionOptionTitle),
                 selection: actionSelection,
                 disabledOptions: item.actionType.isSelectable ? [] : [0],
-                accessibilityLabel: "Action type"
+                accessibilityLabel: "Action type",
+                accessibilityIdentifier: "menuItems.editor.actionType"
             )
 
             // 2. Type-aware data control.
@@ -122,7 +123,7 @@ struct ActionDataEditor: View {
 
                 Spacer()
 
-                AppKitButton(title: "Choose…") {
+                AppKitButton(title: "Choose…", accessibilityIdentifier: "menuItems.editor.chooseApplication") {
                     showingAppPicker = true
                 }
             }
@@ -173,7 +174,8 @@ struct ActionDataEditor: View {
             AppKitMultilineTextField(
                 text: $item.actionData,
                 isFocused: $commandFocused,
-                accessibilityLabel: "Command"
+                accessibilityLabel: "Command",
+                accessibilityIdentifier: "menuItems.editor.command"
             )
             .frame(minHeight: 52, maxHeight: 110)
 
@@ -196,7 +198,8 @@ struct ActionDataEditor: View {
         AppKitPopup(
             options: SnapZone.allCases.map(\.displayName),
             selection: snapZoneSelection,
-            accessibilityLabel: "Snap to"
+            accessibilityLabel: "Snap to",
+            accessibilityIdentifier: "menuItems.editor.snapZone"
         )
     }
 

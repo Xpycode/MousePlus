@@ -105,7 +105,8 @@ struct SlotEditorForm: View {
                         text: item.label,
                         isFocused: $labelFocused,
                         placeholder: "Label",
-                        accessibilityLabel: "Label"
+                        accessibilityLabel: "Label",
+                        accessibilityIdentifier: "menuItems.editor.label"
                     )
                 }
             }
@@ -171,7 +172,8 @@ struct SlotEditorForm: View {
                             title: sub.label.isEmpty ? "(no label)" : sub.label,
                             subtitle: sub.actionType.displayName,
                             isSelected: model.selection?.subItemID == sub.id,
-                            accessibilityLabel: "Sub-item \(sub.label.isEmpty ? "without label" : sub.label)"
+                            accessibilityLabel: "Outer wedge, \(sub.label.isEmpty ? "unlabeled" : sub.label), action \(sub.actionType.displayName), \(model.selection?.subItemID == sub.id ? "selected" : "not selected")",
+                            accessibilityIdentifier: "menuItems.editor.subItem.\(sub.id.uuidString)"
                         ) {
                             model.selection = SlotSelection(
                                 band: .middle,
@@ -196,7 +198,8 @@ struct SlotEditorForm: View {
             AppKitButton(
                 title: "Add Sub-item",
                 systemImageName: "plus",
-                isEnabled: !model.subItemsAtCap(for: parentID)
+                isEnabled: !model.subItemsAtCap(for: parentID),
+                accessibilityIdentifier: "menuItems.addSubItem"
             ) {
                 model.addSubItem(toMiddle: parentID)
             }
@@ -219,7 +222,8 @@ struct SlotEditorForm: View {
             if !isSubItem, let sel = model.selection, let id = sel.itemID {
                 AppKitButton(
                     title: "Move Earlier",
-                    systemImageName: "chevron.left"
+                    systemImageName: "chevron.left",
+                    accessibilityIdentifier: "menuItems.moveEarlier"
                 ) {
                     model.moveItem(id: id, in: sel.band, by: -1)
                 }
@@ -227,7 +231,8 @@ struct SlotEditorForm: View {
 
                 AppKitButton(
                     title: "Move Later",
-                    systemImageName: "chevron.right"
+                    systemImageName: "chevron.right",
+                    accessibilityIdentifier: "menuItems.moveLater"
                 ) {
                     model.moveItem(id: id, in: sel.band, by: 1)
                 }
@@ -239,7 +244,8 @@ struct SlotEditorForm: View {
             AppKitButton(
                 title: "Delete",
                 systemImageName: "trash",
-                accessibilityLabel: "Delete this slot"
+                accessibilityLabel: "Delete this slot",
+                accessibilityIdentifier: "menuItems.delete"
             ) {
                 model.removeSelectedItem()
             }

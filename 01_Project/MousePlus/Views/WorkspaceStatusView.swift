@@ -40,6 +40,9 @@ struct WorkspaceStatusView: View {
                 }
             }
             .accessibilityElement(children: .combine)
+            .accessibilityLabel(presentation.title)
+            .accessibilityValue(presentation.detail ?? presentation.title)
+            .accessibilityIdentifier("workspace.status")
 
             if presentation.canRetry {
                 AppKitButton(

@@ -6,9 +6,11 @@ import SwiftUI
 private func configureAccessibility(
     _ view: NSView,
     label: String,
-    identifier: String?
+    identifier: String?,
+    value: String? = nil
 ) {
     view.setAccessibilityLabel(label)
+    view.setAccessibilityValue(value)
     if let identifier {
         view.setAccessibilityIdentifier(identifier)
     }
@@ -20,6 +22,7 @@ struct AppKitButton: NSViewRepresentable {
     var isEnabled = true
     var accessibilityLabel: String? = nil
     var accessibilityIdentifier: String? = nil
+    var accessibilityValue: String? = nil
     let action: @MainActor () -> Void
 
     func makeCoordinator() -> Coordinator { Coordinator(action: action) }
@@ -38,7 +41,12 @@ struct AppKitButton: NSViewRepresentable {
         }
         button.imagePosition = title.isEmpty ? .imageOnly : .imageLeading
         button.isEnabled = isEnabled
-        configureAccessibility(button, label: accessibilityLabel ?? title, identifier: accessibilityIdentifier)
+        configureAccessibility(
+            button,
+            label: accessibilityLabel ?? title,
+            identifier: accessibilityIdentifier,
+            value: accessibilityValue
+        )
     }
 
     @MainActor final class Coordinator: NSObject {
@@ -291,8 +299,12 @@ struct AppKitSelectableRow: NSViewRepresentable {
         button.title = subtitle.map { "\(title)\n\($0)" } ?? title
         button.state = isSelected ? .on : .off
         button.isEnabled = isEnabled
-        button.setAccessibilityValue(isSelected ? "Selected" : "Not selected")
-        configureAccessibility(button, label: accessibilityLabel ?? title, identifier: accessibilityIdentifier)
+        configureAccessibility(
+            button,
+            label: accessibilityLabel ?? title,
+            identifier: accessibilityIdentifier,
+            value: isSelected ? "Selected" : "Not selected"
+        )
     }
 
     @MainActor final class Coordinator: NSObject {

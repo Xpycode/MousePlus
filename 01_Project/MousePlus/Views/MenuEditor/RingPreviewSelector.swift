@@ -12,6 +12,20 @@
 
 import SwiftUI
 
+struct RingWedgeAccessibility: Equatable {
+    let label: String
+    let value: String
+    let identifier: String
+
+    init(item: RingMenuItem, band: String, position: Int, selected: Bool) {
+        let itemLabel = item.label.isEmpty ? "unlabeled" : item.label
+        let symbolState = SFSymbol.isValid(item.icon) ? "" : ", invalid symbol; placeholder shown"
+        label = "\(band) wedge, position \(position + 1), \(itemLabel), action \(item.actionType.displayName)\(symbolState)"
+        value = selected ? "Selected" : "Not selected"
+        identifier = "menuItems.wedge.\(band.lowercased()).\(position + 1)"
+    }
+}
+
 /// Live ring preview with a click-to-select overlay.
 ///
 /// Shows the concentric ring exactly as the runtime menu would render it, then
@@ -125,13 +139,21 @@ struct RingPreviewSelector: View {
             // Filled slot — transparent selectable button + selection highlight.
             let item = items[i]
             let isSelected = isSlotSelected(band: band, itemID: item.id)
+            let accessibility = RingWedgeAccessibility(
+                item: item,
+                band: band == .inner ? "Inner" : "Middle",
+                position: i,
+                selected: isSelected
+            )
             // Faint companion highlight: when *this same spoke* is selected in the
             // other band, hint at shared-spoke alignment.
             let isSpokeActive = isSpokeSelected(spoke: i)
 
             AppKitButton(
                 title: "",
-                accessibilityLabel: slotAccessibilityLabel(item: item, band: band, position: i, selected: isSelected)
+                accessibilityLabel: accessibility.label,
+                accessibilityIdentifier: accessibility.identifier,
+                accessibilityValue: accessibility.value
             ) {
                 model.activeBand = band
                 model.selection = SlotSelection(band: band, itemID: item.id, subItemID: nil)
@@ -162,7 +184,8 @@ struct RingPreviewSelector: View {
             // (`i < n` also implies the band is under the 8-item cap, since n ≤ 8.)
             AppKitButton(
                 title: "",
-                accessibilityLabel: "Add \(band == .inner ? "inner" : "middle") item at position \(i + 1)"
+                accessibilityLabel: "Add \(band == .inner ? "inner" : "middle") item at position \(i + 1)",
+                accessibilityIdentifier: "menuItems.wedge.\(band == .inner ? "inner" : "middle").add.\(i + 1)"
             ) {
                 model.activeBand = band
                 model.addItem(to: band) // appends at end == fills this spoke
@@ -206,13 +229,20 @@ struct RingPreviewSelector: View {
                         .font(.caption2)
                         .foregroundStyle(.secondary)
                     HStack(spacing: 6) {
-                        ForEach(subs) { sub in
+                        ForEach(Array(subs.enumerated()), id: \.element.id) { position, sub in
                             let isSelected = (model.selection?.subItemID == sub.id)
+                            let accessibility = RingWedgeAccessibility(
+                                item: sub,
+                                band: "Outer",
+                                position: position,
+                                selected: isSelected
+                            )
                             AppKitSelectableRow(
                                 title: sub.label.isEmpty ? "Item" : sub.label,
                                 subtitle: sub.actionType.displayName,
                                 isSelected: isSelected,
-                                accessibilityLabel: "Sub-item \(sub.label.isEmpty ? "without label" : sub.label)"
+                                accessibilityLabel: accessibility.label,
+                                accessibilityIdentifier: accessibility.identifier
                             ) {
                                 model.activeBand = .middle
                                 model.selection = SlotSelection(
@@ -250,18 +280,6 @@ struct RingPreviewSelector: View {
         // Re-assert items in case reset/expand touched ordering expectations.
         preview.innerItems = model.inner
         preview.middleItems = model.middle
-    }
-
-    private func slotAccessibilityLabel(
-        item: RingMenuItem,
-        band: EditorBand,
-        position: Int,
-        selected: Bool
-    ) -> String {
-        let bandName = band == .inner ? "Inner" : "Middle"
-        let label = item.label.isEmpty ? "unlabeled" : item.label
-        let symbolState = SFSymbol.isValid(item.icon) ? "" : ", invalid symbol; placeholder shown"
-        return "\(bandName) item \(position + 1), \(label), \(item.actionType.displayName), \(selected ? "selected" : "not selected")\(symbolState)"
     }
 
     // MARK: - Selection helpers
