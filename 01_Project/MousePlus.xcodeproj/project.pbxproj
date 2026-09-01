@@ -6,6 +6,11 @@
 	objectVersion = 77;
 	objects = {
 
+/* Begin PBXBuildFile section */
+		8BE000012E66A00100A00001 /* MacUIKitSettings in Frameworks */ = {isa = PBXBuildFile; productRef = 8BE000042E66A00100A00001 /* MacUIKitSettings */; };
+		8BE000022E66A00100A00001 /* ShortcutKit in Frameworks */ = {isa = PBXBuildFile; productRef = 8BE000052E66A00100A00001 /* ShortcutKit */; };
+/* End PBXBuildFile section */
+
 /* Begin PBXContainerItemProxy section */
 		8BC265752DEDD3F500F279A4 /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
@@ -60,6 +65,8 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				8BE000012E66A00100A00001 /* MacUIKitSettings in Frameworks */,
+				8BE000022E66A00100A00001 /* ShortcutKit in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -121,6 +128,8 @@
 			);
 			name = MousePlus;
 			packageProductDependencies = (
+				8BE000042E66A00100A00001 /* MacUIKitSettings */,
+				8BE000052E66A00100A00001 /* ShortcutKit */,
 			);
 			productName = MousePlus;
 			productReference = 8BC2655C2DEDD3F400F279A4 /* MousePlus.app */;
@@ -180,6 +189,9 @@
 			minimizedProjectReferenceProxies = 1;
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 8BC2655D2DEDD3F400F279A4 /* Products */;
+			packageReferences = (
+				8BE000032E66A00100A00001 /* XCRemoteSwiftPackageReference "zPackages" */,
+			);
 			projectDirPath = "";
 			projectRoot = "";
 			targets = (
@@ -388,6 +400,30 @@
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		8BE000032E66A00100A00001 /* XCRemoteSwiftPackageReference "zPackages" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/Xpycode/zPackages.git";
+			requirement = {
+				kind = revision;
+				revision = b4ad72a5dd84666e875b19afadd6de13b93fabcb;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		8BE000042E66A00100A00001 /* MacUIKitSettings */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 8BE000032E66A00100A00001 /* XCRemoteSwiftPackageReference "zPackages" */;
+			productName = MacUIKitSettings;
+		};
+		8BE000052E66A00100A00001 /* ShortcutKit */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 8BE000032E66A00100A00001 /* XCRemoteSwiftPackageReference "zPackages" */;
+			productName = ShortcutKit;
+		};
+/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = 8BC265542DEDD3F400F279A4 /* Project object */;
 }
