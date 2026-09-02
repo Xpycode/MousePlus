@@ -19,6 +19,9 @@ struct ActionDataEditor: View {
     @State private var showingAppPicker = false
     @State private var commandFocused = false
     @State private var keystrokeCandidate: CustomKeyboardShortcut?
+    @State private var keystrokeRecorder = KeystrokeCaptureRecorder()
+    @State private var recordingItemID: UUID?
+    @State private var keystrokeCaptureMessage: String?
     private let keystrokeConflicts = KeystrokeConflictChecker()
 
     private var offeredActionTypes: [ActionType] {
@@ -42,9 +45,12 @@ struct ActionDataEditor: View {
             // 2. Type-aware data control.
             dataControl
         }
-        .onChange(of: item.id) { _, _ in keystrokeCandidate = nil }
-        .onChange(of: item.actionType) { _, _ in keystrokeCandidate = nil }
-        .onDisappear { keystrokeCandidate = nil }
+        .onChange(of: keystrokeRecorder.outcome) { _, outcome in
+            handleKeystrokeCapture(outcome)
+        }
+        .onChange(of: item.id) { _, _ in cancelKeystrokeCapture() }
+        .onChange(of: item.actionType) { _, _ in cancelKeystrokeCapture() }
+        .onDisappear { cancelKeystrokeCapture() }
     }
 
     // MARK: - Type-aware data control
@@ -70,17 +76,55 @@ struct ActionDataEditor: View {
     @ViewBuilder
     private var sendKeystrokeControl: some View {
         VStack(alignment: .leading, spacing: 4) {
-            ShortcutRecorder(
-                shortcut: keystrokeBinding,
-                title: "Keystroke",
-                onCandidateChange: { keystrokeCandidate = $0 },
-                isCommitEnabled: { assessment(for: $0)?.severity != .blocked }
-            )
+            HStack {
+                Text("Keystroke")
+
+                Spacer()
+
+                Text(keystrokeRecorder.isRecording
+                     ? "Press a key… (Esc to cancel)"
+                     : committedKeystrokeDisplay)
+                    .foregroundStyle(keystrokeRecorder.isRecording || item.keystrokePayload == nil ? .secondary : .primary)
+                    .accessibilityLabel(keystrokeRecorder.isRecording
+                                        ? "Recording keystroke. Press a key, or Escape to cancel."
+                                        : "Current keystroke: \(committedKeystrokeDisplay)")
+
+                AppKitButton(
+                    title: keystrokeRecorder.isRecording ? "Cancel" : "Record",
+                    accessibilityLabel: keystrokeRecorder.isRecording ? "Cancel keystroke recording" : "Record keystroke",
+                    accessibilityIdentifier: keystrokeRecorder.isRecording
+                        ? "menuItems.editor.keystroke.cancel"
+                        : "menuItems.editor.keystroke.record"
+                ) {
+                    if keystrokeRecorder.isRecording {
+                        cancelKeystrokeCapture()
+                    } else {
+                        recordingItemID = item.id
+                        keystrokeCandidate = nil
+                        keystrokeCaptureMessage = nil
+                        keystrokeRecorder.record()
+                    }
+                }
+
+                AppKitButton(
+                    title: "Clear",
+                    isEnabled: item.keystrokePayload != nil && !keystrokeRecorder.isRecording,
+                    accessibilityIdentifier: "menuItems.editor.keystroke.clear"
+                ) {
+                    item.keystrokePayload = nil
+                    keystrokeCandidate = nil
+                    keystrokeCaptureMessage = nil
+                }
+            }
 
             if case let .unresolvedLegacy(value) = item.keystrokePayload {
                 Label("The legacy shortcut “\(value)” can't be interpreted safely. Record it again.", systemImage: "exclamationmark.circle.fill")
                     .foregroundStyle(.red)
                     .accessibilityLabel("Can't use legacy shortcut. Record it again.")
+            } else if let keystrokeCaptureMessage {
+                Label(keystrokeCaptureMessage, systemImage: "exclamationmark.triangle.fill")
+                    .foregroundStyle(.orange)
+                    .accessibilityLabel("Keystroke recording failed. \(keystrokeCaptureMessage)")
             } else if let conflictCaption {
                 Label(conflictCaption.message, systemImage: conflictCaption.severity == .blocked ? "exclamationmark.circle.fill" : "exclamationmark.triangle.fill")
                     .foregroundStyle(conflictCaption.severity == .blocked ? .red : .orange)
@@ -90,15 +134,52 @@ struct ActionDataEditor: View {
         .font(.caption)
     }
 
-    private var keystrokeBinding: Binding<CustomKeyboardShortcut> {
-        Binding(
-            get: { item.keystrokePayload?.shortcutKitValue ?? .none },
-            set: { shortcut in
-                // ShortcutRecorder writes only from Save or Clear. Candidate and
-                // Cancel paths never touch the selected item's committed payload.
-                item.keystrokePayload = KeystrokePayload(shortcutKitValue: shortcut)
+    private var committedKeystrokeDisplay: String {
+        guard let shortcut = item.keystrokePayload?.shortcutKitValue,
+              !shortcut.isUnbound else { return "None" }
+        return shortcut.resolvedDisplayName
+    }
+
+    private func handleKeystrokeCapture(_ outcome: KeystrokeCaptureRecorder.Outcome?) {
+        guard let outcome else { return }
+        let armedItemID = recordingItemID
+        recordingItemID = nil
+
+        guard armedItemID == item.id, item.actionType == .sendKeystroke else {
+            keystrokeCandidate = nil
+            return
+        }
+
+        switch outcome {
+        case let .captured(payload):
+            let shortcut = payload.shortcutKitValue
+            if assessment(for: shortcut)?.severity == .blocked {
+                // Keep the rejected chord visible in the explanatory caption,
+                // but never replace the item's committed payload.
+                keystrokeCandidate = shortcut
+            } else {
+                item.keystrokePayload = payload
+                keystrokeCandidate = nil
             }
-        )
+            keystrokeCaptureMessage = nil
+        case .cancelled:
+            keystrokeCandidate = nil
+            keystrokeCaptureMessage = nil
+        case .timedOut:
+            keystrokeCandidate = nil
+            keystrokeCaptureMessage = "No keystroke was detected. Try recording again."
+        case let .failed(message):
+            keystrokeCandidate = nil
+            keystrokeCaptureMessage = message
+        }
+    }
+
+    private func cancelKeystrokeCapture() {
+        // Invalidate the binding target before cancellation publishes its outcome.
+        recordingItemID = nil
+        keystrokeRecorder.cancel()
+        keystrokeCandidate = nil
+        keystrokeCaptureMessage = nil
     }
 
     private var conflictCaption: KeystrokeConflictAssessment? {
