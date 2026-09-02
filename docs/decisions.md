@@ -628,6 +628,25 @@ mirror (~1.5–2d) → app switcher (~1.5–2d) → system toggles (~3.5–4d). 
 
 ---
 
+## 2026-09-02 - Exclusive keystroke capture and editor-owned preview selection
+
+**Context:** A passive shortcut recorder observed the requested chord but could not consume it, so
+QuickStatsPanel handled `⌃⌥⌘Q` while MousePlus was armed. Separately, the menu editor overlaid a
+second selection stroke on the runtime ring; its geometry diverged from the rendered wedge and the
+runtime ring's hover handler could overwrite the editor's persistent selection.
+
+**Decision:** Record action keystrokes with a temporary active Quartz event tap that consumes the
+chosen key-down and matching key-up (Escape cancels), with deterministic teardown and timeout. In
+the menu editor, render the real `WedgeView` highlight from the editor's identity selection and
+disable pointer-driven selection on the embedded render-only `RingMenuView`.
+
+**Consequences:** Target applications do not receive a chord while it is being recorded. Recorder
+failure and cancellation remain explicit. Preview selection geometry cannot drift from production
+rendering, and moving the pointer away no longer clears or changes the chosen editor wedge. Runtime
+HUD interaction remains enabled by default.
+
+---
+
 ## 2026-09-01 - Send Keystroke canonical payload, posting, defaults, and permission stance
 
 **Context:** `SEND_KEYSTROKE_PLAN.md` originally proposed encoding a shortcut as a numeric

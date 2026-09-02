@@ -58,7 +58,7 @@ struct RingPreviewSelector: View {
 
         ZStack {
             // 1. Live ring — display only, no interaction.
-            RingMenuView(viewModel: preview)
+            RingMenuView(viewModel: preview, interactionEnabled: false)
                 .allowsHitTesting(false)
 
             // 2. Selection overlay, matched to the same frame + center.
@@ -200,11 +200,6 @@ struct RingPreviewSelector: View {
             } label: {
                 shape
                     .fill(Color.white.opacity(0.001))
-                    .overlay {
-                        if isSelected {
-                            shape.stroke(Color.accentColor, lineWidth: 3)
-                        }
-                    }
             }
             .buttonStyle(.plain)
             .contentShape(shape)
@@ -295,11 +290,6 @@ struct RingPreviewSelector: View {
                 } label: {
                     shape
                         .fill(Color.white.opacity(0.001))
-                        .overlay {
-                            if isSelected {
-                                shape.stroke(Color.accentColor, lineWidth: 3)
-                            }
-                        }
                 }
                 .buttonStyle(.plain)
                 .contentShape(shape)
@@ -338,6 +328,30 @@ struct RingPreviewSelector: View {
         // Re-assert items in case reset/expand touched ordering expectations.
         preview.innerItems = model.inner
         preview.middleItems = model.middle
+        preview.activeSelection = previewSelection()
+    }
+
+    /// Mirror editor identity selection into the render model's index selection.
+    /// The real `WedgeView` then owns the highlight, guaranteeing its geometry is
+    /// identical to the visible slice instead of redrawing a second outline layer.
+    private func previewSelection() -> ActiveSelection? {
+        guard let selection = model.selection else { return nil }
+        switch selection.band {
+        case .inner:
+            guard let itemID = selection.itemID,
+                  let index = model.inner.firstIndex(where: { $0.id == itemID })
+            else { return nil }
+            return ActiveSelection(band: .inner, index: index)
+        case .middle:
+            guard let itemID = selection.itemID,
+                  let parentIndex = model.middle.firstIndex(where: { $0.id == itemID })
+            else { return nil }
+            if let subItemID = selection.subItemID,
+               let subIndex = model.middle[parentIndex].subItems?.firstIndex(where: { $0.id == subItemID }) {
+                return ActiveSelection(band: .outer, index: subIndex)
+            }
+            return ActiveSelection(band: .middle, index: parentIndex)
+        }
     }
 
     // MARK: - Selection helpers

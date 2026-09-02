@@ -84,6 +84,7 @@ struct ActionDataEditor: View {
                 Text(keystrokeRecorder.isRecording
                      ? "Press a key… (Esc to cancel)"
                      : committedKeystrokeDisplay)
+                    .frame(minWidth: 72, alignment: .trailing)
                     .foregroundStyle(keystrokeRecorder.isRecording || item.keystrokePayload == nil ? .secondary : .primary)
                     .accessibilityLabel(keystrokeRecorder.isRecording
                                         ? "Recording keystroke. Press a key, or Escape to cancel."
@@ -105,6 +106,7 @@ struct ActionDataEditor: View {
                         keystrokeRecorder.record()
                     }
                 }
+                .fixedSize()
 
                 AppKitButton(
                     title: "Clear",
@@ -115,6 +117,7 @@ struct ActionDataEditor: View {
                     keystrokeCandidate = nil
                     keystrokeCaptureMessage = nil
                 }
+                .fixedSize()
             }
 
             if case let .unresolvedLegacy(value) = item.keystrokePayload {

@@ -15,6 +15,12 @@ import SwiftUI
 struct RingMenuView: View {
     @Bindable var viewModel: RingViewModel
 
+    /// Whether this view should drive selection from pointer input. The menu
+    /// editor renders the real ring as a preview, but owns selection through its
+    /// wedge overlay; disabling this prevents hover events from replacing that
+    /// persistent editor selection.
+    var interactionEnabled = true
+
     // T11: sourced from `AppearanceConfig` via the view model (persisted in Settings):
     //   - `keepSpokeLit`: also keep inner wedge `p` lit on the live branch (§2.3).
     //   - `animationEnabled`: instant vs animated transitions (§2.3).
@@ -71,7 +77,7 @@ struct RingMenuView: View {
                    value: viewModel.activeSelection)
         // Pointer movement (tap-toggle / hover) drives the active wedge.
         .onContinuousHover { phase in
-            if case .active(let location) = phase {
+            if interactionEnabled, case .active(let location) = phase {
                 viewModel.updateActive(at: location, center: center)
             }
             // .ended → leave selection as-is; a click commits it.
@@ -80,14 +86,17 @@ struct RingMenuView: View {
         .gesture(
             DragGesture(minimumDistance: 0)
                 .onChanged { value in
+                    guard interactionEnabled else { return }
                     viewModel.updateActive(at: value.location, center: center)
                 }
                 .onEnded { _ in
+                    guard interactionEnabled else { return }
                     viewModel.commitActive()
                 }
         )
         // Tap-toggle: a plain click commits the active wedge.
         .onTapGesture {
+            guard interactionEnabled else { return }
             viewModel.commitActive()
         }
     }
