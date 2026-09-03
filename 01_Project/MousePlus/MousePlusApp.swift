@@ -55,6 +55,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// menu bar (see the M1 Max menu-bar-icon mystery in `PROJECT_STATE.md`).
     @MainActor static var showIdentifyInput: (() -> Void)?
 
+    /// Shared lifecycle bridge for every visible quit affordance. Keeping the
+    /// termination request here ensures General Settings remains useful when the
+    /// status item cannot be seen.
+    @MainActor static var quitApplication: (() -> Void)?
+
     private var menuBarController: MenuBarController?
     private var ringWindowController: RingWindowController?
     private var triggerService: TriggerService?
@@ -129,6 +134,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func setupMenuBar() {
+        Self.quitApplication = {
+            NSApp.terminate(nil)
+        }
+
         menuBarController = MenuBarController()
         menuBarController?.setup()
 
@@ -141,7 +150,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
 
         menuBarController?.onQuitClicked = {
-            NSApp.terminate(nil)
+            Self.quitApplication?()
         }
     }
 

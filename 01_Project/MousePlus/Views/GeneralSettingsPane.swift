@@ -1,6 +1,8 @@
 import SwiftUI
 
 struct GeneralSettingsPane: View {
+    static let quitAccessibilityIdentifier = "general.quitMousePlus"
+
     let coordinator: SettingsWorkspaceCoordinator
 
     var body: some View {
@@ -29,8 +31,25 @@ struct GeneralSettingsPane: View {
                     AppDelegate.showIdentifyInput?()
                 }
             }
+
+            Section("Application") {
+                Text("Quit MousePlus completely. Your saved configuration will be used the next time you open the app.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+
+                AppKitButton(
+                    title: "Quit MousePlus",
+                    accessibilityIdentifier: Self.quitAccessibilityIdentifier
+                ) {
+                    Self.performQuit()
+                }
+            }
         }
         .formStyle(.grouped)
         .padding()
+    }
+
+    static func performQuit() {
+        AppDelegate.quitApplication?()
     }
 }
