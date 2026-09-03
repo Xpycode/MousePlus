@@ -29,12 +29,12 @@ Close the sustained-use HUD redesign by fixing every failure found during signed
 
 ### Wave 1 — Deterministic model and policy fixes
 
-- [ ] **1.1: Make top-level reordering circular** → `01_Project/MousePlus/ViewModels/MenuEditorModel.swift`, `01_Project/MousePlusTests/MenuEditorModelRegressionTests.swift`
+- [x] **1.1: Make top-level reordering circular** → `01_Project/MousePlus/ViewModels/MenuEditorModel.swift`, `01_Project/MousePlusTests/MenuEditorModelRegressionTests.swift`
   - Replace edge clamping with modulo wrap for non-empty arrays; preserve the selected UUID and reject offsets that cannot resolve safely.
   - Success: first→Earlier moves to last, last→Later moves to first, repeated moves complete multiple revolutions, and selection follows the same item.
   - Backpressure: focused `MenuEditorModelRegressionTests` covering both bands, both directions, one-item arrays, and repeated wrap.
 
-- [ ] **1.2: Define outer-ring policy as one pure state transition** → `01_Project/MousePlus/ViewModels/RingViewModel.swift`, `01_Project/MousePlus/Views/AppKitControls/HUDPreviewInteractionView.swift`, related tests
+- [x] **1.2: Define outer-ring policy as one pure state transition** → `01_Project/MousePlus/ViewModels/RingViewModel.swift`, `01_Project/MousePlus/Views/AppKitControls/HUDPreviewInteractionView.swift`, related tests
   - Share the same eligibility and reveal-latch rules between runtime and preview: no parent/no items = absent; Always = visible after expansion; Reveal = visible only after the inner-to-outer traversal; Hidden = absent and unavailable.
   - Success: runtime and preview produce identical visibility for the same policy, expansion, pointer history, and item state.
   - Backpressure: focused `RingViewModelHUDTests` and `HUDPreviewInteractionTests` state-transition matrices.
@@ -100,7 +100,7 @@ Close the sustained-use HUD redesign by fixing every failure found during signed
 
 ## Blocked Tasks
 
-- Wave 3 UI implementation waits for confirmation of the proposed center-drag interaction and General-pane Quit placement, per the UI Changes Protocol.
+- None. The proposed center-drag interaction and General-pane Quit placement were confirmed before execution began.
 
 ---
 
@@ -108,7 +108,7 @@ Close the sustained-use HUD redesign by fixing every failure found during signed
 
 | Wave | Started | Completed | Commits |
 |------|---------|-----------|---------|
-| 1 | | | |
+| 1 | 2026-09-03 | 2026-09-03 | Circular reorder and shared outer-ring policy implemented; 35 focused tests passed |
 | 2 | | | |
 | 3 | | | |
 | 4 | | | |

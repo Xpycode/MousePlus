@@ -11,13 +11,14 @@
 
 ## Now
 
-- **Phase:** HUD redesign live-verification remediation planned. <!-- Phase changed: 2026-09-03 -->
-- **Focus:** Fix signed-test failures in circular reorder, dismissal, preview fidelity, outer visibility, movement, and lifecycle access.
+- **Phase:** HUD redesign live-verification remediation in progress. <!-- Phase changed: 2026-09-03 -->
+- **Focus:** Fix circular dismissal, outer geometry, and preview/runtime color fidelity in remediation Wave 2.
 - **Blocker:** Advanced Logitech-button support is paused until raw MX4/MX3S captures resolve the HID++ strategy decision.
-- **Next:** Confirm the proposed center-drag and General-pane Quit placements, then execute `IMPLEMENTATION_PLAN.md` Wave 1.
+- **Next:** Execute `IMPLEMENTATION_PLAN.md` Wave 2, starting with circular outside-click dismissal.
 
 ## Recent
 
+- **2026-09-03:** Completed remediation Wave 1: top-level reordering now wraps circularly while preserving item identity, and runtime/preview share one tested outer-ring eligibility and reveal policy. All 35 focused tests passed; center-drag movement and General-pane Quit placements are confirmed for Wave 3.
 - **2026-09-03:** Signed user testing confirmed direct MousePlus mouse binding works without the BetterMouse shortcut beep, and exposed six closure issues: reorder does not wrap, transparent-corner clicks do not dismiss, preview selection distorts color comparison, outer visibility leaves misleading geometry, HUD movement lacks a safe interaction, and quitting is inaccessible when the status item is invisible. A focused four-wave remediation plan now replaces the completed implementation plan.
 - **2026-09-03:** Live Wave 7 review reshaped Menu Items into a compact tabbed inspector, made deletion and action testing discoverable, preserved wedge selection, removed ambiguous preview-add hotspots, and deferred clearer per-ring/label controls.
 - **2026-09-03:** Wrapped HUD redesign Waves 5–6 with atomic reset/recovery, complete accessibility and migration coverage, shared runtime presentation resolution, and a clean 180-test/build gate.
@@ -31,7 +32,7 @@
 - **Ring UI:** Complete and live-verified.
 - **HUD actions:** Window snapping and keystroke delivery work; menu-bar mirror, app switching, system toggles, and screenshots remain.
 - **Trigger backend:** Keyboard and standard mouse paths work; advanced Logitech HID++ support remains undecided.
-- **Task tracker:** 0/4 current sprint; 12/17 tracked items complete overall (71%).
+- **Task tracker:** 1/4 current sprint; 13/17 tracked items complete overall (76%).
 
 ## Risks and Backlog
 
@@ -65,4 +66,4 @@
 
 ## Resume
 
-Confirm the Wave 3 UI placements, then continue at `IMPLEMENTATION_PLAN.md` Wave 1. Preserve the passing redesign contracts and clean automated baseline while fixing the signed-test findings before repeating user-driven verification.
+Continue at `IMPLEMENTATION_PLAN.md` Wave 2. Preserve the passing redesign contracts and 35-test Wave 1 baseline while fixing the remaining signed-test findings before repeating user-driven verification.
