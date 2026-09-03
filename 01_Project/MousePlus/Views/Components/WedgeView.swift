@@ -1,5 +1,41 @@
 import SwiftUI
 
+/// Testable radial bounds for the material surfaces rendered by the ring.
+struct RingSurfacePresentation: Equatable {
+    let persistentOuterRadius: CGFloat
+    let localizedOuterInnerRadius: CGFloat?
+    let localizedOuterOuterRadius: CGFloat?
+
+    init(radii: BandRadii, isOuterRingVisible: Bool) {
+        persistentOuterRadius = radii.r2
+        localizedOuterInnerRadius = isOuterRingVisible ? radii.r2 : nil
+        localizedOuterOuterRadius = isOuterRingVisible ? radii.r3 : nil
+    }
+}
+
+/// Material surface for one localized outer-ring segment. The caller owns the
+/// policy gate; keeping this shape separate from `WedgeView` lets translucent
+/// configured wedge colors sit on material without extending the persistent
+/// circular backing beyond r2.
+struct OuterWedgeBacking: View {
+    let startAngle: Angle
+    let endAngle: Angle
+    let innerRadius: CGFloat
+    let outerRadius: CGFloat
+    let size: CGFloat
+
+    var body: some View {
+        AnnularWedge(
+            startAngle: startAngle,
+            endAngle: endAngle,
+            innerRadius: innerRadius,
+            outerRadius: outerRadius
+        )
+        .fill(.ultraThinMaterial)
+        .frame(width: size, height: size)
+    }
+}
+
 /// Renders ONE wedge of the concentric ring menu: an annular slice plus its
 /// icon (and, for labeled bands, a caption) anchored at the wedge centroid.
 ///
@@ -47,6 +83,9 @@ struct WedgeView: View {
     let dimOpacity: Double
     /// Fully resolved colors, orientation, and interaction state.
     let presentation: WedgePresentation
+    /// Editor-only persistent selection. This neutral marker is independent of
+    /// hover emphasis so it never changes the configured fill or glyph colors.
+    let showsSelectionMarker: Bool
     let showsExpandAffordance: Bool
 
     init(
@@ -62,6 +101,7 @@ struct WedgeView: View {
         dimmed: Bool = false,
         dimOpacity: Double = 0.30,
         presentation: WedgePresentation? = nil,
+        showsSelectionMarker: Bool = false,
         showsExpandAffordance: Bool = true
     ) {
         self.item = item
@@ -80,6 +120,7 @@ struct WedgeView: View {
             offBranch: dimmed && !isHighlighted,
             dimOpacity: dimOpacity
         )
+        self.showsSelectionMarker = showsSelectionMarker
         self.showsExpandAffordance = showsExpandAffordance
     }
 
@@ -113,9 +154,15 @@ struct WedgeView: View {
             // shape fills the full `size × size` square.
             slice
                 .fill(fillColor)
-                .overlay(slice.fill(Color.white.opacity(presentation.emphasisOpacity)))
+                .overlay(slice.fill(Color.accentColor.opacity(presentation.emphasisOpacity)))
                 .overlay(
                     slice.stroke(Color.white.opacity(presentation.borderOpacity), lineWidth: 1)
+                )
+                .overlay(
+                    slice.stroke(
+                        Color.primary.opacity(showsSelectionMarker ? 0.8 : 0),
+                        style: StrokeStyle(lineWidth: 2, dash: [4, 3])
+                    )
                 )
 
             glyph

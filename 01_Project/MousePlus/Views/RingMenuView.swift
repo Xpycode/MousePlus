@@ -31,6 +31,9 @@ struct RingMenuView: View {
     var accessibilityIdentifierPrefix = "hud.wedge"
     var exposesCenterSettings = true
     var onAccessibilitySelection: ((ActiveSelection) -> Void)?
+    /// Preview-only editor selection, drawn as a neutral marker. Runtime leaves
+    /// this nil and continues to use `activeSelection` exclusively for hover.
+    var persistentSelection: ActiveSelection? = nil
 
     // T11: sourced from `AppearanceConfig` via the view model (persisted in Settings):
     //   - `keepSpokeLit`: also keep inner wedge `p` lit on the live branch (§2.3).
@@ -51,13 +54,21 @@ struct RingMenuView: View {
 
     private var radii: BandRadii { viewModel.radii }
     private var geometry: TopLevelRingGeometry { viewModel.geometry }
+    private var surfacePresentation: RingSurfacePresentation {
+        RingSurfacePresentation(radii: radii, isOuterRingVisible: viewModel.isOuterRingVisible)
+    }
 
     var body: some View {
         ZStack {
-            // Visual backing for the whole ring.
+            // Persistent backing stops at the middle band's outer edge. The
+            // on-demand outer surface is rendered with `outerBand` below so a
+            // hidden submenu never leaves a misleading r2…r3 halo.
             Circle()
                 .fill(.ultraThinMaterial)
-                .frame(width: size, height: size)
+                .frame(
+                    width: surfacePresentation.persistentOuterRadius * 2,
+                    height: surfacePresentation.persistentOuterRadius * 2
+                )
 
             // Dead-zone indicator (radius ~ r0) — cancel/back region.
             Circle()
@@ -142,9 +153,10 @@ struct RingMenuView: View {
                     presentation: presentation(
                         for: item,
                         band: .inner,
-                        selected: isActive(.inner, index),
+                        hovered: isActive(.inner, index),
                         offBranch: dimmed(band: .inner, index: index)
-                    )
+                    ),
+                    showsSelectionMarker: isPersistentSelection(.inner, index)
                 )
                 .hudWedgeAccessibility(
                     presentation: wedgeAccessibility(item, band: .inner, index: index),
@@ -181,9 +193,10 @@ struct RingMenuView: View {
                     presentation: presentation(
                         for: item,
                         band: .middle,
-                        selected: isActive(.middle, index),
+                        hovered: isActive(.middle, index),
                         offBranch: dimmed(band: .middle, index: index)
                     ),
+                    showsSelectionMarker: isPersistentSelection(.middle, index),
                     showsExpandAffordance: !hiddenParent
                 )
                 .hudWedgeAccessibility(
@@ -207,34 +220,46 @@ struct RingMenuView: View {
     /// the app on selecting a sub-item, 2026-05-31). Enumerate so `index` (the arc
     /// offset the geometry needs) comes from the *current* snapshot.
     private var outerBand: some View {
-        ForEach(Array(viewModel.outerItems.enumerated()), id: \.element.id) { index, outerItem in
-            let angles = RadialGeometry.wedgeAngles(
-                band: .outer, index: index, geometry: geometry,
-                expandedParentIndex: viewModel.expandedParentIndex,
-                outerCount: viewModel.outerItems.count
-            )
-            WedgeView(
-                item: outerItem,
-                startAngle: angles.start,
-                endAngle: angles.end,
-                innerRadius: radii.r2,
-                outerRadius: radii.r3,
-                centroid: centroid(.outer, index),
-                size: size,
-                symbolOnly: false,
-                isHighlighted: isActive(.outer, index),
-                dimmed: false,
-                presentation: presentation(
-                    for: outerItem,
-                    band: .outer,
-                    selected: isActive(.outer, index),
-                    offBranch: false
+        ZStack {
+            ForEach(Array(viewModel.outerItems.enumerated()), id: \.element.id) { index, outerItem in
+                let angles = RadialGeometry.wedgeAngles(
+                    band: .outer, index: index, geometry: geometry,
+                    expandedParentIndex: viewModel.expandedParentIndex,
+                    outerCount: viewModel.outerItems.count
                 )
-            )
-            .hudWedgeAccessibility(
-                presentation: wedgeAccessibility(outerItem, band: .outer, index: index),
-                activate: { accessibilityActivate(.outer, index) }
-            )
+                OuterWedgeBacking(
+                    startAngle: angles.start,
+                    endAngle: angles.end,
+                    innerRadius: radii.r2,
+                    outerRadius: radii.r3,
+                    size: size
+                )
+                .accessibilityHidden(true)
+
+                WedgeView(
+                    item: outerItem,
+                    startAngle: angles.start,
+                    endAngle: angles.end,
+                    innerRadius: radii.r2,
+                    outerRadius: radii.r3,
+                    centroid: centroid(.outer, index),
+                    size: size,
+                    symbolOnly: false,
+                    isHighlighted: isActive(.outer, index),
+                    dimmed: false,
+                    presentation: presentation(
+                        for: outerItem,
+                        band: .outer,
+                        hovered: isActive(.outer, index),
+                        offBranch: false
+                    ),
+                    showsSelectionMarker: isPersistentSelection(.outer, index)
+                )
+                .hudWedgeAccessibility(
+                    presentation: wedgeAccessibility(outerItem, band: .outer, index: index),
+                    activate: { accessibilityActivate(.outer, index) }
+                )
+            }
         }
     }
 
@@ -243,7 +268,7 @@ struct RingMenuView: View {
     private func presentation(
         for item: RingMenuItem,
         band: Band,
-        selected: Bool,
+        hovered: Bool,
         offBranch: Bool
     ) -> WedgePresentation {
         let secondary = HUDColor(nsColor: .secondaryLabelColor)
@@ -254,26 +279,21 @@ struct RingMenuView: View {
             blue: secondary.blue,
             alpha: 0.2
         )
-        let accent = HUDColor(nsColor: .controlAccentColor) ?? normalWedge
         let foreground = HUDColor(nsColor: .labelColor) ?? .white
         let resolution = viewModel.colorResolution(
             for: item,
             band: band,
-            application: .init(
-                wedge: selected ? accent : normalWedge,
-                icon: selected ? .white : foreground
-            ),
+            application: .init(wedge: normalWedge, icon: foreground),
             backdrop: HUDColor(nsColor: .windowBackgroundColor) ?? .black
         )
-        let state: WedgePresentation.State = selected
-            ? .selected
-            : (offBranch ? .offBranch(opacity: dimOpacity) : .normal)
         return WedgePresentation(
             wedgeColor: resolution.requestedWedge,
             iconColor: resolution.renderedIcon,
             labelColor: resolution.renderedLabel,
             orientation: viewModel.iconOrientation(for: band),
-            state: state
+            state: WedgePresentation.state(
+                hovered: hovered, offBranch: offBranch, dimOpacity: dimOpacity
+            )
         )
     }
 
@@ -301,12 +321,18 @@ struct RingMenuView: View {
         viewModel.activeSelection == ActiveSelection(band: band, index: index)
     }
 
+    private func isPersistentSelection(_ band: Band, _ index: Int) -> Bool {
+        persistentSelection == ActiveSelection(band: band, index: index)
+    }
+
     private func wedgeAccessibility(
         _ item: RingMenuItem, band: Band, index: Int, unavailableReason: String? = nil
     ) -> RingWedgeAccessibility {
         let name = band == .inner ? "Inner" : (band == .middle ? "Middle" : "Outer")
         return RingWedgeAccessibility(
-            item: item, band: name, position: index, selected: isActive(band, index),
+            item: item, band: name, position: index,
+            selected: persistentSelection.map { $0 == ActiveSelection(band: band, index: index) }
+                ?? isActive(band, index),
             unavailableReason: unavailableReason,
             identifierPrefix: accessibilityIdentifierPrefix
         )

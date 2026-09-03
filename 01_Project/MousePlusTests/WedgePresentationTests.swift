@@ -2,6 +2,24 @@ import XCTest
 @testable import MousePlus
 
 final class WedgePresentationTests: XCTestCase {
+    func testPersistentMaterialStopsAtMiddleEdgeWithoutOuterSurface() {
+        let radii = BandRadii(r0: 10, r1: 20, r2: 30, r3: 40)
+        let presentation = RingSurfacePresentation(radii: radii, isOuterRingVisible: false)
+
+        XCTAssertEqual(presentation.persistentOuterRadius, 30)
+        XCTAssertNil(presentation.localizedOuterInnerRadius)
+        XCTAssertNil(presentation.localizedOuterOuterRadius)
+    }
+
+    func testVisibleOuterSurfaceIsLocalizedFromMiddleToOuterEdge() {
+        let radii = BandRadii(r0: 10, r1: 20, r2: 30, r3: 40)
+        let presentation = RingSurfacePresentation(radii: radii, isOuterRingVisible: true)
+
+        XCTAssertEqual(presentation.persistentOuterRadius, 30)
+        XCTAssertEqual(presentation.localizedOuterInnerRadius, 30)
+        XCTAssertEqual(presentation.localizedOuterOuterRadius, 40)
+    }
+
     func testUprightOrientationNeverRotates() {
         for midpoint in [-450.0, 0, 90, 180, 270, 720] {
             XCTAssertEqual(
@@ -67,6 +85,36 @@ final class WedgePresentationTests: XCTestCase {
         XCTAssertEqual(presentation.labelColor, label)
         XCTAssertEqual(presentation.orientation, .radial)
         XCTAssertGreaterThan(presentation.emphasisOpacity, 0)
+    }
+
+    func testPersistentEditorSelectionIsNeutralUntilActuallyHovered() {
+        let selected = WedgeInteractionPresentation(
+            hovered: false, persistentlySelected: true, offBranch: false, dimOpacity: 0.3
+        )
+        let hovered = WedgeInteractionPresentation(
+            hovered: true, persistentlySelected: true, offBranch: false, dimOpacity: 0.3
+        )
+
+        XCTAssertEqual(selected.state, .normal)
+        XCTAssertTrue(selected.showsSelectionMarker)
+        XCTAssertEqual(hovered.state, .hovered)
+        XCTAssertTrue(hovered.showsSelectionMarker)
+    }
+
+    func testHoverEmphasisPreservesResolvedWedgeAndIconColors() {
+        let wedge = HUDColor(red: 0.12, green: 0.34, blue: 0.56)
+        let icon = HUDColor(red: 0.93, green: 0.82, blue: 0.71)
+        let normal = WedgePresentation(
+            wedgeColor: wedge, iconColor: icon, labelColor: icon, state: .normal
+        )
+        let hovered = WedgePresentation(
+            wedgeColor: wedge, iconColor: icon, labelColor: icon, state: .hovered
+        )
+
+        XCTAssertEqual(normal.wedgeColor, hovered.wedgeColor)
+        XCTAssertEqual(normal.iconColor, hovered.iconColor)
+        XCTAssertEqual(normal.labelColor, hovered.labelColor)
+        XCTAssertGreaterThan(hovered.emphasisOpacity, normal.emphasisOpacity)
     }
 
     private func rotation(_ orientation: IconOrientation, _ degrees: Double) -> Double {

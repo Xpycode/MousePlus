@@ -96,12 +96,13 @@ struct RingPreviewSelector: View {
                 interactionEnabled: false,
                 accessibilityIdentifierPrefix: "menuItems.preview.wedge",
                 exposesCenterSettings: false,
-                onAccessibilitySelection: applyAccessibilitySelection
+                onAccessibilitySelection: applyAccessibilitySelection,
+                persistentSelection: editorActiveSelection
             )
                 .allowsHitTesting(false)
             HUDPreviewInteractionView(
                 snapshot: snapshot,
-                onHover: { preview.activeSelection = $0 ?? editorActiveSelection },
+                onHover: { preview.activeSelection = $0 },
                 onRevealChange: { if $0 { revealPreviewOuterRing() } },
                 onIntent: apply,
                 onDeleteIntent: delete
@@ -157,11 +158,7 @@ struct RingPreviewSelector: View {
         preview.innerItems = model.inner
         preview.middleItems = model.middle
         preview.hudCustomization = model.hudCustomization
-        syncPreviewSelection()
-    }
-
-    private func syncPreviewSelection() {
-        preview.activeSelection = editorActiveSelection
+        preview.activeSelection = nil
     }
 
     private var editorActiveSelection: ActiveSelection? {

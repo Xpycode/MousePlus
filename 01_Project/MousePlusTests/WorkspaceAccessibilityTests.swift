@@ -85,6 +85,26 @@ final class WorkspaceAccessibilityTests: XCTestCase {
         XCTAssertTrue(snapshot.outer.isEmpty)
     }
 
+    func testOuterAccessibilityAppearsOnlyWithPolicyResolvedSurface() {
+        let child = RingMenuItem(
+            label: "Left", icon: "arrow.left", actionType: .windowSnap
+        )
+
+        for visible in [false, true] {
+            let snapshot = RingAccessibilitySnapshot(
+                innerItems: [], middleItems: [], outerItems: [child],
+                selected: nil, outerVisible: visible
+            )
+            let surface = RingSurfacePresentation(
+                radii: BandRadii(r0: 10, r1: 20, r2: 30, r3: 40),
+                isOuterRingVisible: visible
+            )
+
+            XCTAssertEqual(snapshot.outer.isEmpty, !visible)
+            XCTAssertEqual(surface.localizedOuterOuterRadius == nil, !visible)
+        }
+    }
+
     func testPreviewUsesDistinctIdentifiersAndAnnouncesSelection() {
         let item = RingMenuItem(label: "Mission Control", icon: "rectangle.3.group", actionType: .custom)
         let snapshot = RingAccessibilitySnapshot(
