@@ -41,18 +41,18 @@ Close the sustained-use HUD redesign by fixing every failure found during signed
 
 ### Wave 2 — Runtime geometry and preview fidelity
 
-- [ ] **2.1: Make outside-click dismissal circular and complete** → `01_Project/MousePlus/Services/DismissMonitor.swift`, `01_Project/MousePlus/Controllers/RingWindowController.swift`, `01_Project/MousePlus/MousePlusApp.swift`, tests
+- [x] **2.1: Make outside-click dismissal circular and complete** → `01_Project/MousePlus/Services/DismissMonitor.swift`, `01_Project/MousePlus/Controllers/RingWindowController.swift`, `01_Project/MousePlus/MousePlusApp.swift`, tests
   - Keep the global monitor for clicks delivered to other apps; add a local panel click path that converts the event into panel coordinates and dismisses only when distance from HUD center exceeds `r3`.
   - Preserve wedge clicks, center clicks, trigger events, and the `dismissOnClickOutside` preference.
   - Success: desktop/other-app clicks and transparent-corner clicks dismiss; points inside the circular HUD do not; monitors are removed on every close path.
   - Backpressure: pure geometry boundary tests plus monitor/controller lifecycle tests and signed corner-click verification.
 
-- [ ] **2.2: Render only the outer surface allowed by policy** → `01_Project/MousePlus/Views/RingMenuView.swift`, `01_Project/MousePlus/Views/Components/WedgeView.swift`, presentation tests
+- [x] **2.2: Render only the outer surface allowed by policy** → `01_Project/MousePlus/Views/RingMenuView.swift`, `01_Project/MousePlus/Views/Components/WedgeView.swift`, presentation tests
   - Draw the persistent material/background only through `r2`; add the localized outer backing and wedges only when `isOuterRingVisible` is true.
   - Success: Hidden has no visible `r2…r3` surface, Reveal adds it only after its latch, and Always shows it after a submenu parent expands.
   - Backpressure: `WedgePresentationTests`, accessibility snapshots, and signed screenshots for all three policies.
 
-- [ ] **2.3: Separate editor selection from runtime hover presentation** → `01_Project/MousePlus/Views/MenuEditor/RingPreviewSelector.swift`, `01_Project/MousePlus/Views/RingMenuView.swift`, `01_Project/MousePlus/Views/Components/WedgeView.swift`, color/presentation tests
+- [x] **2.3: Separate editor selection from runtime hover presentation** → `01_Project/MousePlus/Views/MenuEditor/RingPreviewSelector.swift`, `01_Project/MousePlus/Views/RingMenuView.swift`, `01_Project/MousePlus/Views/Components/WedgeView.swift`, color/presentation tests
   - Keep persistent editor selection as a neutral outline/marker; drive accent/emphasis only from actual preview hover. Resolve semantic application colors once through the shared presentation path.
   - Success: the selected item remains discoverable without washing its configured color, and unhovered preview/live pixels use the same resolved wedge/icon colors.
   - Backpressure: pure state/color tests plus side-by-side signed screenshot comparison in light and dark appearances.
@@ -109,6 +109,6 @@ Close the sustained-use HUD redesign by fixing every failure found during signed
 | Wave | Started | Completed | Commits |
 |------|---------|-----------|---------|
 | 1 | 2026-09-03 | 2026-09-03 | Circular reorder and shared outer-ring policy implemented; 35 focused tests passed |
-| 2 | | | |
+| 2 | 2026-09-03 | 2026-09-03 | Circular dismissal, policy-gated outer surfaces, and neutral preview selection implemented; 48 combined focused tests passed |
 | 3 | | | |
 | 4 | | | |

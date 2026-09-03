@@ -13,7 +13,7 @@
 <!-- When done: /log moves to tasks-archive.md -->
 
 - [x] Wave 1: Fix circular reordering and unify outer-ring policy state
-- [ ] Wave 2: Fix circular dismissal, outer geometry, and preview/runtime color fidelity
+- [x] Wave 2: Fix circular dismissal, outer geometry, and preview/runtime color fidelity
 - [ ] Wave 3: Add confirmed HUD movement and visible lifecycle controls
 - [ ] Wave 4: Run adversarial, automated, signed-live, and documentation closure gates
 
