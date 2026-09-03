@@ -121,6 +121,90 @@ final class MenuEditorModelRegressionTests: XCTestCase {
         XCTAssertEqual(model.middle.last?.label, "First")
     }
 
+    func testTopLevelReorderWrapsEarlierInBothBandsAndPreservesSelection() {
+        for band in [EditorBand.inner, .middle] {
+            let first = RingMenuItem(label: "First", icon: "1.circle", actionType: .custom)
+            let second = RingMenuItem(label: "Second", icon: "2.circle", actionType: .custom)
+            let third = RingMenuItem(label: "Third", icon: "3.circle", actionType: .custom)
+            let model = MenuEditorModel(
+                inner: band == .inner ? [first, second, third] : [],
+                middle: band == .middle ? [first, second, third] : []
+            )
+            model.selection = SlotSelection(band: band, itemID: first.id, subItemID: nil)
+
+            model.moveItem(id: first.id, in: band, by: -1)
+
+            let items = band == .inner ? model.inner : model.middle
+            XCTAssertEqual(items.map(\.id), [second.id, third.id, first.id])
+            XCTAssertEqual(model.selection?.itemID, first.id)
+        }
+    }
+
+    func testTopLevelReorderWrapsLaterInBothBandsAndPreservesSelection() {
+        for band in [EditorBand.inner, .middle] {
+            let first = RingMenuItem(label: "First", icon: "1.circle", actionType: .custom)
+            let second = RingMenuItem(label: "Second", icon: "2.circle", actionType: .custom)
+            let third = RingMenuItem(label: "Third", icon: "3.circle", actionType: .custom)
+            let model = MenuEditorModel(
+                inner: band == .inner ? [first, second, third] : [],
+                middle: band == .middle ? [first, second, third] : []
+            )
+            model.selection = SlotSelection(band: band, itemID: third.id, subItemID: nil)
+
+            model.moveItem(id: third.id, in: band, by: 1)
+
+            let items = band == .inner ? model.inner : model.middle
+            XCTAssertEqual(items.map(\.id), [third.id, first.id, second.id])
+            XCTAssertEqual(model.selection?.itemID, third.id)
+        }
+    }
+
+    func testTopLevelReorderOneItemBandsRemainStableInBothDirections() {
+        for band in [EditorBand.inner, .middle] {
+            let only = RingMenuItem(label: "Only", icon: "circle", actionType: .custom)
+            let model = MenuEditorModel(
+                inner: band == .inner ? [only] : [],
+                middle: band == .middle ? [only] : []
+            )
+            model.selection = SlotSelection(band: band, itemID: only.id, subItemID: nil)
+
+            model.moveItem(id: only.id, in: band, by: -1)
+            model.moveItem(id: only.id, in: band, by: 1)
+
+            let items = band == .inner ? model.inner : model.middle
+            XCTAssertEqual(items.map(\.id), [only.id])
+            XCTAssertEqual(model.selection?.itemID, only.id)
+        }
+    }
+
+    func testTopLevelReorderRepeatedWrapCompletesMultipleRevolutions() {
+        let first = RingMenuItem(label: "First", icon: "1.circle", actionType: .custom)
+        let selected = RingMenuItem(label: "Selected", icon: "2.circle", actionType: .custom)
+        let third = RingMenuItem(label: "Third", icon: "3.circle", actionType: .custom)
+        let model = MenuEditorModel(inner: [], middle: [first, selected, third])
+        model.selection = SlotSelection(band: .middle, itemID: selected.id, subItemID: nil)
+
+        for _ in 0..<7 { model.moveItem(id: selected.id, in: .middle, by: 1) }
+        XCTAssertEqual(model.middle.map(\.id), [first.id, third.id, selected.id])
+
+        for _ in 0..<8 { model.moveItem(id: selected.id, in: .middle, by: -1) }
+        XCTAssertEqual(model.middle.map(\.id), [selected.id, first.id, third.id])
+        XCTAssertEqual(model.selection?.itemID, selected.id)
+    }
+
+    func testTopLevelReorderRejectsUnknownIdentityAndHandlesExtremeOffsets() {
+        let first = RingMenuItem(label: "First", icon: "1.circle", actionType: .custom)
+        let selected = RingMenuItem(label: "Selected", icon: "2.circle", actionType: .custom)
+        let third = RingMenuItem(label: "Third", icon: "3.circle", actionType: .custom)
+        let model = MenuEditorModel(inner: [first, selected, third], middle: [])
+
+        model.moveItem(id: UUID(), in: .inner, by: Int.max)
+        XCTAssertEqual(model.inner.map(\.id), [first.id, selected.id, third.id])
+
+        model.moveItem(id: selected.id, in: .inner, by: Int.min)
+        XCTAssertEqual(model.inner.map(\.id), [first.id, third.id, selected.id])
+    }
+
     func testSubItemBindingFollowsUUIDAfterSiblingRemoval() throws {
         let first = RingMenuItem(label: "First", icon: "1.circle", actionType: .custom)
         let selected = RingMenuItem(label: "Selected", icon: "2.circle", actionType: .custom)

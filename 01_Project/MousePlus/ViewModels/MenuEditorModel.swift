@@ -373,15 +373,30 @@ final class MenuEditorModel {
         }
     }
 
-    /// Move a top-level item left/right within its band (offset `-1` / `+1`).
+    /// Move a top-level item circularly within its band (offset `-1` / `+1`).
     ///
-    /// Clamps at the array ends — moving past an edge is a no-op.
+    /// Offsets are reduced before index arithmetic so even extreme values cannot
+    /// overflow. Missing identities and empty bands remain safe no-ops.
     func moveItem(id: UUID, in band: EditorBand, by offset: Int) {
         let keyPath = arrayKeyPath(for: band)
-        guard let index = self[keyPath: keyPath].firstIndex(where: { $0.id == id }) else { return }
+        let count = self[keyPath: keyPath].count
+        guard count > 0,
+              let index = self[keyPath: keyPath].firstIndex(where: { $0.id == id }) else { return }
 
-        let target = index + offset
-        guard target >= 0, target < self[keyPath: keyPath].count else { return }
+        let normalizedOffset = offset % count
+        let target: Int
+        if normalizedOffset >= 0 {
+            let distanceToEnd = count - index
+            target = normalizedOffset >= distanceToEnd
+                ? normalizedOffset - distanceToEnd
+                : index + normalizedOffset
+        } else {
+            let magnitude = -normalizedOffset
+            target = magnitude > index
+                ? count - (magnitude - index)
+                : index - magnitude
+        }
+        guard target != index else { return }
 
         let item = self[keyPath: keyPath].remove(at: index)
         self[keyPath: keyPath].insert(item, at: target)
