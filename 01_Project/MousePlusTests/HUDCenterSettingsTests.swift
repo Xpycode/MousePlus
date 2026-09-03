@@ -58,4 +58,47 @@ final class HUDCenterSettingsTests: XCTestCase {
         XCTAssertEqual(HUDCenterSettingsControl.accessibilityIdentifier, "hud.center.settings")
         XCTAssertEqual(HUDCenterSettingsControl.accessibilityLabel, "Open MousePlus Settings")
     }
+
+    func testMovementAtThresholdRemainsAClick() {
+        var state = HUDCenterDragState()
+        state.begin(at: .zero)
+
+        XCTAssertNil(state.move(to: CGPoint(x: 4, y: 0)))
+        XCTAssertTrue(state.end())
+    }
+
+    func testMovementBeyondThresholdBecomesDragAndCannotClick() {
+        var state = HUDCenterDragState()
+        state.begin(at: CGPoint(x: 10, y: 10))
+
+        XCTAssertEqual(state.move(to: CGPoint(x: 13, y: 14)), CGSize(width: 3, height: 4))
+        XCTAssertTrue(state.isDragging)
+        XCTAssertEqual(state.move(to: CGPoint(x: 15, y: 17)), CGSize(width: 2, height: 3))
+        XCTAssertFalse(state.end())
+    }
+
+    func testPanelOriginClampsToVisibleFrameIncludingOffsetScreens() {
+        let visible = CGRect(x: -1200, y: 30, width: 1000, height: 800)
+        let size = CGSize(width: 472, height: 472)
+
+        XCTAssertEqual(
+            HUDPanelGeometry.clampedOrigin(CGPoint(x: -1400, y: -100), size: size, in: visible),
+            CGPoint(x: -1200, y: 30)
+        )
+        XCTAssertEqual(
+            HUDPanelGeometry.clampedOrigin(CGPoint(x: 0, y: 900), size: size, in: visible),
+            CGPoint(x: -672, y: 358)
+        )
+    }
+
+    func testPanelLargerThanScreenPinsToMinimumEdges() {
+        XCTAssertEqual(
+            HUDPanelGeometry.clampedOrigin(
+                CGPoint(x: 100, y: 100),
+                size: CGSize(width: 600, height: 700),
+                in: CGRect(x: 20, y: 40, width: 500, height: 500)
+            ),
+            CGPoint(x: 20, y: 40)
+        )
+    }
 }

@@ -76,6 +76,20 @@ final class RingWindowController {
         hostingView = nil
     }
 
+    /// Moves the current HUD by a global-coordinate delta while keeping the
+    /// complete square inside the visible frame of the screen under the pointer.
+    func movePanel(by delta: CGSize) {
+        guard let panel else { return }
+        let proposed = CGPoint(x: panel.frame.origin.x + delta.width,
+                               y: panel.frame.origin.y + delta.height)
+        let screen = NSScreen.screens.first { $0.frame.contains(NSEvent.mouseLocation) }
+            ?? panel.screen ?? NSScreen.main
+        let origin = screen.map {
+            HUDPanelGeometry.clampedOrigin(proposed, size: panel.frame.size, in: $0.visibleFrame)
+        } ?? proposed
+        panel.setFrameOrigin(origin)
+    }
+
     /// Computes the panel origin (bottom-left, global screen coords) for a square
     /// of `side` centered on `point`, clamped to stay fully within the
     /// `visibleFrame` of the screen under the cursor.
@@ -135,5 +149,20 @@ final class RingWindowController {
 enum HUDDismissalGeometry {
     static func isOutsideHUD(point: CGPoint, center: CGPoint, outerRadius: CGFloat) -> Bool {
         hypot(point.x - center.x, point.y - center.y) > outerRadius
+    }
+}
+
+enum HUDPanelGeometry {
+    static func clampedOrigin(_ origin: CGPoint, size: CGSize, in visibleFrame: CGRect) -> CGPoint {
+        CGPoint(
+            x: clamped(origin.x, extent: size.width, min: visibleFrame.minX, max: visibleFrame.maxX),
+            y: clamped(origin.y, extent: size.height, min: visibleFrame.minY, max: visibleFrame.maxY)
+        )
+    }
+
+    private static func clamped(_ value: CGFloat, extent: CGFloat,
+                                min minimum: CGFloat, max maximum: CGFloat) -> CGFloat {
+        guard maximum - minimum >= extent else { return minimum }
+        return Swift.min(Swift.max(value, minimum), maximum - extent)
     }
 }

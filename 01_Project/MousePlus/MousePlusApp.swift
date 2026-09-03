@@ -228,8 +228,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         ringViewModel.isVisible = true
 
         let mouseLocation = NSEvent.mouseLocation
-        let view = RingMenuView(viewModel: ringViewModel,
-                                commitsOnPointerRelease: commitsOnPointerRelease)
+        let view = RingMenuView(
+            viewModel: ringViewModel,
+            commitsOnPointerRelease: commitsOnPointerRelease,
+            onCenterDrag: commitsOnPointerRelease ? { [weak controller] delta in
+                controller?.movePanel(by: delta)
+            } : nil
+        )
         controller.show(at: mouseLocation, content: view)
 
         startDismissMonitor()

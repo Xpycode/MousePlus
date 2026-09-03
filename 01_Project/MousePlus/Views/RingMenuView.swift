@@ -25,6 +25,8 @@ struct RingMenuView: View {
     /// commits from the in-panel pointer release. Keeping these paths exclusive
     /// prevents an expandable parent from being committed twice on one release.
     var commitsOnPointerRelease = true
+    /// Tap-toggle only: moving the native center control relocates the panel.
+    var onCenterDrag: ((CGSize) -> Void)?
 
     /// Runtime and preview use distinct stable namespaces. The preview supplies
     /// a selection callback so VoiceOver activation edits without executing.
@@ -75,9 +77,15 @@ struct RingMenuView: View {
                 .fill(.secondary.opacity(0.3))
                 .frame(width: radii.r0 * 2, height: radii.r0 * 2)
 
-            HUDCenterSettingsControl {
-                viewModel.activateCenterSettings()
-            }
+            HUDCenterSettingsControl(
+                action: { viewModel.activateCenterSettings() },
+                draggingEnabled: onCenterDrag != nil,
+                onDrag: { delta in
+                    // A center drag is panel manipulation, never wedge selection.
+                    viewModel.activeSelection = nil
+                    onCenterDrag?(delta)
+                }
+            )
             .frame(width: radii.r0 * 1.6, height: radii.r0 * 1.6)
             .allowsHitTesting(interactionEnabled)
             .accessibilityHidden(!exposesCenterSettings)
