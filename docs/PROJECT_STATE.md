@@ -11,18 +11,18 @@
 
 ## Now
 
-- **Phase:** HUD redesign implementation in progress (Waves 1–6 complete). <!-- Phase changed: 2026-09-02 -->
-- **Focus:** Complete signed live verification and adversarial review in Wave 7.
+- **Phase:** HUD redesign live-verification remediation planned. <!-- Phase changed: 2026-09-03 -->
+- **Focus:** Fix signed-test failures in circular reorder, dismissal, preview fidelity, outer visibility, movement, and lifecycle access.
 - **Blocker:** Advanced Logitech-button support is paused until raw MX4/MX3S captures resolve the HID++ strategy decision.
-- **Next:** Resume Wave 7 signed verification on the refined tabbed Menu Items workspace, then run adversarial review and feature closure.
+- **Next:** Confirm the proposed center-drag and General-pane Quit placements, then execute `IMPLEMENTATION_PLAN.md` Wave 1.
 
 ## Recent
 
+- **2026-09-03:** Signed user testing confirmed direct MousePlus mouse binding works without the BetterMouse shortcut beep, and exposed six closure issues: reorder does not wrap, transparent-corner clicks do not dismiss, preview selection distorts color comparison, outer visibility leaves misleading geometry, HUD movement lacks a safe interaction, and quitting is inaccessible when the status item is invisible. A focused four-wave remediation plan now replaces the completed implementation plan.
 - **2026-09-03:** Live Wave 7 review reshaped Menu Items into a compact tabbed inspector, made deletion and action testing discoverable, preserved wedge selection, removed ambiguous preview-add hotspots, and deferred clearer per-ring/label controls.
 - **2026-09-03:** Wrapped HUD redesign Waves 5–6 with atomic reset/recovery, complete accessibility and migration coverage, shared runtime presentation resolution, and a clean 180-test/build gate.
 - **2026-09-02:** Completed HUD redesign Wave 6; five migration fixtures and editor-to-runtime coverage now validate canonical persistence, unknown actions, geometry, visibility, orientation, colors, retry behavior, and preview safety. The clean gate passed 180/180 tests and a Debug build with no new HUD warnings or forbidden controls.
 - **2026-09-02:** Completed HUD redesign Wave 5; reset/undo/backup restore now atomically preserve full HUD customization, and runtime/editor accessibility exposes configured visible wedges while omitting empty and policy-hidden positions. The 24 focused tests and signed Debug build passed.
-- **2026-09-02:** Completed HUD redesign Wave 4; editor persistence/live apply, layout and color controls, per-item overrides, and the non-executing AppKit preview passed the complete unit target and signed Debug build.
 
 ## Progress
 
@@ -31,7 +31,7 @@
 - **Ring UI:** Complete and live-verified.
 - **HUD actions:** Window snapping and keystroke delivery work; menu-bar mirror, app switching, system toggles, and screenshots remain.
 - **Trigger backend:** Keyboard and standard mouse paths work; advanced Logitech HID++ support remains undecided.
-- **Task tracker:** 0/1 current sprint; 12/14 tracked items complete overall (86%).
+- **Task tracker:** 0/4 current sprint; 12/17 tracked items complete overall (71%).
 
 ## Risks and Backlog
 
@@ -65,4 +65,4 @@
 
 ## Resume
 
-Continue at `IMPLEMENTATION_PLAN.md` Wave 7. Preserve the passing Wave 1–6 contracts and clean automated gate while completing signed user-driven verification and adversarial review; the working tree is intentionally uncommitted.
+Confirm the Wave 3 UI placements, then continue at `IMPLEMENTATION_PLAN.md` Wave 1. Preserve the passing redesign contracts and clean automated baseline while fixing the signed-test findings before repeating user-driven verification.

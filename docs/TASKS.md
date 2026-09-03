@@ -12,7 +12,10 @@
 <!-- Active work. Populated by /plan or /execute. Keep focused (3-7 tasks). -->
 <!-- When done: /log moves to tasks-archive.md -->
 
-- [ ] Wave 7: Complete signed live verification and adversarial review
+- [ ] Wave 1: Fix circular reordering and unify outer-ring policy state
+- [ ] Wave 2: Fix circular dismissal, outer geometry, and preview/runtime color fidelity
+- [ ] Wave 3: Add confirmed HUD movement and visible lifecycle controls
+- [ ] Wave 4: Run adversarial, automated, signed-live, and documentation closure gates
 
 ---
 
