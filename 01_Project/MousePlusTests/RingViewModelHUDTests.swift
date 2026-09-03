@@ -4,6 +4,55 @@ import CoreGraphics
 
 @MainActor
 final class RingViewModelHUDTests: XCTestCase {
+    func testOuterRingPolicyStateTransitionMatrix() {
+        struct Case {
+            let policy: OuterRingVisibility
+            let hasParent: Bool
+            let itemCount: Int
+            let traversal: [Bool]
+            let eligible: Bool
+            let visible: Bool
+        }
+        let cases = [
+            Case(policy: .alwaysVisible, hasParent: false, itemCount: 2,
+                 traversal: [], eligible: false, visible: false),
+            Case(policy: .alwaysVisible, hasParent: true, itemCount: 0,
+                 traversal: [], eligible: false, visible: false),
+            Case(policy: .alwaysVisible, hasParent: true, itemCount: 2,
+                 traversal: [], eligible: true, visible: true),
+            Case(policy: .revealBeyondInnerRing, hasParent: true, itemCount: 2,
+                 traversal: [], eligible: true, visible: false),
+            Case(policy: .revealBeyondInnerRing, hasParent: true, itemCount: 2,
+                 traversal: [false], eligible: true, visible: false),
+            Case(policy: .revealBeyondInnerRing, hasParent: true, itemCount: 2,
+                 traversal: [true], eligible: true, visible: false),
+            Case(policy: .revealBeyondInnerRing, hasParent: true, itemCount: 2,
+                 traversal: [true, false], eligible: true, visible: true),
+            Case(policy: .alwaysHidden, hasParent: true, itemCount: 2,
+                 traversal: [true, false], eligible: false, visible: false)
+        ]
+
+        for testCase in cases {
+            var state = OuterRingPolicyState()
+            var result = state.transition(
+                policy: testCase.policy,
+                hasExpandedParent: testCase.hasParent,
+                itemCount: testCase.itemCount
+            )
+            for position in testCase.traversal {
+                state = result.state
+                result = state.transition(
+                    policy: testCase.policy,
+                    hasExpandedParent: testCase.hasParent,
+                    itemCount: testCase.itemCount,
+                    pointerIsAtOrInsideInnerBoundary: position
+                )
+            }
+            XCTAssertEqual(result.isEligible, testCase.eligible, "\(testCase)")
+            XCTAssertEqual(result.isVisible, testCase.visible, "\(testCase)")
+        }
+    }
+
     func testEffectiveGeometryResolvesAutoAndFixedBandsIndependently() {
         var customization = HUDCustomization.default
         customization.inner.layout = HUDRingLayout(
@@ -68,6 +117,16 @@ final class RingViewModelHUDTests: XCTestCase {
         XCTAssertFalse(model.hasRevealedOuterRing)
         model.updateActive(at: CGPoint(x: 20.001, y: 0), center: .zero)
         XCTAssertTrue(model.hasRevealedOuterRing)
+    }
+
+    func testTraversalBeforeExpansionDoesNotRevealNewBranch() {
+        let model = conditionalModel()
+        model.updateActive(at: CGPoint(x: 20, y: 0), center: .zero)
+        model.expand(0)
+        model.updateActive(at: CGPoint(x: 21, y: 0), center: .zero)
+
+        XCTAssertFalse(model.hasRevealedOuterRing)
+        XCTAssertFalse(model.isOuterRingVisible)
     }
 
     func testRevealStateIsTriggerNeutral() {

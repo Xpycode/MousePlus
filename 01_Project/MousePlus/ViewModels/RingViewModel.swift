@@ -17,6 +17,52 @@ enum RingCommitResult: Equatable {
     case executed
 }
 
+/// Pure outer-ring policy state shared by the runtime HUD and editor preview.
+/// Pointer history is scoped to one expanded branch and must be reset whenever
+/// that branch changes.
+struct OuterRingPolicyState: Equatable {
+    private(set) var hasEnteredInnerBoundary = false
+    private(set) var hasRevealedOuterRing = false
+
+    struct Resolution: Equatable {
+        let state: OuterRingPolicyState
+        let isEligible: Bool
+        let isVisible: Bool
+    }
+
+    static func parentIsAvailable(policy: OuterRingVisibility, itemCount: Int) -> Bool {
+        policy != .alwaysHidden && itemCount > 0
+    }
+
+    func transition(
+        policy: OuterRingVisibility,
+        hasExpandedParent: Bool,
+        itemCount: Int,
+        pointerIsAtOrInsideInnerBoundary: Bool? = nil
+    ) -> Resolution {
+        let eligible = hasExpandedParent && Self.parentIsAvailable(
+            policy: policy, itemCount: itemCount
+        )
+        guard eligible else {
+            return Resolution(state: OuterRingPolicyState(), isEligible: false, isVisible: false)
+        }
+
+        var next = self
+        if policy == .revealBeyondInnerRing,
+           let pointerIsAtOrInsideInnerBoundary {
+            if pointerIsAtOrInsideInnerBoundary {
+                next.hasEnteredInnerBoundary = true
+            } else if next.hasEnteredInnerBoundary {
+                next.hasRevealedOuterRing = true
+            }
+        }
+
+        let visible = policy == .alwaysVisible
+            || (policy == .revealBeyondInnerRing && next.hasRevealedOuterRing)
+        return Resolution(state: next, isEligible: true, isVisible: visible)
+    }
+}
+
 /// Main view model for the concentric wedge ring menu.
 ///
 /// State model (§2):
@@ -64,20 +110,19 @@ final class RingViewModel {
     }
 
     /// Whether conditional reveal has latched for this invocation.
-    private(set) var hasRevealedOuterRing = false
+    private var outerRingPolicyState = OuterRingPolicyState()
+    var hasRevealedOuterRing: Bool { outerRingPolicyState.hasRevealedOuterRing }
     /// A reveal is only eligible after the pointer has reached `r1` or inward.
-    private(set) var hasEnteredInnerBoundary = false
-    private var wasAtOrInsideInnerBoundary = false
+    var hasEnteredInnerBoundary: Bool { outerRingPolicyState.hasEnteredInnerBoundary }
 
     /// Policy-resolved visibility. Availability still requires an expanded,
     /// non-empty parent branch.
     var isOuterRingVisible: Bool {
-        guard expandedParentIndex != nil, !outerItems.isEmpty else { return false }
-        switch hudCustomization.outerRingVisibility {
-        case .alwaysVisible: return true
-        case .revealBeyondInnerRing: return hasRevealedOuterRing
-        case .alwaysHidden: return false
-        }
+        outerRingPolicyState.transition(
+            policy: hudCustomization.outerRingVisibility,
+            hasExpandedParent: expandedParentIndex != nil,
+            itemCount: outerItems.count
+        ).isVisible
     }
 
     /// Whether the ring is on screen.
@@ -224,7 +269,10 @@ final class RingViewModel {
         if selection.band == .middle, item.hasSubItems {
             // A hidden submenu parent is unavailable. In particular, never
             // execute its marker action as a fallback.
-            guard hudCustomization.outerRingVisibility != .alwaysHidden else {
+            guard OuterRingPolicyState.parentIsAvailable(
+                policy: hudCustomization.outerRingVisibility,
+                itemCount: item.subItems?.count ?? 0
+            ) else {
                 activeSelection = nil
                 return .unavailable
             }
@@ -260,16 +308,21 @@ final class RingViewModel {
     /// outer band from its sub-items. Switching branches = just call with a
     /// different index (re-points in place, no explicit collapse needed).
     func expand(_ parentIndex: Int) {
-        guard hudCustomization.outerRingVisibility != .alwaysHidden else { return }
         guard parentIndex >= 0, parentIndex < middleItems.count else { return }
+        let items = middleItems[parentIndex].subItems ?? []
+        guard OuterRingPolicyState.parentIsAvailable(
+            policy: hudCustomization.outerRingVisibility, itemCount: items.count
+        ) else { return }
+        outerRingPolicyState = OuterRingPolicyState()
         expandedParentIndex = parentIndex
-        outerItems = middleItems[parentIndex].subItems ?? []
+        outerItems = items
     }
 
     /// Collapse the outer band back to root (keeps any active selection).
     func collapse() {
         expandedParentIndex = nil
         outerItems = []
+        outerRingPolicyState = OuterRingPolicyState()
     }
 
     /// Returns `true` when Escape should close the invocation. An expanded
@@ -292,9 +345,7 @@ final class RingViewModel {
         activeSelection = nil
         expandedParentIndex = nil
         outerItems = []
-        hasRevealedOuterRing = false
-        hasEnteredInnerBoundary = false
-        wasAtOrInsideInnerBoundary = false
+        outerRingPolicyState = OuterRingPolicyState()
     }
 
     // MARK: - Effective geometry and invocation reveal
@@ -318,16 +369,12 @@ final class RingViewModel {
     }
 
     private func updateRevealState(at point: CGPoint, center: CGPoint) {
-        guard hudCustomization.outerRingVisibility == .revealBeyondInnerRing,
-              !hasRevealedOuterRing else { return }
-
         let radius = hypot(point.x - center.x, point.y - center.y)
-        let isAtOrInside = radius <= radii.r1
-        if isAtOrInside {
-            hasEnteredInnerBoundary = true
-        } else if hasEnteredInnerBoundary && wasAtOrInsideInnerBoundary {
-            hasRevealedOuterRing = true
-        }
-        wasAtOrInsideInnerBoundary = isAtOrInside
+        outerRingPolicyState = outerRingPolicyState.transition(
+            policy: hudCustomization.outerRingVisibility,
+            hasExpandedParent: expandedParentIndex != nil,
+            itemCount: outerItems.count,
+            pointerIsAtOrInsideInnerBoundary: radius <= radii.r1
+        ).state
     }
 }

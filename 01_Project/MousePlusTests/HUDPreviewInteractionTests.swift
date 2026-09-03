@@ -6,6 +6,42 @@ final class HUDPreviewInteractionTests: XCTestCase {
     private let center = CGPoint.zero
     private let radii = BandRadii(r0: 10, r1: 20, r2: 30, r3: 40)
 
+    func testOuterVisibilityStateMatrixMatchesSharedPolicy() {
+        for policy in OuterRingVisibility.allCases {
+            for parent in [nil, 0] {
+                for outerCount in [0, 2] {
+                    var state = HUDPreviewInteractionState()
+                    let snapshot = makeSnapshot(
+                        visibility: policy, parent: parent, outerCount: outerCount
+                    )
+                    _ = state.pointerMoved(
+                        to: point(angle: 0, radius: 20), center: center, snapshot: snapshot
+                    )
+                    _ = state.pointerMoved(
+                        to: point(angle: 0, radius: 21), center: center, snapshot: snapshot
+                    )
+                    let expected = OuterRingPolicyState()
+                        .transition(
+                            policy: policy,
+                            hasExpandedParent: parent != nil,
+                            itemCount: outerCount,
+                            pointerIsAtOrInsideInnerBoundary: true
+                        ).state
+                        .transition(
+                            policy: policy,
+                            hasExpandedParent: parent != nil,
+                            itemCount: outerCount,
+                            pointerIsAtOrInsideInnerBoundary: false
+                        ).isVisible
+                    XCTAssertEqual(
+                        state.outerIsVisible(snapshot: snapshot), expected,
+                        "policy: \(policy), parent: \(String(describing: parent)), count: \(outerCount)"
+                    )
+                }
+            }
+        }
+    }
+
     func testEveryVisibleBandProducesOnlyEditorIntent() {
         let state = HUDPreviewInteractionState()
         let snapshot = makeSnapshot(visibility: .alwaysVisible, parent: 0, outerCount: 2)
@@ -58,12 +94,12 @@ final class HUDPreviewInteractionTests: XCTestCase {
                                snapshot: snapshot)
         _ = state.pointerMoved(to: point(angle: 0, radius: 21), center: center,
                                snapshot: snapshot)
-        XCTAssertTrue(state.outerIsVisible)
+        XCTAssertTrue(state.outerIsVisible(snapshot: snapshot))
         XCTAssertEqual(state.intent(at: outer, center: center, snapshot: snapshot),
                        .selectOuter(0))
         _ = state.pointerMoved(to: point(angle: 0, radius: 15), center: center,
                                snapshot: snapshot)
-        XCTAssertTrue(state.outerIsVisible)
+        XCTAssertTrue(state.outerIsVisible(snapshot: snapshot))
     }
 
     func testAlwaysHiddenOuterHasNoIntent() {

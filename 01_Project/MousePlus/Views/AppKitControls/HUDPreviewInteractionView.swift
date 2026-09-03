@@ -25,22 +25,19 @@ struct HUDPreviewInteractionSnapshot {
 /// Pure preview-only pointer state. It deliberately has no ActionService,
 /// application-launching callback, or runtime commit path.
 struct HUDPreviewInteractionState {
-    private(set) var hasEnteredInnerBoundary = false
-    private(set) var hasRevealedOuterRing = false
+    private var outerRingPolicyState = OuterRingPolicyState()
 
     mutating func resetReveal() {
-        hasEnteredInnerBoundary = false
-        hasRevealedOuterRing = false
+        outerRingPolicyState = OuterRingPolicyState()
     }
 
     mutating func pointerMoved(to point: CGPoint, center: CGPoint,
                                snapshot: HUDPreviewInteractionSnapshot) -> ActiveSelection? {
         let distance = hypot(point.x - center.x, point.y - center.y)
-        if distance <= snapshot.radii.r1 { hasEnteredInnerBoundary = true }
-        if snapshot.outerVisibility == .revealBeyondInnerRing,
-           hasEnteredInnerBoundary, distance > snapshot.radii.r1 {
-            hasRevealedOuterRing = true
-        }
+        outerRingPolicyState = resolution(
+            snapshot: snapshot,
+            pointerIsAtOrInsideInnerBoundary: distance <= snapshot.radii.r1
+        ).state
         return selection(at: point, center: center, snapshot: snapshot)
     }
 
@@ -56,16 +53,13 @@ struct HUDPreviewInteractionState {
         return nil
     }
 
-    var outerIsVisible: Bool { hasRevealedOuterRing }
+    func outerIsVisible(snapshot: HUDPreviewInteractionSnapshot) -> Bool {
+        resolution(snapshot: snapshot).isVisible
+    }
 
     private func selection(at point: CGPoint, center: CGPoint,
                            snapshot: HUDPreviewInteractionSnapshot) -> ActiveSelection? {
-        let visible: Bool
-        switch snapshot.outerVisibility {
-        case .alwaysVisible: visible = true
-        case .revealBeyondInnerRing: visible = hasRevealedOuterRing
-        case .alwaysHidden: visible = false
-        }
+        let visible = resolution(snapshot: snapshot).isVisible
         let hit = RadialGeometry.hitTest(
             point: point, center: center, radii: snapshot.radii,
             geometry: snapshot.geometry,
@@ -75,6 +69,18 @@ struct HUDPreviewInteractionState {
             outerCount: visible ? snapshot.outerCount : 0
         )
         return hit.map { ActiveSelection(band: $0.band, index: $0.index) }
+    }
+
+    private func resolution(
+        snapshot: HUDPreviewInteractionSnapshot,
+        pointerIsAtOrInsideInnerBoundary: Bool? = nil
+    ) -> OuterRingPolicyState.Resolution {
+        outerRingPolicyState.transition(
+            policy: snapshot.outerVisibility,
+            hasExpandedParent: snapshot.expandedParentIndex != nil,
+            itemCount: snapshot.outerCount,
+            pointerIsAtOrInsideInnerBoundary: pointerIsAtOrInsideInnerBoundary
+        )
     }
 
 }
@@ -122,9 +128,10 @@ struct HUDPreviewInteractionView: NSViewRepresentable {
         }
 
         func moved(_ point: CGPoint, center: CGPoint) {
-            let before = state.outerIsVisible
+            let before = state.outerIsVisible(snapshot: snapshot)
             onHover(state.pointerMoved(to: point, center: center, snapshot: snapshot))
-            if before != state.outerIsVisible { onRevealChange(state.outerIsVisible) }
+            let after = state.outerIsVisible(snapshot: snapshot)
+            if before != after { onRevealChange(after) }
         }
 
         func clicked(_ point: CGPoint, center: CGPoint) {
