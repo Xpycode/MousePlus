@@ -23,8 +23,6 @@
 - **2026-09-03:** Signed user testing confirmed direct MousePlus mouse binding works without the BetterMouse shortcut beep, and exposed six closure issues: reorder does not wrap, transparent-corner clicks do not dismiss, preview selection distorts color comparison, outer visibility leaves misleading geometry, HUD movement lacks a safe interaction, and quitting is inaccessible when the status item is invisible. A focused four-wave remediation plan now replaces the completed implementation plan.
 - **2026-09-03:** Live Wave 7 review reshaped Menu Items into a compact tabbed inspector, made deletion and action testing discoverable, preserved wedge selection, removed ambiguous preview-add hotspots, and deferred clearer per-ring/label controls.
 - **2026-09-03:** Wrapped HUD redesign Waves 5–6 with atomic reset/recovery, complete accessibility and migration coverage, shared runtime presentation resolution, and a clean 180-test/build gate.
-- **2026-09-02:** Completed HUD redesign Wave 6; five migration fixtures and editor-to-runtime coverage now validate canonical persistence, unknown actions, geometry, visibility, orientation, colors, retry behavior, and preview safety. The clean gate passed 180/180 tests and a Debug build with no new HUD warnings or forbidden controls.
-- **2026-09-02:** Completed HUD redesign Wave 5; reset/undo/backup restore now atomically preserve full HUD customization, and runtime/editor accessibility exposes configured visible wedges while omitting empty and policy-hidden positions. The 24 focused tests and signed Debug build passed.
 
 ## Progress
 
@@ -33,7 +31,7 @@
 - **Ring UI:** Complete and live-verified.
 - **HUD actions:** Window snapping and keystroke delivery work; menu-bar mirror, app switching, system toggles, and screenshots remain.
 - **Trigger backend:** Keyboard and standard mouse paths work; advanced Logitech HID++ support remains undecided.
-- **Task tracker:** 2/4 current sprint; 14/17 tracked items complete overall (82%).
+- **Task tracker:** 0/2 current sprint; 14/17 tracked items complete overall (82%).
 
 ## Risks and Backlog
 

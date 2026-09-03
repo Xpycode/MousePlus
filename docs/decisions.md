@@ -4,6 +4,27 @@ This file tracks the WHY behind technical and design decisions.
 
 ---
 
+## 2026-09-03 - HUD remediation interaction and presentation boundaries
+
+**Context:** Signed review exposed four related ambiguities: transparent corners of the square panel
+did not count as outside the circular HUD; hidden outer rings retained a misleading backing surface;
+editor selection reused runtime hover styling and obscured configured colors; and the HUD lacked a
+safe move gesture or visible Quit path when the status item was unavailable.
+
+**Decision:** Local panel clicks use the circular `r3` boundary while global clicks continue to
+represent other applications. Outer visibility controls hit testing, wedges, and localized backing
+through one shared policy transition. Persistent editor selection is a neutral marker independent
+of hover and color resolution. Wave 3 will use a 4 pt threshold on the existing center Settings
+control for tap-toggle dragging, and General will expose a native Quit MousePlus button.
+
+**Consequences:** Clicks exactly on `r3` remain inside; only transparent corners beyond it dismiss.
+Hidden outer branches leave no visual or interactive surface. Preview selection no longer alters
+the color being compared with runtime. Center clicks must still open Settings, drags must never
+execute wedges, hold-release stays pointer-anchored, and panel movement must clamp to the active
+screen. Quitting remains available even if status-item rendering fails.
+
+---
+
 ## 2026-09-02 - Sustained-use HUD customization contracts
 
 **Context:** MousePlus had become useful for one established workflow, but its fixed shared-spoke
