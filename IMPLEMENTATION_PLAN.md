@@ -73,7 +73,7 @@ Close the sustained-use HUD redesign by fixing every failure found during signed
 
 ### Wave 4 — Regression gate and feature closure
 
-- [ ] **4.1: Run focused adversarial review** → all changed source/tests/spec/docs
+- [x] **4.1: Run focused adversarial review** → all changed source/tests/spec/docs
   - Review array wrap identity, exact `r3` boundaries, monitor teardown, stale selection after dismissal, reveal reset per invocation, color contrast under selection/dimming, drag-vs-click arbitration, multi-display clamping, and quit during pending save.
   - Success: two focused passes leave no unresolved high-severity finding.
   - Backpressure: rerun every affected narrow suite after fixes.
