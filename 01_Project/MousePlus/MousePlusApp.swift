@@ -299,6 +299,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 guard let self else { return }
                 guard self.configuration.behavior.dismissOnClickOutside else { return }
                 self.closeRing()
+            },
+            onLocalMouseDown: { [weak self] event in
+                guard let self,
+                      self.configuration.behavior.dismissOnClickOutside,
+                      self.ringWindowController?.shouldDismiss(
+                        forLocalMouseDown: event,
+                        outerRadius: self.ringViewModel.radii.r3
+                      ) == true else { return false }
+                self.closeRing()
+                return true
             }
         )
     }
@@ -341,6 +351,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationWillTerminate(_ notification: Notification) {
+        closeRing()
         triggerEventTask?.cancel()
         triggerService?.stop()
         settingsHotkeyMonitor?.stop()

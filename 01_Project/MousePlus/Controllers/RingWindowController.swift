@@ -33,6 +33,20 @@ final class RingWindowController {
         panel?.isVisible ?? false
     }
 
+    /// Returns whether a local mouse-down targets this panel outside the HUD's
+    /// circular outer edge. The square panel includes transparent padding and
+    /// corners, so panel-frame containment alone is insufficient.
+    func shouldDismiss(forLocalMouseDown event: NSEvent, outerRadius: CGFloat) -> Bool {
+        guard let panel, let hostingView, event.window === panel else { return false }
+        let point = hostingView.convert(event.locationInWindow, from: nil)
+        let center = CGPoint(x: hostingView.bounds.midX, y: hostingView.bounds.midY)
+        return HUDDismissalGeometry.isOutsideHUD(
+            point: point,
+            center: center,
+            outerRadius: outerRadius
+        )
+    }
+
     func show<Content: View>(at point: NSPoint, content: Content) {
         let panel = createPanel()
         let side = panelSide
@@ -114,5 +128,12 @@ final class RingWindowController {
         panel.acceptsMouseMovedEvents = true
 
         return panel
+    }
+}
+
+/// Pure boundary math shared by runtime dismissal and focused unit tests.
+enum HUDDismissalGeometry {
+    static func isOutsideHUD(point: CGPoint, center: CGPoint, outerRadius: CGFloat) -> Bool {
+        hypot(point.x - center.x, point.y - center.y) > outerRadius
     }
 }
