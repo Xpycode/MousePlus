@@ -2,6 +2,11 @@ import Foundation
 
 /// A single item in the ring menu
 struct RingMenuItem: Identifiable, Codable, Hashable {
+    enum ColorRole: Sendable {
+        case wedge
+        case icon
+    }
+
     let id: UUID
     var label: String
     var icon: String          // SF Symbol name or app bundle identifier
@@ -9,6 +14,8 @@ struct RingMenuItem: Identifiable, Codable, Hashable {
     var actionData: String    // App bundle ID, command, etc.
     var subItems: [RingMenuItem]?
     var keystrokePayload: KeystrokePayload?
+    var wedgeColor: HUDColor?
+    var iconColor: HUDColor?
 
     init(
         id: UUID = UUID(),
@@ -17,7 +24,9 @@ struct RingMenuItem: Identifiable, Codable, Hashable {
         actionType: ActionType,
         actionData: String = "",
         subItems: [RingMenuItem]? = nil,
-        keystrokePayload: KeystrokePayload? = nil
+        keystrokePayload: KeystrokePayload? = nil,
+        wedgeColor: HUDColor? = nil,
+        iconColor: HUDColor? = nil
     ) {
         self.id = id
         self.label = label
@@ -26,6 +35,8 @@ struct RingMenuItem: Identifiable, Codable, Hashable {
         self.actionData = actionData
         self.subItems = subItems
         self.keystrokePayload = keystrokePayload
+        self.wedgeColor = wedgeColor
+        self.iconColor = iconColor
     }
 
     var hasSubItems: Bool {
@@ -33,8 +44,22 @@ struct RingMenuItem: Identifiable, Codable, Hashable {
         return !subItems.isEmpty
     }
 
+    func color(for role: ColorRole) -> HUDColor? {
+        switch role {
+        case .wedge: wedgeColor
+        case .icon: iconColor
+        }
+    }
+
+    mutating func setColor(_ color: HUDColor?, for role: ColorRole) {
+        switch role {
+        case .wedge: wedgeColor = color
+        case .icon: iconColor = color
+        }
+    }
+
     private enum CodingKeys: String, CodingKey {
-        case id, label, icon, actionType, actionData, subItems, keystrokePayload
+        case id, label, icon, actionType, actionData, subItems, keystrokePayload, wedgeColor, iconColor
         case keyboardShortcut
     }
 
@@ -46,6 +71,8 @@ struct RingMenuItem: Identifiable, Codable, Hashable {
         actionType = try container.decode(ActionType.self, forKey: .actionType)
         actionData = try container.decodeIfPresent(String.self, forKey: .actionData) ?? ""
         subItems = try container.decodeIfPresent([RingMenuItem].self, forKey: .subItems)
+        wedgeColor = try? container.decode(HUDColor.self, forKey: .wedgeColor)
+        iconColor = try? container.decode(HUDColor.self, forKey: .iconColor)
 
         if let canonical = try container.decodeIfPresent(KeystrokePayload.self, forKey: .keystrokePayload) {
             keystrokePayload = canonical
@@ -66,6 +93,8 @@ struct RingMenuItem: Identifiable, Codable, Hashable {
         try container.encode(actionData, forKey: .actionData)
         try container.encodeIfPresent(subItems, forKey: .subItems)
         try container.encodeIfPresent(keystrokePayload, forKey: .keystrokePayload)
+        try container.encodeIfPresent(wedgeColor, forKey: .wedgeColor)
+        try container.encodeIfPresent(iconColor, forKey: .iconColor)
         // `keyboardShortcut` is decode-only and intentionally retired.
     }
 }

@@ -10,6 +10,7 @@
 //  no AppDelegate, no views, no timers).
 //
 
+import AppKit
 import SwiftUI
 import Observation
 
@@ -74,6 +75,9 @@ final class MenuEditorModel {
     /// Working copy of the middle ring (primary actions, may drill into sub-items).
     var middle: [RingMenuItem]
 
+    /// Working copy of menu/ring HUD layout and appearance customization.
+    var hudCustomization: HUDCustomization
+
     /// The currently selected editor slot, if any.
     var selection: SlotSelection?
 
@@ -86,9 +90,14 @@ final class MenuEditorModel {
     ///
     /// `RingMenuItem` is a value-type struct, so assigning the arrays already
     /// makes independent copies — edits here never touch the caller's arrays.
-    init(inner: [RingMenuItem], middle: [RingMenuItem]) {
+    init(
+        inner: [RingMenuItem],
+        middle: [RingMenuItem],
+        hudCustomization: HUDCustomization = .default
+    ) {
         self.inner = inner
         self.middle = middle
+        self.hudCustomization = hudCustomization
         enforceInnerInvariants()
         normalizeSnapPayloads()
     }
@@ -102,6 +111,7 @@ final class MenuEditorModel {
         let previousSelection = preservingSelection ? selection : nil
         inner = config.inner
         middle = config.middle
+        hudCustomization = config.hudCustomization
         enforceInnerInvariants()
         normalizeSnapPayloads()
         selection = previousSelection.flatMap(validSelection)
@@ -217,6 +227,87 @@ final class MenuEditorModel {
                 self.middle[parentIndex].subItems?[subIndex] = Self.normalizingTypeSwitch(old: old, new: newValue)
             }
         )
+    }
+
+    /// AppKit color-well binding tied to one stable item identity. A stale control
+    /// can therefore never write into whichever item is selected afterward.
+    func colorBinding(
+        forItem id: UUID,
+        band: EditorBand,
+        role: RingMenuItem.ColorRole
+    ) -> Binding<NSColor?>? {
+        guard let item = binding(forItem: id, band: band) else { return nil }
+        return appKitColorBinding(item: item, role: role)
+    }
+
+    /// Identity-safe color binding for an outer/sub-item.
+    func colorBinding(
+        forSubItem id: UUID,
+        ofMiddle parentID: UUID,
+        role: RingMenuItem.ColorRole
+    ) -> Binding<NSColor?>? {
+        guard let item = binding(forSubItem: id, ofMiddle: parentID) else { return nil }
+        return appKitColorBinding(item: item, role: role)
+    }
+
+    /// Resolves the same item -> ring -> menu -> application chain used by the HUD.
+    /// Requested and rendered values remain separate so the editor can explain a
+    /// contrast substitution without overwriting the configured color.
+    func colorResolution(
+        for item: RingMenuItem,
+        selection: SlotSelection,
+        application: HUDColorResolver.Overrides? = nil,
+        backdrop: HUDColor? = nil
+    ) -> HUDColorResolver.Resolution {
+        let appearance: HUDRingAppearance
+        if selection.subItemID != nil {
+            appearance = hudCustomization.outerAppearance
+        } else {
+            appearance = selection.band == .inner
+                ? hudCustomization.inner.appearance
+                : hudCustomization.middle.appearance
+        }
+        return HUDColorResolver.resolve(
+            application: application ?? Self.editorApplicationColors,
+            menu: .init(wedge: hudCustomization.wedgeColor, icon: hudCustomization.iconColor),
+            ring: .init(wedge: appearance.wedgeColor, icon: appearance.iconColor),
+            item: .init(wedge: item.wedgeColor, icon: item.iconColor),
+            backdrop: backdrop ?? Self.editorBackdropColor
+        )
+    }
+
+    private func appKitColorBinding(
+        item: Binding<RingMenuItem>,
+        role: RingMenuItem.ColorRole
+    ) -> Binding<NSColor?> {
+        Binding(
+            get: { item.wrappedValue.color(for: role)?.nsColor },
+            set: { newColor in
+                var value = item.wrappedValue
+                if let newColor {
+                    // A failed sRGB conversion rejects the edit and preserves the
+                    // previous requested value, per the persistence contract.
+                    guard let converted = HUDColor(nsColor: newColor) else { return }
+                    value.setColor(converted, for: role)
+                } else {
+                    value.setColor(nil, for: role)
+                }
+                item.wrappedValue = value
+            }
+        )
+    }
+
+    private static var editorApplicationColors: HUDColorResolver.Overrides {
+        let secondary = HUDColor(nsColor: .secondaryLabelColor)
+            ?? HUDColor(red: 0.5, green: 0.5, blue: 0.5)
+        return .init(
+            wedge: HUDColor(red: secondary.red, green: secondary.green, blue: secondary.blue, alpha: 0.2),
+            icon: HUDColor(nsColor: .labelColor) ?? .white
+        )
+    }
+
+    private static var editorBackdropColor: HUDColor {
+        HUDColor(nsColor: .windowBackgroundColor) ?? .black
     }
 
     // MARK: - Mutation API
@@ -356,6 +447,7 @@ final class MenuEditorModel {
         var config = base
         config.inner = inner
         config.middle = middle
+        config.hudCustomization = hudCustomization
         return config
     }
 

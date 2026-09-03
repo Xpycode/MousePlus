@@ -126,6 +126,8 @@ struct AppKitSegmentedControl: NSViewRepresentable {
     let labels: [String]
     @Binding var selection: Int
     var isEnabled = true
+    var tooltips: [String]? = nil
+    var minimumSegmentWidth: CGFloat = 64
     var accessibilityLabel: String
     var accessibilityIdentifier: String? = nil
 
@@ -134,6 +136,7 @@ struct AppKitSegmentedControl: NSViewRepresentable {
     func makeNSView(context: Context) -> NSSegmentedControl {
         let control = NSSegmentedControl(labels: labels, trackingMode: .selectOne, target: context.coordinator, action: #selector(Coordinator.changed(_:)))
         control.segmentStyle = .rounded
+        control.setAccessibilityRole(.radioGroup)
         return control
     }
 
@@ -142,16 +145,214 @@ struct AppKitSegmentedControl: NSViewRepresentable {
         if control.segmentCount != labels.count {
             control.segmentCount = labels.count
         }
-        for (index, label) in labels.enumerated() { control.setLabel(label, forSegment: index) }
+        for (index, label) in labels.enumerated() {
+            control.setLabel(label, forSegment: index)
+            control.setToolTip(tooltips?[safe: index] ?? label, forSegment: index)
+            control.setWidth(max(minimumSegmentWidth, measuredSegmentWidth(label)), forSegment: index)
+        }
         control.selectedSegment = labels.indices.contains(selection) ? selection : -1
         control.isEnabled = isEnabled
-        configureAccessibility(control, label: accessibilityLabel, identifier: accessibilityIdentifier)
+        configureAccessibility(
+            control,
+            label: accessibilityLabel,
+            identifier: accessibilityIdentifier,
+            value: labels.indices.contains(selection) ? labels[selection] : "No selection"
+        )
     }
 
     @MainActor final class Coordinator: NSObject {
         var selection: Binding<Int>
         init(selection: Binding<Int>) { self.selection = selection }
         @objc func changed(_ sender: NSSegmentedControl) { selection.wrappedValue = sender.selectedSegment }
+    }
+
+    private func measuredSegmentWidth(_ label: String) -> CGFloat {
+        ceil((label as NSString).size(withAttributes: [.font: NSFont.systemFont(ofSize: NSFont.systemFontSize)]).width) + 24
+    }
+}
+
+/// A native color well paired with an explicit Inherit state.
+/// `nil` represents inheritance; switching back to Custom restores the last chosen color.
+struct AppKitColorWell: NSViewRepresentable {
+    @Binding var color: NSColor?
+    var defaultCustomColor: NSColor = .controlAccentColor
+    var isEnabled = true
+    var accessibilityLabel: String
+    var accessibilityIdentifier: String? = nil
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator(color: $color, defaultCustomColor: defaultCustomColor)
+    }
+
+    func makeNSView(context: Context) -> NSStackView {
+        let inherit = NSButton(
+            checkboxWithTitle: "Inherit",
+            target: context.coordinator,
+            action: #selector(Coordinator.inheritChanged(_:))
+        )
+        let well = NSColorWell()
+        well.target = context.coordinator
+        well.action = #selector(Coordinator.colorChanged(_:))
+        well.colorWellStyle = .minimal
+        let stack = NSStackView(views: [inherit, well])
+        stack.orientation = .horizontal
+        stack.alignment = .centerY
+        stack.spacing = 8
+        context.coordinator.inheritButton = inherit
+        context.coordinator.colorWell = well
+        return stack
+    }
+
+    func updateNSView(_ stack: NSStackView, context: Context) {
+        context.coordinator.color = $color
+        context.coordinator.defaultCustomColor = defaultCustomColor
+        let inherits = color == nil
+        if let color { context.coordinator.lastCustomColor = color }
+        context.coordinator.inheritButton?.state = inherits ? .on : .off
+        context.coordinator.inheritButton?.isEnabled = isEnabled
+        context.coordinator.colorWell?.isEnabled = isEnabled && !inherits
+        context.coordinator.colorWell?.color = color ?? context.coordinator.lastCustomColor
+        configureAccessibility(
+            stack,
+            label: accessibilityLabel,
+            identifier: accessibilityIdentifier,
+            value: inherits ? "Inherit" : "Custom"
+        )
+        if let identifier = accessibilityIdentifier {
+            context.coordinator.inheritButton?.setAccessibilityIdentifier("\(identifier).inherit")
+            context.coordinator.colorWell?.setAccessibilityIdentifier("\(identifier).color")
+        }
+        context.coordinator.inheritButton?.setAccessibilityLabel("Inherit \(accessibilityLabel)")
+        context.coordinator.colorWell?.setAccessibilityLabel(accessibilityLabel)
+    }
+
+    @MainActor final class Coordinator: NSObject {
+        var color: Binding<NSColor?>
+        var defaultCustomColor: NSColor
+        var lastCustomColor: NSColor
+        weak var inheritButton: NSButton?
+        weak var colorWell: NSColorWell?
+
+        init(color: Binding<NSColor?>, defaultCustomColor: NSColor) {
+            self.color = color
+            self.defaultCustomColor = defaultCustomColor
+            self.lastCustomColor = color.wrappedValue ?? defaultCustomColor
+        }
+
+        @objc func inheritChanged(_ sender: NSButton) {
+            if sender.state == .on {
+                if let current = color.wrappedValue { lastCustomColor = current }
+                color.wrappedValue = nil
+                colorWell?.isEnabled = false
+            } else {
+                let restored = lastCustomColor
+                color.wrappedValue = restored
+                colorWell?.color = restored
+                colorWell?.isEnabled = true
+            }
+        }
+
+        @objc func colorChanged(_ sender: NSColorWell) {
+            lastCustomColor = sender.color
+            color.wrappedValue = sender.color
+        }
+    }
+}
+
+/// Compact native integer input. Text entry and the stepper share one clamped binding.
+struct AppKitCountControl: NSViewRepresentable {
+    @Binding var value: Int
+    let range: ClosedRange<Int>
+    var isEnabled = true
+    var accessibilityLabel: String
+    var accessibilityIdentifier: String? = nil
+
+    func makeCoordinator() -> Coordinator { Coordinator(value: $value, range: range) }
+
+    func makeNSView(context: Context) -> NSStackView {
+        let field = NSTextField()
+        field.alignment = .right
+        field.formatter = NumberFormatter.integerFormatter(range: range)
+        field.delegate = context.coordinator
+        field.frame.size.width = 44
+        field.setContentHuggingPriority(.required, for: .horizontal)
+        let stepper = NSStepper()
+        stepper.target = context.coordinator
+        stepper.action = #selector(Coordinator.stepperChanged(_:))
+        let stack = NSStackView(views: [field, stepper])
+        stack.orientation = .horizontal
+        stack.alignment = .centerY
+        stack.spacing = 4
+        context.coordinator.field = field
+        context.coordinator.stepper = stepper
+        return stack
+    }
+
+    func updateNSView(_ stack: NSStackView, context: Context) {
+        context.coordinator.value = $value
+        context.coordinator.range = range
+        let clamped = min(max(value, range.lowerBound), range.upperBound)
+        context.coordinator.field?.integerValue = clamped
+        context.coordinator.field?.isEnabled = isEnabled
+        context.coordinator.stepper?.minValue = Double(range.lowerBound)
+        context.coordinator.stepper?.maxValue = Double(range.upperBound)
+        context.coordinator.stepper?.integerValue = clamped
+        context.coordinator.stepper?.isEnabled = isEnabled
+        configureAccessibility(stack, label: accessibilityLabel, identifier: accessibilityIdentifier, value: String(clamped))
+        if let identifier = accessibilityIdentifier {
+            context.coordinator.field?.setAccessibilityIdentifier("\(identifier).field")
+            context.coordinator.stepper?.setAccessibilityIdentifier("\(identifier).stepper")
+        }
+        context.coordinator.field?.setAccessibilityLabel(accessibilityLabel)
+        context.coordinator.stepper?.setAccessibilityLabel("Adjust \(accessibilityLabel)")
+    }
+
+    @MainActor final class Coordinator: NSObject, NSTextFieldDelegate {
+        var value: Binding<Int>
+        var range: ClosedRange<Int>
+        weak var field: NSTextField?
+        weak var stepper: NSStepper?
+
+        init(value: Binding<Int>, range: ClosedRange<Int>) {
+            self.value = value
+            self.range = range
+        }
+
+        @objc func stepperChanged(_ sender: NSStepper) { commit(sender.integerValue) }
+
+        func controlTextDidEndEditing(_ notification: Notification) {
+            guard let field = notification.object as? NSTextField else { return }
+            commit(field.integerValue)
+        }
+
+        func control(_ control: NSControl, textShouldEndEditing fieldEditor: NSText) -> Bool {
+            guard Int(fieldEditor.string) != nil else {
+                NSSound.beep()
+                return false
+            }
+            return true
+        }
+
+        private func commit(_ proposed: Int) {
+            let clamped = min(max(proposed, range.lowerBound), range.upperBound)
+            value.wrappedValue = clamped
+            field?.integerValue = clamped
+            stepper?.integerValue = clamped
+        }
+    }
+}
+
+private extension Collection {
+    subscript(safe index: Index) -> Element? { indices.contains(index) ? self[index] : nil }
+}
+
+private extension NumberFormatter {
+    static func integerFormatter(range: ClosedRange<Int>) -> NumberFormatter {
+        let formatter = NumberFormatter()
+        formatter.allowsFloats = false
+        formatter.minimum = NSNumber(value: range.lowerBound)
+        formatter.maximum = NSNumber(value: range.upperBound)
+        return formatter
     }
 }
 

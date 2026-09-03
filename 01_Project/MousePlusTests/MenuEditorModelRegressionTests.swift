@@ -1,8 +1,84 @@
 import XCTest
+import AppKit
 @testable import MousePlus
 
 @MainActor
 final class MenuEditorModelRegressionTests: XCTestCase {
+    func testItemColorResolutionFallsBackThroughRingAndMenuImmediately() throws {
+        let item = RingMenuItem(label: "Item", icon: "circle", actionType: .custom)
+        var customization = HUDCustomization()
+        let menuWedge = HUDColor(red: 0.1, green: 0.2, blue: 0.3)
+        let ringWedge = HUDColor(red: 0.3, green: 0.4, blue: 0.5)
+        let itemWedge = HUDColor(red: 0.7, green: 0.8, blue: 0.9)
+        customization.wedgeColor = menuWedge
+        customization.middle.appearance.wedgeColor = ringWedge
+        let model = MenuEditorModel(inner: [], middle: [item], hudCustomization: customization)
+        let selection = SlotSelection(band: .middle, itemID: item.id, subItemID: nil)
+
+        XCTAssertEqual(model.colorResolution(for: model.middle[0], selection: selection).requestedWedge, ringWedge)
+
+        let binding = try XCTUnwrap(model.colorBinding(forItem: item.id, band: .middle, role: .wedge))
+        binding.wrappedValue = itemWedge.nsColor
+        XCTAssertEqual(model.colorResolution(for: model.middle[0], selection: selection).requestedWedge, itemWedge)
+
+        binding.wrappedValue = nil
+        XCTAssertEqual(model.colorResolution(for: model.middle[0], selection: selection).requestedWedge, ringWedge)
+
+        model.hudCustomization.middle.appearance.wedgeColor = nil
+        XCTAssertEqual(model.colorResolution(for: model.middle[0], selection: selection).requestedWedge, menuWedge)
+    }
+
+    func testStaleColorBindingCannotWriteAcrossRapidSelectionChanges() throws {
+        let first = RingMenuItem(label: "First", icon: "1.circle", actionType: .custom)
+        let second = RingMenuItem(label: "Second", icon: "2.circle", actionType: .custom)
+        let model = MenuEditorModel(inner: [], middle: [first, second])
+        model.selection = SlotSelection(band: .middle, itemID: first.id, subItemID: nil)
+        let firstBinding = try XCTUnwrap(model.colorBinding(forItem: first.id, band: .middle, role: .icon))
+
+        model.selection = SlotSelection(band: .middle, itemID: second.id, subItemID: nil)
+        let chosen = HUDColor(red: 0.25, green: 0.5, blue: 0.75)
+        firstBinding.wrappedValue = chosen.nsColor
+
+        XCTAssertEqual(model.middle.first(where: { $0.id == first.id })?.iconColor, chosen)
+        XCTAssertNil(model.middle.first(where: { $0.id == second.id })?.iconColor)
+    }
+
+    func testUnconvertibleItemColorEditPreservesPreviousValue() throws {
+        let previous = HUDColor(red: 0.2, green: 0.4, blue: 0.6)
+        let item = RingMenuItem(
+            label: "Item", icon: "circle", actionType: .custom, wedgeColor: previous
+        )
+        let model = MenuEditorModel(inner: [], middle: [item])
+        let binding = try XCTUnwrap(model.colorBinding(forItem: item.id, band: .middle, role: .wedge))
+
+        binding.wrappedValue = NSColor(patternImage: NSImage(size: NSSize(width: 1, height: 1)))
+
+        XCTAssertEqual(model.middle[0].wedgeColor, previous)
+    }
+
+    func testHUDCustomizationAndItemOverridesLoadAndMergeWithoutLosingSelection() throws {
+        let item = RingMenuItem(label: "Item", icon: "circle", actionType: .custom)
+        let model = MenuEditorModel(inner: [], middle: [item])
+        model.selection = SlotSelection(band: .middle, itemID: item.id, subItemID: nil)
+
+        var loaded = Configuration(inner: [], middle: [item])
+        loaded.hudCustomization.inner.layout.angularOffset = 42
+        model.load(from: loaded, preservingSelection: true)
+        model.hudCustomization.outerRingVisibility = .alwaysHidden
+        let binding = try XCTUnwrap(model.binding(forItem: item.id, band: .middle))
+        binding.wrappedValue.wedgeColor = HUDColor(red: 0.2, green: 0.3, blue: 0.4)
+
+        var unrelatedBase = Configuration()
+        unrelatedBase.appearance.deadZone = 61
+        let merged = model.merged(into: unrelatedBase)
+
+        XCTAssertEqual(model.selection?.itemID, item.id)
+        XCTAssertEqual(merged.hudCustomization.inner.layout.angularOffset, 42)
+        XCTAssertEqual(merged.hudCustomization.outerRingVisibility, .alwaysHidden)
+        XCTAssertEqual(merged.middle.first?.wedgeColor, HUDColor(red: 0.2, green: 0.3, blue: 0.4))
+        XCTAssertEqual(merged.appearance.deadZone, 61)
+    }
+
     func testF7RemovingLastSnapSubItemNormalizesDirectPayload() throws {
         let child = RingMenuItem(label: "Left", icon: "rectangle.lefthalf.filled", actionType: .windowSnap, actionData: SnapZone.left.rawValue)
         let parent = RingMenuItem(label: "Snap", icon: "rectangle.split.2x1", actionType: .windowSnap, subItems: [child])

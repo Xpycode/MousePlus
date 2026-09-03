@@ -39,7 +39,11 @@ final class SettingsWorkspaceCoordinator {
     private var saveTask: Task<Bool, Never>?
     private var saveTaskID: UUID?
     private var generations: [Field: UInt] = [:]
-    private var sessionUndoMenuItems: (inner: [RingMenuItem], middle: [RingMenuItem])?
+    private var sessionUndoMenuItems: (
+        inner: [RingMenuItem],
+        middle: [RingMenuItem],
+        hudCustomization: HUDCustomization
+    )?
 
     private(set) var configuration = Configuration()
     private(set) var status: Status = .idle
@@ -101,7 +105,8 @@ final class SettingsWorkspaceCoordinator {
         // load, reset, restore). Treat an identical model/config pair as a no-op
         // so merely revealing the pane cannot manufacture a dirty save.
         guard configuration.inner != menuEditorModel.inner ||
-                configuration.middle != menuEditorModel.middle else { return }
+                configuration.middle != menuEditorModel.middle ||
+                configuration.hudCustomization != menuEditorModel.hudCustomization else { return }
         configuration = menuEditorModel.merged(into: configuration)
         markDirty([.menuItems])
         scheduleSave()
@@ -137,7 +142,11 @@ final class SettingsWorkspaceCoordinator {
             return false
         }
 
-        let previous = (inner: configuration.inner, middle: configuration.middle)
+        let previous = (
+            inner: configuration.inner,
+            middle: configuration.middle,
+            hudCustomization: configuration.hudCustomization
+        )
         do {
             try await persistence.createBackup()
             workspaceState.durableBackupAvailable = true
@@ -149,6 +158,7 @@ final class SettingsWorkspaceCoordinator {
         edit([.menuItems]) {
             $0.inner = RingMenuItem.sampleInnerItems
             $0.middle = RingMenuItem.sampleItems
+            $0.hudCustomization = .default
         }
         guard await flush() else {
             workspaceState.reset = .failed(statusMessage)
@@ -166,6 +176,7 @@ final class SettingsWorkspaceCoordinator {
         edit([.menuItems]) {
             $0.inner = previous.inner
             $0.middle = previous.middle
+            $0.hudCustomization = previous.hudCustomization
         }
         guard await flush() else {
             workspaceState.reset = .failed(statusMessage)
@@ -191,11 +202,13 @@ final class SettingsWorkspaceCoordinator {
         edit([.menuItems]) {
             $0.inner = backup.inner
             $0.middle = backup.middle
+            $0.hudCustomization = backup.hudCustomization
         }
         guard await flush() else {
             workspaceState.reset = .failed(statusMessage)
             return false
         }
+        sessionUndoMenuItems = nil
         workspaceState.reset = .idle
         return true
     }
@@ -348,6 +361,7 @@ final class SettingsWorkspaceCoordinator {
         if fields.contains(.menuItems) {
             base.inner = edited.inner
             base.middle = edited.middle
+            base.hudCustomization = edited.hudCustomization
         }
         if fields.contains(.triggers) { base.triggers = edited.triggers }
         if fields.contains(.appearance) { base.appearance = edited.appearance }

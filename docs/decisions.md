@@ -4,6 +4,52 @@ This file tracks the WHY behind technical and design decisions.
 
 ---
 
+## 2026-09-02 - Sustained-use HUD customization contracts
+
+**Context:** MousePlus had become useful for one established workflow, but its fixed shared-spoke
+geometry and save-then-resummon editing loop made broader experimentation slow. The redesign needed
+to support first-time discovery and sustained developer use without breaking existing JSON,
+misaligning rendering and hit testing, or letting the editor preview execute real actions.
+
+**Options Considered:**
+
+1. Keep one shared inner/middle spoke count and add appearance-only controls. This is the smallest
+   renderer change, but cannot provide independent spacing or rotation and preserves the preview's
+   duplicated geometry debt.
+2. Add independent per-band geometry and a hierarchy of menu/ring/item presentation overrides,
+   while making runtime and preview consume one pure geometry contract.
+3. Store fully resolved presentation on every item. This simplifies rendering but duplicates data,
+   makes inheritance changes expensive, and destroys the distinction between a requested color and
+   an accessibility fallback.
+
+**Decision:** Choose option 2. Inner and middle rings receive independent auto/fixed slot counts
+and normalized angular offsets. Icon orientation resolves from a menu default with optional ring
+overrides. Wedge and icon colors resolve application → menu → ring → item, while requested sRGB RGBA
+values remain persisted and contrast-safe rendered values are derived. Outer-ring visibility is an
+explicit three-mode setting: always visible, reveal after an outward crossing of the configured
+inner outer edge, or always hidden. Conditional reveal latches only for the current invocation.
+
+The editor preview will use one AppKit-backed interaction surface calling the same pure geometry and
+hit-test API as runtime. It can hover, reveal, and select, but has no dependency path to action
+execution. Small fixed choices use `NSSegmentedControl`; color input uses `NSColorWell`; evolving
+configuration fields use tolerant per-field decoding.
+
+**Rationale:** One geometry contract prevents renderer, hit-target, preview, and accessibility
+positions from drifting as counts and offsets diverge. Persisting intent separately from resolved
+contrast preserves user choices and makes inheritance reversible. Invocation reveal state is
+ephemeral behavior and therefore belongs in `RingViewModel.reset()` lifecycle, not JSON. Native
+AppKit controls satisfy the project's desktop UI conventions and keep options visible without
+overusing dropdowns.
+
+**Consequences:** `RadialGeometry`, `RingViewModel`, `RingMenuView`, and the editor preview must be
+refactored together around explicit per-band inputs. Legacy configurations must default to today's
+appearance and behavior. Meaningful icons/control states target WCAG 2.2 contrast of at least 3:1;
+small labels target 4.5:1. Always-hidden submenu parents preserve their data but suppress expansion
+and marker-action fallback, with an unavailable reason and Settings warning. Implementation follows
+the dependency gates in `IMPLEMENTATION_PLAN.md`.
+
+---
+
 ## 2026-01-09 - Menu Depth: Two Levels
 
 **Context:** How deep should nested menus go?

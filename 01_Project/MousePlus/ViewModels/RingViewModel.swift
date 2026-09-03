@@ -10,6 +10,13 @@ struct ActiveSelection: Equatable {
     let index: Int
 }
 
+enum RingCommitResult: Equatable {
+    case noSelection
+    case unavailable
+    case expanded
+    case executed
+}
+
 /// Main view model for the concentric wedge ring menu.
 ///
 /// State model (§2):
@@ -43,8 +50,42 @@ final class RingViewModel {
     /// keepSpokeLit, animation flags). Set from `Configuration.appearance` in `load(from:)`.
     var appearance: AppearanceConfig = .default
 
+    /// Persisted HUD policy and per-band layout loaded with the menu items.
+    var hudCustomization: HUDCustomization = .default
+
+    /// Independent effective top-level geometry after resolving auto/fixed mode.
+    var geometry: TopLevelRingGeometry {
+        TopLevelRingGeometry(
+            inner: effectiveGeometry(for: hudCustomization.inner.layout,
+                                     itemCount: innerItems.count),
+            middle: effectiveGeometry(for: hudCustomization.middle.layout,
+                                      itemCount: middleItems.count)
+        )
+    }
+
+    /// Whether conditional reveal has latched for this invocation.
+    private(set) var hasRevealedOuterRing = false
+    /// A reveal is only eligible after the pointer has reached `r1` or inward.
+    private(set) var hasEnteredInnerBoundary = false
+    private var wasAtOrInsideInnerBoundary = false
+
+    /// Policy-resolved visibility. Availability still requires an expanded,
+    /// non-empty parent branch.
+    var isOuterRingVisible: Bool {
+        guard expandedParentIndex != nil, !outerItems.isEmpty else { return false }
+        switch hudCustomization.outerRingVisibility {
+        case .alwaysVisible: return true
+        case .revealBeyondInnerRing: return hasRevealedOuterRing
+        case .alwaysHidden: return false
+        }
+    }
+
     /// Whether the ring is on screen.
-    var isVisible = false
+    var isVisible = false {
+        didSet {
+            if isVisible != oldValue { reset() }
+        }
+    }
 
     /// Frontmost application's PID, captured by the owner (AppDelegate) at
     /// ring-open — *before* our non-activating panel shows — so window/menu
@@ -68,6 +109,17 @@ final class RingViewModel {
     /// Carries no logic; it only requests the window be torn down.
     var requestClose: (() -> Void)?
 
+    /// Pure UI callback for routing the center control to Settings > Menu Items.
+    var requestOpenMenuItemsSettings: (() -> Void)?
+
+    /// Clears selectable state before either owner callback, preventing a later
+    /// hold-release from committing the wedge active before Settings was pressed.
+    func activateCenterSettings() {
+        reset()
+        requestClose?()
+        requestOpenMenuItemsSettings?()
+    }
+
     /// Locked spoke count `N` shared by inner + middle (§2.1).
     var spokeCount: Int {
         RadialGeometry.spokeCount(innerCount: innerItems.count,
@@ -83,7 +135,39 @@ final class RingViewModel {
         middleItems = config.middle
         appearance = config.appearance
         radii = config.appearance.bandRadii
+        hudCustomization = config.hudCustomization
         reset()
+    }
+
+    /// Resolves persisted menu/ring/item presentation through the same path used
+    /// by both the runtime HUD and editor preview.
+    func iconOrientation(for band: Band) -> IconOrientation {
+        ringAppearance(for: band).iconOrientation ?? hudCustomization.iconOrientation
+    }
+
+    func colorResolution(
+        for item: RingMenuItem,
+        band: Band,
+        application: HUDColorResolver.Overrides,
+        backdrop: HUDColor
+    ) -> HUDColorResolver.Resolution {
+        let ring = ringAppearance(for: band)
+        return HUDColorResolver.resolve(
+            application: application,
+            menu: .init(wedge: hudCustomization.wedgeColor,
+                        icon: hudCustomization.iconColor),
+            ring: .init(wedge: ring.wedgeColor, icon: ring.iconColor),
+            item: .init(wedge: item.wedgeColor, icon: item.iconColor),
+            backdrop: backdrop
+        )
+    }
+
+    private func ringAppearance(for band: Band) -> HUDRingAppearance {
+        switch band {
+        case .inner: hudCustomization.inner.appearance
+        case .middle: hudCustomization.middle.appearance
+        case .outer: hudCustomization.outerAppearance
+        }
     }
 
     // MARK: - Item lookup
@@ -106,12 +190,15 @@ final class RingViewModel {
     /// Maps a pointer location to the current `activeSelection` using
     /// `RadialGeometry.hitTest` with the live spoke/expansion state (§2.2).
     func updateActive(at point: CGPoint, center: CGPoint) {
+        updateRevealState(at: point, center: center)
         if let hit = RadialGeometry.hitTest(point: point,
                                             center: center,
                                             radii: radii,
-                                            spokeCount: spokeCount,
-                                            expandedParentIndex: expandedParentIndex,
-                                            outerCount: outerItems.count) {
+                                            geometry: geometry,
+                                            innerItemCount: innerItems.count,
+                                            middleItemCount: middleItems.count,
+                                            expandedParentIndex: isOuterRingVisible ? expandedParentIndex : nil,
+                                            outerCount: isOuterRingVisible ? outerItems.count : 0) {
             activeSelection = ActiveSelection(band: hit.band, index: hit.index)
         } else {
             activeSelection = nil
@@ -124,18 +211,25 @@ final class RingViewModel {
     ///   - Expandable middle wedge → re-point expansion in place (`expand`).
     ///   - Any direct item (inner / middle-direct / outer) → execute + `reset()`.
     ///   - Dead zone (nil) → cancel (no-op).
-    func commitActive() {
+    @discardableResult
+    func commitActive() -> RingCommitResult {
         guard let selection = activeSelection,
               let item = item(for: selection) else {
             // Dead zone or empty/placeholder wedge → cancel.
-            return
+            return .noSelection
         }
 
         // Expandable middle wedge → re-point expansion. Outer items are
         // direct-only (depth cap 3), so never expand from `.outer`.
         if selection.band == .middle, item.hasSubItems {
+            // A hidden submenu parent is unavailable. In particular, never
+            // execute its marker action as a fallback.
+            guard hudCustomization.outerRingVisibility != .alwaysHidden else {
+                activeSelection = nil
+                return .unavailable
+            }
             expand(selection.index)
-            return
+            return .expanded
         }
 
         // Direct item → fire and fully reset, then ask the owner to close the panel.
@@ -150,12 +244,23 @@ final class RingViewModel {
         }
         reset()
         requestClose?()
+        return .executed
+    }
+
+    /// Pointer-release/click commit path. Re-hit-tests at the event's final
+    /// location so a stale hover can never be committed after crossing a band,
+    /// an invisible slot, or the center dead zone.
+    @discardableResult
+    func commit(at point: CGPoint, center: CGPoint) -> RingCommitResult {
+        updateActive(at: point, center: center)
+        return commitActive()
     }
 
     /// Expand a middle wedge: point `expandedParentIndex` at it and populate the
     /// outer band from its sub-items. Switching branches = just call with a
     /// different index (re-points in place, no explicit collapse needed).
     func expand(_ parentIndex: Int) {
+        guard hudCustomization.outerRingVisibility != .alwaysHidden else { return }
         guard parentIndex >= 0, parentIndex < middleItems.count else { return }
         expandedParentIndex = parentIndex
         outerItems = middleItems[parentIndex].subItems ?? []
@@ -167,10 +272,62 @@ final class RingViewModel {
         outerItems = []
     }
 
+    /// Returns `true` when Escape should close the invocation. An expanded
+    /// branch consumes the first Escape by collapsing back to root.
+    func handleEscape() -> Bool {
+        guard expandedParentIndex != nil else { return true }
+        collapse()
+        activeSelection = nil
+        return false
+    }
+
+    var hiddenSubmenuUnavailableReason: String? {
+        hudCustomization.outerRingVisibility == .alwaysHidden
+            ? "Submenu hidden by HUD setting"
+            : nil
+    }
+
     /// Full reset to root state — used on show/hide and after a direct commit.
     func reset() {
         activeSelection = nil
         expandedParentIndex = nil
         outerItems = []
+        hasRevealedOuterRing = false
+        hasEnteredInnerBoundary = false
+        wasAtOrInsideInnerBoundary = false
+    }
+
+    // MARK: - Effective geometry and invocation reveal
+
+    private func effectiveGeometry(for layout: HUDRingLayout,
+                                   itemCount: Int) -> RingBandGeometry {
+        let boundedItems = min(max(itemCount, 1), HUDRingLayout.supportedSlotRange.upperBound)
+        let slots: Int
+        switch layout.slotCountMode {
+        case .auto:
+            slots = boundedItems
+        case .fixed:
+            // A malformed/stale fixed value must never overlap configured
+            // items. Preserve all items while staying within the ring limit.
+            slots = min(max(HUDRingLayout.clampedSlotCount(layout.fixedSlotCount),
+                            boundedItems),
+                        HUDRingLayout.supportedSlotRange.upperBound)
+        }
+        return RingBandGeometry(slotCount: slots,
+                                angularOffset: CGFloat(layout.angularOffset * .pi / 180))
+    }
+
+    private func updateRevealState(at point: CGPoint, center: CGPoint) {
+        guard hudCustomization.outerRingVisibility == .revealBeyondInnerRing,
+              !hasRevealedOuterRing else { return }
+
+        let radius = hypot(point.x - center.x, point.y - center.y)
+        let isAtOrInside = radius <= radii.r1
+        if isAtOrInside {
+            hasEnteredInnerBoundary = true
+        } else if hasEnteredInnerBoundary && wasAtOrInsideInnerBoundary {
+            hasRevealedOuterRing = true
+        }
+        wasAtOrInsideInnerBoundary = isAtOrInside
     }
 }

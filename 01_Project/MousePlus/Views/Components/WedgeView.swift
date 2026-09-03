@@ -21,7 +21,7 @@ import SwiftUI
 /// The caller is responsible for centering this `size × size` view on the menu
 /// center inside its parent `ZStack`.
 struct WedgeView: View {
-    /// The menu item this wedge represents. Ignored when `isPlaceholder`.
+    /// The menu item this wedge represents.
     let item: RingMenuItem
     /// Wedge angular start (view space, CW from +x). From `RadialGeometry.wedgeAngles`.
     let startAngle: Angle
@@ -45,9 +45,9 @@ struct WedgeView: View {
     let dimmed: Bool
     /// Opacity applied when `dimmed` (config-driven, default 0.30; §2.3).
     let dimOpacity: Double
-    /// Empty spoke-lock padding wedge (§2.1) → faint outline, no glyph, never
-    /// highlighted.
-    let isPlaceholder: Bool
+    /// Fully resolved colors, orientation, and interaction state.
+    let presentation: WedgePresentation
+    let showsExpandAffordance: Bool
 
     init(
         item: RingMenuItem,
@@ -61,7 +61,8 @@ struct WedgeView: View {
         isHighlighted: Bool = false,
         dimmed: Bool = false,
         dimOpacity: Double = 0.30,
-        isPlaceholder: Bool = false
+        presentation: WedgePresentation? = nil,
+        showsExpandAffordance: Bool = true
     ) {
         self.item = item
         self.startAngle = startAngle
@@ -74,16 +75,16 @@ struct WedgeView: View {
         self.isHighlighted = isHighlighted
         self.dimmed = dimmed
         self.dimOpacity = dimOpacity
-        self.isPlaceholder = isPlaceholder
+        self.presentation = presentation ?? .applicationDefault(
+            selected: isHighlighted,
+            offBranch: dimmed && !isHighlighted,
+            dimOpacity: dimOpacity
+        )
+        self.showsExpandAffordance = showsExpandAffordance
     }
-
-    // A placeholder is never lit even if a stale flag says so.
-    private var highlighted: Bool { isHighlighted && !isPlaceholder }
 
     // Highlight implies the live branch, so a highlighted wedge is never dimmed.
-    private var effectiveOpacity: Double {
-        (dimmed && !highlighted) ? dimOpacity : 1.0
-    }
+    private var effectiveOpacity: Double { presentation.opacity }
 
     private var slice: AnnularWedge {
         AnnularWedge(
@@ -95,8 +96,15 @@ struct WedgeView: View {
     }
 
     private var fillColor: Color {
-        if isPlaceholder { return Color.secondary.opacity(0.06) }
-        return highlighted ? Color.accentColor : Color.secondary.opacity(0.2)
+        Color(nsColor: presentation.wedgeColor.nsColor)
+    }
+
+    private var normalizedMidpoint: Angle {
+        let start = startAngle.degrees
+        var sweep = endAngle.degrees - start
+        if sweep < 0 { sweep += 360 }
+        let midpoint = (start + sweep / 2).truncatingRemainder(dividingBy: 360)
+        return .degrees(midpoint < 0 ? midpoint + 360 : midpoint)
     }
 
     var body: some View {
@@ -105,15 +113,13 @@ struct WedgeView: View {
             // shape fills the full `size × size` square.
             slice
                 .fill(fillColor)
+                .overlay(slice.fill(Color.white.opacity(presentation.emphasisOpacity)))
                 .overlay(
-                    slice.stroke(Color.white.opacity(0.12), lineWidth: 1)
+                    slice.stroke(Color.white.opacity(presentation.borderOpacity), lineWidth: 1)
                 )
 
-            // Glyph: skipped entirely for padding placeholders.
-            if !isPlaceholder {
-                glyph
-                    .position(centroid)
-            }
+            glyph
+                .position(centroid)
         }
         .frame(width: size, height: size)
         .opacity(effectiveOpacity)
@@ -121,29 +127,37 @@ struct WedgeView: View {
 
     @ViewBuilder
     private var glyph: some View {
-        let foreground: Color = highlighted ? .white : .primary
+        let iconColor = Color(nsColor: presentation.iconColor.nsColor)
+        let labelColor = Color(nsColor: presentation.labelColor.nsColor)
 
         if symbolOnly {
-            Image(systemName: SFSymbol.resolved(item.icon))
-                .font(.title2)
-                .foregroundStyle(foreground)
+            OrientedHUDIcon(
+                systemName: SFSymbol.resolved(item.icon),
+                orientation: presentation.orientation,
+                wedgeMidpoint: normalizedMidpoint,
+                color: iconColor
+            )
         } else {
             VStack(spacing: 4) {
                 HStack(spacing: 3) {
-                    Image(systemName: SFSymbol.resolved(item.icon))
-                        .font(.title2)
+                    OrientedHUDIcon(
+                        systemName: SFSymbol.resolved(item.icon),
+                        orientation: presentation.orientation,
+                        wedgeMidpoint: normalizedMidpoint,
+                        color: iconColor
+                    )
                     // Subtle "expandable" hint for items with sub-items.
-                    if item.hasSubItems {
+                    if item.hasSubItems && showsExpandAffordance {
                         Image(systemName: "chevron.right")
                             .font(.caption2)
-                            .foregroundStyle(foreground.opacity(0.7))
+                            .foregroundStyle(iconColor.opacity(0.7))
                     }
                 }
                 Text(item.label)
                     .font(.caption)
                     .lineLimit(1)
+                    .foregroundStyle(labelColor)
             }
-            .foregroundStyle(foreground)
         }
     }
 }
@@ -175,7 +189,6 @@ struct WedgeView: View {
         label: "Apps", icon: "square.grid.2x2", actionType: .appSwitch,
         subItems: [RingMenuItem(label: "Safari", icon: "safari", actionType: .appSwitch)]
     )
-    let placeholderItem = RingMenuItem(label: "", icon: "", actionType: .custom)
 
     return ZStack {
         // Symbol-only inner wedge (index 0).
@@ -213,14 +226,6 @@ struct WedgeView: View {
             dimmed: true
         )
 
-        // Placeholder padding wedge (index 4) — faint, no glyph.
-        WedgeView(
-            item: placeholderItem,
-            startAngle: angles(.middle, 4).start, endAngle: angles(.middle, 4).end,
-            innerRadius: radii.r1, outerRadius: radii.r2,
-            centroid: centroid(.middle, 4), size: size,
-            isPlaceholder: true
-        )
     }
     .frame(width: size, height: size)
     .background(Color.black.opacity(0.85))

@@ -1,0 +1,121 @@
+import XCTest
+import CoreGraphics
+@testable import MousePlus
+
+final class HUDPreviewInteractionTests: XCTestCase {
+    private let center = CGPoint.zero
+    private let radii = BandRadii(r0: 10, r1: 20, r2: 30, r3: 40)
+
+    func testEveryVisibleBandProducesOnlyEditorIntent() {
+        let state = HUDPreviewInteractionState()
+        let snapshot = makeSnapshot(visibility: .alwaysVisible, parent: 0, outerCount: 2)
+
+        XCTAssertEqual(state.intent(at: point(angle: .pi / 4, radius: 15), center: center,
+                                    snapshot: snapshot), .selectTopLevel(.inner, 0))
+        XCTAssertEqual(state.intent(at: point(angle: .pi / 4, radius: 25), center: center,
+                                    snapshot: snapshot), .selectTopLevel(.middle, 0))
+
+        let outer = RadialGeometry.centroid(
+            band: .outer, index: 0, center: center, radii: radii,
+            geometry: snapshot.geometry, expandedParentIndex: 0, outerCount: 2
+        )
+        XCTAssertEqual(state.intent(at: outer, center: center, snapshot: snapshot),
+                       .selectOuter(0))
+    }
+
+    func testCenterOutsideAndInvisibleFixedSlotsHaveZeroEffects() {
+        let state = HUDPreviewInteractionState()
+        let geometry = TopLevelRingGeometry(
+            inner: RingBandGeometry(slotCount: 6),
+            middle: RingBandGeometry(slotCount: 5, angularOffset: .pi / 3)
+        )
+        let snapshot = makeSnapshot(geometry: geometry, innerCount: 2, middleCount: 2)
+        var emitted: [HUDPreviewIntent] = []
+        for location in [
+            CGPoint.zero,
+            point(angle: 11 * .pi / 6, radius: 15),
+            point(angle: 0, radius: 25),
+            point(angle: 0, radius: 41)
+        ] {
+            if let intent = state.intent(at: location, center: center, snapshot: snapshot) {
+                emitted.append(intent)
+            }
+        }
+        XCTAssertTrue(emitted.isEmpty)
+    }
+
+    func testConditionalRevealRequiresCrossingAndLatchesForOuterSelection() {
+        var state = HUDPreviewInteractionState()
+        let snapshot = makeSnapshot(visibility: .revealBeyondInnerRing,
+                                    parent: 0, outerCount: 2)
+        let outer = RadialGeometry.centroid(
+            band: .outer, index: 0, center: center, radii: radii,
+            geometry: snapshot.geometry, expandedParentIndex: 0, outerCount: 2
+        )
+
+        XCTAssertNil(state.pointerMoved(to: outer, center: center, snapshot: snapshot))
+        _ = state.pointerMoved(to: point(angle: 0, radius: 20), center: center,
+                               snapshot: snapshot)
+        _ = state.pointerMoved(to: point(angle: 0, radius: 21), center: center,
+                               snapshot: snapshot)
+        XCTAssertTrue(state.outerIsVisible)
+        XCTAssertEqual(state.intent(at: outer, center: center, snapshot: snapshot),
+                       .selectOuter(0))
+        _ = state.pointerMoved(to: point(angle: 0, radius: 15), center: center,
+                               snapshot: snapshot)
+        XCTAssertTrue(state.outerIsVisible)
+    }
+
+    func testAlwaysHiddenOuterHasNoIntent() {
+        let state = HUDPreviewInteractionState()
+        let snapshot = makeSnapshot(visibility: .alwaysHidden, parent: 0, outerCount: 2)
+        let outer = RadialGeometry.centroid(
+            band: .outer, index: 0, center: center, radii: radii,
+            geometry: snapshot.geometry, expandedParentIndex: 0, outerCount: 2
+        )
+        XCTAssertNil(state.intent(at: outer, center: center, snapshot: snapshot))
+    }
+
+    func testFixedEmptyRingRegionsNeverAddOrSelectItems() {
+        let state = HUDPreviewInteractionState()
+        let fixedGeometry = TopLevelRingGeometry(
+            inner: RingBandGeometry(slotCount: 4),
+            middle: RingBandGeometry(slotCount: 2)
+        )
+        let fixed = makeSnapshot(
+            geometry: fixedGeometry, innerCount: 2, middleCount: 2
+        )
+        let emptyPoint = RadialGeometry.centroid(
+            band: .inner, index: 2, center: center, radii: radii,
+            geometry: fixedGeometry, expandedParentIndex: nil, outerCount: 0
+        )
+        XCTAssertNil(state.intent(at: emptyPoint, center: center, snapshot: fixed))
+    }
+
+    func testFitScalePreservesLogicalGeometryAndOnlyShrinksCanvas() {
+        XCTAssertEqual(HUDPreviewInteractionSnapshot.fitScale(logicalSide: 800,
+                                                              canvasSide: 400), 0.5)
+        XCTAssertEqual(HUDPreviewInteractionSnapshot.fitScale(logicalSide: 300,
+                                                              canvasSide: 400), 1)
+    }
+
+    private func makeSnapshot(
+        geometry: TopLevelRingGeometry = .shared(spokeCount: 2),
+        innerCount: Int = 2,
+        middleCount: Int = 2,
+        visibility: OuterRingVisibility = .alwaysVisible,
+        parent: Int? = nil,
+        outerCount: Int = 0
+    ) -> HUDPreviewInteractionSnapshot {
+        HUDPreviewInteractionSnapshot(
+            geometry: geometry, radii: radii,
+            innerCount: innerCount, middleCount: middleCount,
+            expandedParentIndex: parent, outerCount: outerCount,
+            outerVisibility: visibility
+        )
+    }
+
+    private func point(angle: CGFloat, radius: CGFloat) -> CGPoint {
+        CGPoint(x: radius * cos(angle), y: radius * sin(angle))
+    }
+}

@@ -33,6 +33,204 @@ final class ConfigurationServiceTests: XCTestCase {
         }
     }
 
+    func testLegacyConfigurationReceivesCompatibleHUDDefaults() throws {
+        let current = Configuration()
+        let encoded = try JSONEncoder().encode(current)
+        var object = try XCTUnwrap(JSONSerialization.jsonObject(with: encoded) as? [String: Any])
+        object.removeValue(forKey: "hudCustomization")
+
+        let decoded = try JSONDecoder().decode(
+            Configuration.self,
+            from: JSONSerialization.data(withJSONObject: object)
+        )
+
+        XCTAssertEqual(decoded.hudCustomization, .default)
+        XCTAssertEqual(decoded.inner.map(\.id), current.inner.map(\.id))
+        XCTAssertEqual(decoded.middle.map(\.id), current.middle.map(\.id))
+        XCTAssertEqual(decoded.triggers, current.triggers)
+        XCTAssertEqual(decoded.behavior, current.behavior)
+    }
+
+    func testMalformedHUDFieldsPreserveKnownConfigurationAndUnknownAction() throws {
+        let id = UUID()
+        let json = """
+        {
+          "inner": [],
+          "middle": [{
+            "id": "\(id.uuidString)",
+            "label": "Future action",
+            "icon": "sparkles",
+            "actionType": "newerVersionAction",
+            "actionData": "opaque-payload"
+          }],
+          "hudCustomization": {
+            "inner": {
+              "layout": {
+                "slotCountMode": "invalid",
+                "fixedSlotCount": 999,
+                "angularOffset": 725
+              },
+              "appearance": { "iconOrientation": "tangential" }
+            },
+            "outerRingVisibility": 123
+          }
+        }
+        """
+
+        let decoded = try JSONDecoder().decode(Configuration.self, from: Data(json.utf8))
+        XCTAssertEqual(decoded.middle.first?.actionType, .unavailable("newerVersionAction"))
+        XCTAssertEqual(decoded.middle.first?.actionData, "opaque-payload")
+        XCTAssertEqual(decoded.hudCustomization.inner.layout.slotCountMode, .auto)
+        XCTAssertEqual(decoded.hudCustomization.inner.layout.fixedSlotCount, 8)
+        XCTAssertEqual(decoded.hudCustomization.inner.layout.angularOffset, 5)
+        XCTAssertEqual(decoded.hudCustomization.inner.appearance.iconOrientation, .tangential)
+        XCTAssertEqual(decoded.hudCustomization.outerRingVisibility, .alwaysVisible)
+
+        let roundTripped = try JSONDecoder().decode(
+            Configuration.self,
+            from: JSONEncoder().encode(decoded)
+        )
+        XCTAssertEqual(roundTripped.middle.first?.actionType, .unavailable("newerVersionAction"))
+        XCTAssertEqual(roundTripped.middle.first?.actionData, "opaque-payload")
+    }
+
+    @MainActor
+    func testCurrentProductionFixtureMigratesToCompatibleResolvedRenderInputs() async throws {
+        let configuration = try await loadFixtureThroughService(named: "current-production")
+        let inputs = resolvedRenderInputs(configuration)
+
+        XCTAssertEqual(inputs.geometry.inner.slotCount, 1)
+        XCTAssertEqual(inputs.geometry.middle.slotCount, 2)
+        XCTAssertEqual(inputs.geometry.inner.angularOffset, 0, accuracy: 0.000_001)
+        XCTAssertEqual(inputs.geometry.middle.angularOffset, 0, accuracy: 0.000_001)
+        XCTAssertEqual(inputs.outerVisibility, .alwaysVisible)
+        XCTAssertEqual(inputs.innerOrientation, .upright)
+        XCTAssertEqual(inputs.middleOrientation, .upright)
+        XCTAssertEqual(inputs.outerOrientation, .upright)
+        XCTAssertEqual(inputs.firstMiddleColors.requestedWedge, .black)
+        XCTAssertEqual(inputs.firstMiddleColors.requestedIcon, .white)
+        assertUnknownAction(
+            configuration.middle[0],
+            rawValue: "futureProductionAction",
+            payload: "opaque:{\"version\":7,\"flags\":[\"a\",\"b\"]}"
+        )
+        try assertCanonicalRoundTrip(configuration, fixtureName: "current-production")
+    }
+
+    @MainActor
+    func testPreInnerMiddleFixtureMigratesFlatItemsWithoutChangingCompatibilityAppearance() async throws {
+        let configuration = try await loadFixtureThroughService(named: "pre-inner-middle-legacy")
+        let inputs = resolvedRenderInputs(configuration)
+
+        XCTAssertTrue(configuration.inner.isEmpty)
+        XCTAssertEqual(configuration.middle.count, 2)
+        XCTAssertEqual(inputs.geometry.inner.slotCount, 1)
+        XCTAssertEqual(inputs.geometry.middle.slotCount, 2)
+        XCTAssertEqual(inputs.outerVisibility, .alwaysVisible)
+        XCTAssertEqual(inputs.innerOrientation, .upright)
+        XCTAssertEqual(inputs.middleOrientation, .upright)
+        XCTAssertEqual(inputs.firstMiddleColors.requestedWedge, .black)
+        XCTAssertEqual(inputs.firstMiddleColors.renderedIcon, .white)
+        XCTAssertEqual(
+            configuration.triggers.keyboard,
+            .keyboard(keyCode: 96, modifiers: 1_048_576, mode: .holdRelease)
+        )
+        assertUnknownAction(
+            configuration.middle[0],
+            rawValue: "legacyPluginAction",
+            payload: "plugin://payload?keep=true"
+        )
+        try assertCanonicalRoundTrip(configuration, fixtureName: "pre-inner-middle-legacy")
+    }
+
+    @MainActor
+    func testPartialNewFixtureDefaultsOnlyMissingResolvedRenderInputs() async throws {
+        let configuration = try await loadFixtureThroughService(named: "partial-new-shape")
+        let inputs = resolvedRenderInputs(configuration)
+
+        XCTAssertEqual(inputs.geometry.inner.slotCount, 6)
+        XCTAssertEqual(inputs.geometry.middle.slotCount, 1)
+        XCTAssertEqual(inputs.geometry.inner.angularOffset, 0, accuracy: 0.000_001)
+        XCTAssertEqual(inputs.outerVisibility, .alwaysHidden)
+        XCTAssertEqual(inputs.innerOrientation, .upright)
+        XCTAssertEqual(inputs.middleOrientation, .upright)
+        XCTAssertEqual(
+            inputs.firstMiddleColors.requestedWedge,
+            HUDColor(red: 0.2, green: 0.3, blue: 0.4, alpha: 0.8)
+        )
+        XCTAssertEqual(inputs.firstMiddleColors.requestedIcon, .white)
+        assertUnknownAction(
+            configuration.middle[0],
+            rawValue: "partialFutureAction",
+            payload: "partial-opaque-payload"
+        )
+        try assertCanonicalRoundTrip(configuration, fixtureName: "partial-new-shape")
+    }
+
+    @MainActor
+    func testCorruptNewValuesAreIndividuallySanitizedInResolvedRenderInputs() async throws {
+        let configuration = try await loadFixtureThroughService(named: "corrupt-new-values")
+        let inputs = resolvedRenderInputs(configuration)
+
+        XCTAssertEqual(inputs.geometry.inner.slotCount, 1)
+        XCTAssertEqual(inputs.geometry.middle.slotCount, 8)
+        XCTAssertEqual(inputs.geometry.inner.angularOffset, .pi * 1.5, accuracy: 0.000_001)
+        XCTAssertEqual(inputs.geometry.middle.angularOffset, 5 * .pi / 180, accuracy: 0.000_001)
+        XCTAssertEqual(inputs.outerVisibility, .alwaysVisible)
+        XCTAssertEqual(inputs.innerOrientation, .radial)
+        XCTAssertEqual(inputs.middleOrientation, .upright)
+        XCTAssertEqual(inputs.outerOrientation, .tangential)
+        XCTAssertEqual(inputs.firstInnerColors.requestedWedge, .black)
+        XCTAssertEqual(
+            inputs.firstInnerColors.requestedIcon,
+            HUDColor(red: 1, green: 0, blue: 0.5, alpha: 1)
+        )
+        assertUnknownAction(
+            configuration.inner[0],
+            rawValue: "corruptFixtureFutureAction",
+            payload: "do-not-normalize-this-payload"
+        )
+        try assertCanonicalRoundTrip(configuration, fixtureName: "corrupt-new-values")
+    }
+
+    @MainActor
+    func testFullyCustomizedFixtureResolvesAllInheritanceLevelsAndRoundTrips() async throws {
+        let configuration = try await loadFixtureThroughService(named: "fully-customized")
+        let inputs = resolvedRenderInputs(configuration)
+
+        XCTAssertEqual(inputs.geometry.inner.slotCount, 7)
+        XCTAssertEqual(inputs.geometry.middle.slotCount, 5)
+        XCTAssertEqual(inputs.geometry.inner.angularOffset, 22.5 * .pi / 180, accuracy: 0.000_001)
+        XCTAssertEqual(inputs.geometry.middle.angularOffset, 315 * .pi / 180, accuracy: 0.000_001)
+        XCTAssertEqual(inputs.outerVisibility, .revealBeyondInnerRing)
+        XCTAssertEqual(inputs.innerOrientation, .radial)
+        XCTAssertEqual(inputs.middleOrientation, .tangential)
+        XCTAssertEqual(inputs.outerOrientation, .upright)
+        XCTAssertEqual(
+            inputs.firstInnerColors.requestedWedge,
+            HUDColor(red: 0.9, green: 0.8, blue: 0.1, alpha: 0.75)
+        )
+        XCTAssertEqual(
+            inputs.firstMiddleColors.requestedWedge,
+            HUDColor(red: 0.2, green: 0.4, blue: 0.6)
+        )
+        XCTAssertEqual(
+            inputs.firstMiddleColors.requestedIcon,
+            HUDColor(red: 0.8, green: 0.8, blue: 0.8)
+        )
+        assertUnknownAction(
+            configuration.middle[0],
+            rawValue: "fullyCustomizedFutureAction",
+            payload: "{\"opaque\":true,\"revision\":42}"
+        )
+        assertUnknownAction(
+            try XCTUnwrap(configuration.middle[0].subItems?.first),
+            rawValue: "childFutureAction",
+            payload: "child-opaque"
+        )
+        try assertCanonicalRoundTrip(configuration, fixtureName: "fully-customized")
+    }
+
     func testCorruptFileThrowsInsteadOfReturningDefaults() async throws {
         let service = makeService()
         let store = await service.store
@@ -112,4 +310,133 @@ final class ConfigurationServiceTests: XCTestCase {
         temporaryDirectories.append(url)
         return url
     }
+
+    private func fixtureData(named name: String) throws -> Data {
+        let testsDirectory = URL(fileURLWithPath: #filePath).deletingLastPathComponent()
+        return try Data(contentsOf: testsDirectory
+            .appendingPathComponent("Fixtures", isDirectory: true)
+            .appendingPathComponent(name)
+            .appendingPathExtension("json"))
+    }
+
+    private func loadFixtureThroughService(named name: String) async throws -> Configuration {
+        let service = makeService()
+        let store = await service.store
+        try FileManager.default.createDirectory(
+            at: store.configurationURL.deletingLastPathComponent(),
+            withIntermediateDirectories: true
+        )
+        try fixtureData(named: name).write(to: store.configurationURL)
+        guard case .loaded(let configuration) = try await service.loadResult() else {
+            throw FixtureFailure.expectedLoadedConfiguration(name)
+        }
+        return configuration
+    }
+
+    @MainActor
+    private func resolvedRenderInputs(_ configuration: Configuration) -> ResolvedRenderInputs {
+        let viewModel = RingViewModel()
+        viewModel.load(from: configuration)
+        let application = HUDColorResolver.Overrides(wedge: .black, icon: .white)
+        let hud = configuration.hudCustomization
+
+        func orientation(_ appearance: HUDRingAppearance) -> IconOrientation {
+            appearance.iconOrientation ?? hud.iconOrientation
+        }
+
+        func colors(_ item: RingMenuItem?, ring: HUDRingAppearance) -> HUDColorResolver.Resolution {
+            HUDColorResolver.resolve(
+                application: application,
+                menu: .init(wedge: hud.wedgeColor, icon: hud.iconColor),
+                ring: .init(wedge: ring.wedgeColor, icon: ring.iconColor),
+                item: .init(wedge: item?.wedgeColor, icon: item?.iconColor),
+                backdrop: .white
+            )
+        }
+
+        return ResolvedRenderInputs(
+            geometry: viewModel.geometry,
+            outerVisibility: hud.outerRingVisibility,
+            innerOrientation: orientation(hud.inner.appearance),
+            middleOrientation: orientation(hud.middle.appearance),
+            outerOrientation: orientation(hud.outerAppearance),
+            firstInnerColors: colors(configuration.inner.first, ring: hud.inner.appearance),
+            firstMiddleColors: colors(configuration.middle.first, ring: hud.middle.appearance)
+        )
+    }
+
+    private func assertUnknownAction(
+        _ item: RingMenuItem,
+        rawValue: String,
+        payload: String,
+        file: StaticString = #filePath,
+        line: UInt = #line
+    ) {
+        XCTAssertEqual(item.actionType, .unavailable(rawValue), file: file, line: line)
+        XCTAssertEqual(item.actionData, payload, file: file, line: line)
+    }
+
+    private func assertCanonicalRoundTrip(
+        _ configuration: Configuration,
+        fixtureName: String,
+        file: StaticString = #filePath,
+        line: UInt = #line
+    ) throws {
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.sortedKeys]
+        let canonicalData = try encoder.encode(configuration)
+        let object = try XCTUnwrap(
+            JSONSerialization.jsonObject(with: canonicalData) as? [String: Any],
+            file: file,
+            line: line
+        )
+        XCTAssertEqual(
+            Set(object.keys),
+            Set(["inner", "middle", "triggers", "appearance", "behavior", "hudCustomization"]),
+            "\(fixtureName) must encode only the canonical top-level shape",
+            file: file,
+            line: line
+        )
+        XCTAssertNil(object["items"], file: file, line: line)
+        XCTAssertNil(object["hotkey"], file: file, line: line)
+
+        let decoded = try JSONDecoder().decode(Configuration.self, from: canonicalData)
+        XCTAssertEqual(decoded.inner.map(\.id), configuration.inner.map(\.id), file: file, line: line)
+        XCTAssertEqual(decoded.middle.map(\.id), configuration.middle.map(\.id), file: file, line: line)
+        XCTAssertEqual(decoded.triggers, configuration.triggers, file: file, line: line)
+        XCTAssertEqual(decoded.appearance, configuration.appearance, file: file, line: line)
+        XCTAssertEqual(decoded.behavior, configuration.behavior, file: file, line: line)
+        XCTAssertEqual(decoded.hudCustomization, configuration.hudCustomization, file: file, line: line)
+        XCTAssertEqual(actionSnapshots(decoded), actionSnapshots(configuration), file: file, line: line)
+    }
+
+    private func actionSnapshots(_ configuration: Configuration) -> [ActionSnapshot] {
+        func flatten(_ items: [RingMenuItem]) -> [ActionSnapshot] {
+            items.flatMap { item in
+                [ActionSnapshot(id: item.id, rawAction: item.actionType.rawValue, payload: item.actionData)]
+                    + flatten(item.subItems ?? [])
+            }
+        }
+        return flatten(configuration.inner) + flatten(configuration.middle)
+    }
+}
+
+private struct ResolvedRenderInputs {
+    let geometry: TopLevelRingGeometry
+    let outerVisibility: OuterRingVisibility
+    let innerOrientation: IconOrientation
+    let middleOrientation: IconOrientation
+    let outerOrientation: IconOrientation
+    let firstInnerColors: HUDColorResolver.Resolution
+    let firstMiddleColors: HUDColorResolver.Resolution
+}
+
+private struct ActionSnapshot: Equatable {
+    let id: UUID
+    let rawAction: String
+    let payload: String
+}
+
+private enum FixtureFailure: Error {
+    case expectedLoadedConfiguration(String)
 }

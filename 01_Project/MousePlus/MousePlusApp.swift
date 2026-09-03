@@ -16,11 +16,17 @@ struct MousePlusApp: App {
             }
                 .environmentObject(appDelegate.settingsActionContextProvider)
         }
+        .windowStyle(.hiddenTitleBar)
     }
 
     init() {
         // Store reference for AppDelegate to use
         AppDelegate.openSettingsAction = { [self] in
+            openSettings()
+        }
+        AppDelegate.openMenuItemsSettingsAction = { [self] in
+            settingsSelection = .menuItems
+            requestedMenuItemID = nil
             openSettings()
         }
         AppDelegate.openSettingsRouteAction = { [self] route in
@@ -38,6 +44,7 @@ struct MousePlusApp: App {
 final class AppDelegate: NSObject, NSApplicationDelegate {
     static var openSettingsAction: (() -> Void)?
     static var openSettingsRouteAction: ((ActionSettingsRoute) -> Void)?
+    static var openMenuItemsSettingsAction: (() -> Void)?
 
     /// The sole Settings → runtime bridge. The workspace invokes it only after a
     /// successful save and always supplies the complete durable configuration.
@@ -160,7 +167,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 guard let self else { return }
                 switch event {
                 case .down(_, .holdRelease):
-                    self.showRing()
+                    self.showRing(commitsOnPointerRelease: false)
                 case .up(_, .holdRelease):
                     self.hideRing(commitHovered: true)
                 case .down(_, .tapToggle):
@@ -180,6 +187,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // closing commits back here. Only fires on a *closing* commit, never on expand.
         ringViewModel.requestClose = { [weak self] in
             self?.closeRing()
+        }
+        ringViewModel.requestOpenMenuItemsSettings = { [weak self] in
+            self?.showMenuItemsSettings()
         }
 
         AppDelegate.applyConfiguration = { [weak self] config in
@@ -205,7 +215,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
-    private func showRing() {
+    private func showRing(commitsOnPointerRelease: Bool) {
         // keyDown repeats while held — without this guard each tick creates a new NSPanel.
         guard let controller = ringWindowController, !controller.isVisible else { return }
 
@@ -218,7 +228,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         ringViewModel.isVisible = true
 
         let mouseLocation = NSEvent.mouseLocation
-        let view = RingMenuView(viewModel: ringViewModel)
+        let view = RingMenuView(viewModel: ringViewModel,
+                                commitsOnPointerRelease: commitsOnPointerRelease)
         controller.show(at: mouseLocation, content: view)
 
         startDismissMonitor()
@@ -265,7 +276,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         if ringWindowController?.isVisible == true {
             hideRing(commitHovered: false)
         } else {
-            showRing()
+            showRing(commitsOnPointerRelease: true)
         }
     }
 
@@ -280,9 +291,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 guard self.configuration.behavior.dismissOnEscape else { return }
                 // Esc first collapses an expanded outer ring back to root; only a
                 // second Esc (when nothing is expanded) closes the whole ring.
-                if self.ringViewModel.expandedParentIndex != nil {
-                    self.ringViewModel.collapse()
-                } else {
+                if self.ringViewModel.handleEscape() {
                     self.closeRing()
                 }
             },
@@ -302,6 +311,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         settingsActionContextProvider.recordFrontmostApplicationBeforeSettingsActivation()
         NSApp.activate(ignoringOtherApps: true)
         Self.openSettingsAction?()
+    }
+
+    private func showMenuItemsSettings() {
+        settingsActionContextProvider.recordFrontmostApplicationBeforeSettingsActivation()
+        NSApp.activate(ignoringOtherApps: true)
+        Self.openMenuItemsSettingsAction?()
     }
 
     /// (Re)bind the global "open Settings" hotkey to `binding`. A `.keyboard` binding

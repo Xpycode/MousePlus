@@ -1,0 +1,39 @@
+{
+  "inner": [
+    {
+      "id": "10000000-0000-0000-0000-000000000001",
+      "label": "Copy",
+      "icon": "doc.on.doc",
+      "actionType": "sendKeystroke",
+      "actionData": ""
+    }
+  ],
+  "middle": [
+    {
+      "id": "10000000-0000-0000-0000-000000000002",
+      "label": "Future production action",
+      "icon": "sparkles",
+      "actionType": "futureProductionAction",
+      "actionData": "opaque:{\"version\":7,\"flags\":[\"a\",\"b\"]}"
+    },
+    {
+      "id": "10000000-0000-0000-0000-000000000003",
+      "label": "Terminal",
+      "icon": "terminal",
+      "actionType": "custom",
+      "actionData": "open -a Terminal"
+    }
+  ],
+  "appearance": {
+    "ringRadius": 120,
+    "itemSize": 60,
+    "animationEnabled": true,
+    "animationDuration": 0.15
+  },
+  "behavior": {
+    "holdToActivate": true,
+    "tapToActivate": true,
+    "dismissOnClickOutside": true,
+    "dismissOnEscape": true
+  }
+}

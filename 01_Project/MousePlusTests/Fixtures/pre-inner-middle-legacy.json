@@ -1,0 +1,19 @@
+{
+  "items": [
+    {
+      "id": "20000000-0000-0000-0000-000000000001",
+      "label": "Legacy future action",
+      "icon": "questionmark.circle",
+      "actionType": "legacyPluginAction",
+      "actionData": "plugin://payload?keep=true"
+    },
+    {
+      "id": "20000000-0000-0000-0000-000000000002",
+      "label": "Legacy custom",
+      "icon": "terminal",
+      "actionType": "custom",
+      "actionData": "echo legacy"
+    }
+  ],
+  "hotkey": { "keyCode": 96, "modifiers": 1048576 }
+}

@@ -7,13 +7,52 @@ import Foundation
 /// See `IMPLEMENTATION_PLAN.md` §2.1. The dead zone (radius `0…r0`) is not a
 /// `Band` value — hit-testing returns `nil` there.
 enum Band: Equatable {
-    /// Inner symbol-only band (`r0…r1`). Shares spoke geometry with `.middle`.
+    /// Inner symbol-only band (`r0…r1`).
     case inner
-    /// Middle labeled band (`r1…r2`). Shares spoke geometry with `.inner`.
+    /// Middle labeled band (`r1…r2`).
     case middle
     /// On-demand outer band (`r2…r3`) — a localized arc expanded from a parent
     /// middle wedge. Has its own item count `M`.
     case outer
+}
+
+/// Angular layout for one top-level ring band.
+///
+/// `slotCount` is the effective (auto or fixed) count, including any invisible
+/// empty positions. `angularOffset` is normalized to `[0, 2π)` so equivalent
+/// persisted rotations produce identical geometry.
+struct RingBandGeometry: Equatable {
+    let slotCount: Int
+    let angularOffset: CGFloat
+
+    init(slotCount: Int, angularOffset: CGFloat = 0) {
+        self.slotCount = max(1, slotCount)
+        self.angularOffset = RadialGeometry.normalizedAngle(angularOffset)
+    }
+}
+
+/// Independent geometry for the two top-level bands. Outer geometry is derived
+/// from the middle parent, so it deliberately has no independent entry here.
+struct TopLevelRingGeometry: Equatable {
+    let inner: RingBandGeometry
+    let middle: RingBandGeometry
+
+    init(inner: RingBandGeometry, middle: RingBandGeometry) {
+        self.inner = inner
+        self.middle = middle
+    }
+
+    static func shared(spokeCount: Int, angularOffset: CGFloat = 0) -> Self {
+        let band = RingBandGeometry(slotCount: spokeCount, angularOffset: angularOffset)
+        return Self(inner: band, middle: band)
+    }
+
+    func geometry(for band: Band) -> RingBandGeometry {
+        switch band {
+        case .inner: return inner
+        case .middle, .outer: return middle
+        }
+    }
 }
 
 /// Band edge radii (default values from `IMPLEMENTATION_PLAN.md` §2.1).
@@ -55,12 +94,10 @@ enum RadialGeometry {
 
     // MARK: - Spoke count
 
-    /// The locked spoke count `N` shared by the inner and middle bands.
+    /// Derives the legacy shared spoke count used by compatibility callers.
     ///
-    /// `N = min(8, max(innerCount, middleCount))` (§2.1). Both bands render `N`
-    /// angular wedges on the same divider lines; the shorter band pads the
-    /// remainder with dim placeholders. Guaranteed `≥ 1` so wedge width is
-    /// well-defined even when both counts are zero/empty.
+    /// New customization-aware callers supply `TopLevelRingGeometry` instead.
+    /// Guaranteed `≥ 1` so the legacy wedge width remains well-defined.
     static func spokeCount(innerCount: Int, middleCount: Int) -> Int {
         max(1, min(8, max(innerCount, middleCount)))
     }
@@ -86,7 +123,9 @@ enum RadialGeometry {
     static func hitTest(point: CGPoint,
                         center: CGPoint,
                         radii: BandRadii,
-                        spokeCount N: Int,
+                        geometry: TopLevelRingGeometry,
+                        innerItemCount: Int,
+                        middleItemCount: Int,
                         expandedParentIndex: Int?,
                         outerCount M: Int) -> (band: Band, index: Int)? {
         let dx = point.x - center.x
@@ -94,40 +133,56 @@ enum RadialGeometry {
         let dist = hypot(dx, dy)
         let theta = normalizedAngle(atan2(dy, dx))
 
-        // Dead zone / cancel region.
         if dist <= radii.r0 { return nil }
 
-        let n = max(1, N)
-        let wedge = twoPi / CGFloat(n)
-
         if dist <= radii.r1 {
-            let index = clamp(Int(floor(theta / wedge)), lower: 0, upper: n - 1)
-            return (.inner, index)
+            let index = topLevelIndex(theta: theta, geometry: geometry.inner)
+            return index < max(0, innerItemCount) ? (.inner, index) : nil
         }
 
         if dist <= radii.r2 {
-            let index = clamp(Int(floor(theta / wedge)), lower: 0, upper: n - 1)
-            return (.middle, index)
+            let index = topLevelIndex(theta: theta, geometry: geometry.middle)
+            return index < max(0, middleItemCount) ? (.middle, index) : nil
         }
 
         if dist <= radii.r3,
            let parent = expandedParentIndex,
+           parent >= 0,
+           parent < max(0, middleItemCount),
            M > 0 {
-            let span = outerArcSpan(parentIndex: parent, spokeCount: n, outerCount: M)
+            let span = outerArcSpan(parentIndex: parent,
+                                    parentGeometry: geometry.middle,
+                                    outerCount: M)
             let start = CGFloat(span.start.radians)
-            let total = CGFloat(span.end.radians) - start // always ≥ 0 (see outerArcSpan)
-
-            // Angular offset of theta from the arc start, measured forward
-            // (clockwise) and wrapped into [0, 2π). Inside the arc ⇔ offset < total.
-            let offset = normalizedAngle(theta - start)
-            guard offset < total else { return nil }
+            let total = CGFloat(span.end.radians) - start
+            let rawOffset = normalizedAngle(theta - start)
+            let tolerance = 16 * CGFloat.ulpOfOne * max(1, abs(total))
+            // `atan2(sin(a), cos(a))` can put an exact wrapped start a few
+            // ulps below 2π, or an exact end a few ulps below `total`.
+            // Preserve the documented half-open arc `[start, end)` by snapping
+            // only those representational seams, not nearby real points.
+            let offset = twoPi - rawOffset <= tolerance ? 0 : rawOffset
+            guard total - offset > tolerance else { return nil }
 
             let perItem = total / CGFloat(M)
-            let index = clamp(Int(floor(offset / perItem)), lower: 0, upper: M - 1)
-            return (.outer, index)
+            return (.outer, clamp(Int(floor(offset / perItem)), lower: 0, upper: M - 1))
         }
 
         return nil
+    }
+
+    /// Compatibility entry point for the pre-customization shared-spoke model.
+    static func hitTest(point: CGPoint,
+                        center: CGPoint,
+                        radii: BandRadii,
+                        spokeCount N: Int,
+                        expandedParentIndex: Int?,
+                        outerCount M: Int) -> (band: Band, index: Int)? {
+        let n = max(1, N)
+        return hitTest(point: point, center: center, radii: radii,
+                       geometry: .shared(spokeCount: n),
+                       innerItemCount: n, middleItemCount: n,
+                       expandedParentIndex: expandedParentIndex, outerCount: M)
     }
 
     // MARK: - Wedge angles
@@ -140,28 +195,37 @@ enum RadialGeometry {
     /// (see `outerArcSpan`).
     static func wedgeAngles(band: Band,
                             index: Int,
-                            spokeCount N: Int,
+                            geometry: TopLevelRingGeometry,
                             expandedParentIndex: Int?,
                             outerCount M: Int) -> (start: Angle, end: Angle) {
         switch band {
         case .inner, .middle:
-            let n = max(1, N)
-            let wedge = twoPi / CGFloat(n)
-            let i = clamp(index, lower: 0, upper: n - 1)
-            let start = CGFloat(i) * wedge
+            let bandGeometry = geometry.geometry(for: band)
+            let wedge = twoPi / CGFloat(bandGeometry.slotCount)
+            let i = clamp(index, lower: 0, upper: bandGeometry.slotCount - 1)
+            let start = bandGeometry.angularOffset + CGFloat(i) * wedge
             return (.radians(Double(start)), .radians(Double(start + wedge)))
-
         case .outer:
             let m = max(1, M)
-            let parent = expandedParentIndex ?? 0
-            let span = outerArcSpan(parentIndex: parent, spokeCount: N, outerCount: m)
+            let span = outerArcSpan(parentIndex: expandedParentIndex ?? 0,
+                                    parentGeometry: geometry.middle,
+                                    outerCount: m)
             let start = CGFloat(span.start.radians)
-            let total = CGFloat(span.end.radians) - start
-            let perItem = total / CGFloat(m)
+            let perItem = (CGFloat(span.end.radians) - start) / CGFloat(m)
             let i = clamp(index, lower: 0, upper: m - 1)
-            let s = start + CGFloat(i) * perItem
-            return (.radians(Double(s)), .radians(Double(s + perItem)))
+            let itemStart = start + CGFloat(i) * perItem
+            return (.radians(Double(itemStart)), .radians(Double(itemStart + perItem)))
         }
+    }
+
+    /// Compatibility entry point for the pre-customization shared-spoke model.
+    static func wedgeAngles(band: Band,
+                            index: Int,
+                            spokeCount N: Int,
+                            expandedParentIndex: Int?,
+                            outerCount M: Int) -> (start: Angle, end: Angle) {
+        wedgeAngles(band: band, index: index, geometry: .shared(spokeCount: N),
+                    expandedParentIndex: expandedParentIndex, outerCount: M)
     }
 
     // MARK: - Centroid
@@ -175,6 +239,22 @@ enum RadialGeometry {
                          index: Int,
                          center: CGPoint,
                          radii: BandRadii,
+                         geometry: TopLevelRingGeometry,
+                         expandedParentIndex: Int?,
+                         outerCount M: Int) -> CGPoint {
+        let (start, end) = wedgeAngles(band: band, index: index,
+                                       geometry: geometry,
+                                       expandedParentIndex: expandedParentIndex,
+                                       outerCount: M)
+        return centroid(band: band, center: center, radii: radii,
+                        start: start, end: end)
+    }
+
+    /// Compatibility entry point for the pre-customization shared-spoke model.
+    static func centroid(band: Band,
+                         index: Int,
+                         center: CGPoint,
+                         radii: BandRadii,
                          spokeCount N: Int,
                          expandedParentIndex: Int?,
                          outerCount M: Int) -> CGPoint {
@@ -183,6 +263,12 @@ enum RadialGeometry {
                                        spokeCount: N,
                                        expandedParentIndex: expandedParentIndex,
                                        outerCount: M)
+        return centroid(band: band, center: center, radii: radii,
+                        start: start, end: end)
+    }
+
+    private static func centroid(band: Band, center: CGPoint, radii: BandRadii,
+                                 start: Angle, end: Angle) -> CGPoint {
         let midAngle = CGFloat((start.radians + end.radians) / 2)
 
         let r: CGFloat
@@ -220,25 +306,41 @@ enum RadialGeometry {
     /// (the arc length) is normalized. `start ≤ end` always holds, and
     /// `end - start ≤ 2π`.
     static func outerArcSpan(parentIndex p: Int,
-                             spokeCount N: Int,
+                             parentGeometry: RingBandGeometry,
                              outerCount M: Int) -> (start: Angle, end: Angle) {
-        let n = max(1, N)
+        let n = parentGeometry.slotCount
         let m = max(1, M)
         let wedge = twoPi / CGFloat(n)
-        let perItem = wedge / 3
+        let span = min(twoPi, max(wedge, CGFloat(m) * wedge / 3))
+        let parent = clamp(p, lower: 0, upper: n - 1)
+        let parentMid = parentGeometry.angularOffset + (CGFloat(parent) + 0.5) * wedge
+        return (.radians(Double(parentMid - span / 2)),
+                .radians(Double(parentMid + span / 2)))
+    }
 
-        let span = min(twoPi, max(wedge, CGFloat(m) * perItem))
-
-        // Mid-angle of the parent wedge p (clockwise from +x).
-        let pi = clamp(p, lower: 0, upper: n - 1)
-        let parentMid = (CGFloat(pi) + 0.5) * wedge
-
-        let start = parentMid - span / 2
-        let end = parentMid + span / 2
-        return (.radians(Double(start)), .radians(Double(end)))
+    /// Compatibility entry point for zero-offset shared-spoke geometry.
+    static func outerArcSpan(parentIndex p: Int,
+                             spokeCount N: Int,
+                             outerCount M: Int) -> (start: Angle, end: Angle) {
+        outerArcSpan(parentIndex: p,
+                     parentGeometry: RingBandGeometry(slotCount: N),
+                     outerCount: M)
     }
 
     // MARK: - Helpers
+
+    /// Returns the target slot whose angular region contains the source slot's
+    /// midpoint. This replaces legacy same-index "shared spoke" assumptions for
+    /// presentation such as keeping the inner branch lit during expansion.
+    static func alignedIndex(sourceIndex: Int,
+                             sourceGeometry: RingBandGeometry,
+                             targetGeometry: RingBandGeometry) -> Int {
+        let sourceWidth = twoPi / CGFloat(sourceGeometry.slotCount)
+        let source = min(max(0, sourceIndex), sourceGeometry.slotCount - 1)
+        let midpoint = sourceGeometry.angularOffset
+            + (CGFloat(source) + 0.5) * sourceWidth
+        return topLevelIndex(theta: normalizedAngle(midpoint), geometry: targetGeometry)
+    }
 
     /// Normalizes an angle (radians) into `[0, 2π)`.
     static func normalizedAngle(_ angle: CGFloat) -> CGFloat {
@@ -247,6 +349,14 @@ enum RadialGeometry {
         // Guard against `a == 2π` from FP rounding of a small negative input.
         if a >= twoPi { a -= twoPi }
         return a
+    }
+
+    private static func topLevelIndex(theta: CGFloat,
+                                      geometry: RingBandGeometry) -> Int {
+        let relative = normalizedAngle(theta - geometry.angularOffset)
+        let wedge = twoPi / CGFloat(geometry.slotCount)
+        return clamp(Int(floor(relative / wedge)), lower: 0,
+                     upper: geometry.slotCount - 1)
     }
 
     /// Clamps an integer into `[lower, upper]`. If `upper < lower` (empty range)

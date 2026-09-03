@@ -1,0 +1,65 @@
+{
+  "inner": [
+    {
+      "id": "50000000-0000-0000-0000-000000000001",
+      "label": "Customized inner",
+      "icon": "star",
+      "actionType": "custom",
+      "actionData": "inner-custom",
+      "wedgeColor": { "red": 0.9, "green": 0.8, "blue": 0.1, "alpha": 0.75 },
+      "iconColor": { "red": 0.05, "green": 0.05, "blue": 0.05, "alpha": 1 }
+    }
+  ],
+  "middle": [
+    {
+      "id": "50000000-0000-0000-0000-000000000002",
+      "label": "Customized future parent",
+      "icon": "hexagon",
+      "actionType": "fullyCustomizedFutureAction",
+      "actionData": "{\"opaque\":true,\"revision\":42}",
+      "subItems": [
+        {
+          "id": "50000000-0000-0000-0000-000000000003",
+          "label": "Customized child",
+          "icon": "diamond",
+          "actionType": "childFutureAction",
+          "actionData": "child-opaque",
+          "iconColor": { "red": 1, "green": 1, "blue": 1, "alpha": 0.9 }
+        }
+      ]
+    },
+    {
+      "id": "50000000-0000-0000-0000-000000000004",
+      "label": "Second middle",
+      "icon": "square",
+      "actionType": "custom",
+      "actionData": "second"
+    }
+  ],
+  "hudCustomization": {
+    "inner": {
+      "layout": { "slotCountMode": "fixed", "fixedSlotCount": 7, "angularOffset": 22.5 },
+      "appearance": {
+        "iconOrientation": "radial",
+        "wedgeColor": { "red": 0.15, "green": 0.25, "blue": 0.35, "alpha": 0.9 },
+        "iconColor": { "red": 0.95, "green": 0.95, "blue": 0.95, "alpha": 1 }
+      }
+    },
+    "middle": {
+      "layout": { "slotCountMode": "fixed", "fixedSlotCount": 5, "angularOffset": 315 },
+      "appearance": {
+        "iconOrientation": "tangential",
+        "wedgeColor": { "red": 0.2, "green": 0.4, "blue": 0.6, "alpha": 1 }
+      }
+    },
+    "outerAppearance": {
+      "iconOrientation": "upright",
+      "wedgeColor": { "red": 0.45, "green": 0.15, "blue": 0.55, "alpha": 1 },
+      "iconColor": { "red": 0.9, "green": 0.9, "blue": 0.2, "alpha": 1 }
+    },
+    "outerRingVisibility": "revealBeyondInnerRing",
+    "iconOrientation": "tangential",
+    "wedgeColor": { "red": 0.1, "green": 0.1, "blue": 0.1, "alpha": 1 },
+    "iconColor": { "red": 0.8, "green": 0.8, "blue": 0.8, "alpha": 1 }
+  }
+}

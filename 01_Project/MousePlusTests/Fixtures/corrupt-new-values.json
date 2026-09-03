@@ -1,0 +1,41 @@
+{
+  "inner": [
+    {
+      "id": "40000000-0000-0000-0000-000000000001",
+      "label": "Corrupt fields item",
+      "icon": "exclamationmark.triangle",
+      "actionType": "corruptFixtureFutureAction",
+      "actionData": "do-not-normalize-this-payload"
+    }
+  ],
+  "middle": [],
+  "hudCustomization": {
+    "inner": {
+      "layout": {
+        "slotCountMode": "futureMode",
+        "fixedSlotCount": -12,
+        "angularOffset": -90
+      },
+      "appearance": {
+        "iconOrientation": "radial",
+        "wedgeColor": "not-a-color",
+        "iconColor": { "red": 1.5, "green": -0.25, "blue": 0.5, "alpha": 2 }
+      }
+    },
+    "middle": {
+      "layout": {
+        "slotCountMode": "fixed",
+        "fixedSlotCount": 99,
+        "angularOffset": 725
+      },
+      "appearance": { "iconOrientation": "futureOrientation" }
+    },
+    "outerAppearance": {
+      "iconOrientation": "tangential",
+      "iconColor": { "red": 0.1, "green": 0.2, "blue": 0.3 }
+    },
+    "outerRingVisibility": 123,
+    "iconOrientation": "sideways",
+    "wedgeColor": { "red": "bad", "green": 0, "blue": 0, "alpha": 1 }
+  }
+}

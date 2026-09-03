@@ -11,6 +11,7 @@ struct Configuration: Codable {
     var triggers: TriggersConfig
     var appearance: AppearanceConfig
     var behavior: BehaviorConfig
+    var hudCustomization: HUDCustomization
 
     /// Temporary source-compat bridge (T3): pre-split code still reads `config.items`.
     /// Maps to `middle`, the band that absorbs old flat `items` on migration.
@@ -25,17 +26,19 @@ struct Configuration: Codable {
         middle: [RingMenuItem] = RingMenuItem.sampleItems,
         triggers: TriggersConfig = .default,
         appearance: AppearanceConfig = .default,
-        behavior: BehaviorConfig = .default
+        behavior: BehaviorConfig = .default,
+        hudCustomization: HUDCustomization = .default
     ) {
         self.inner = inner
         self.middle = middle
         self.triggers = triggers
         self.appearance = appearance
         self.behavior = behavior
+        self.hudCustomization = hudCustomization
     }
 
     private enum CodingKeys: String, CodingKey {
-        case inner, middle, triggers, appearance, behavior
+        case inner, middle, triggers, appearance, behavior, hudCustomization
         case items    // legacy, pre-split; flat array migrated into `middle`
         case hotkey   // legacy, pre-2026-04-29; migrated into `triggers.keyboard`
     }
@@ -59,6 +62,7 @@ struct Configuration: Codable {
 
         appearance = try c.decodeIfPresent(AppearanceConfig.self, forKey: .appearance) ?? .default
         behavior = try c.decodeIfPresent(BehaviorConfig.self, forKey: .behavior) ?? .default
+        hudCustomization = (try? c.decode(HUDCustomization.self, forKey: .hudCustomization)) ?? .default
 
         if let t = try c.decodeIfPresent(TriggersConfig.self, forKey: .triggers) {
             triggers = t
@@ -79,6 +83,7 @@ struct Configuration: Codable {
         try c.encode(triggers, forKey: .triggers)
         try c.encode(appearance, forKey: .appearance)
         try c.encode(behavior, forKey: .behavior)
+        try c.encode(hudCustomization, forKey: .hudCustomization)
     }
 }
 
@@ -262,7 +267,7 @@ struct AppearanceConfig: Codable, Equatable {
 /// Interaction behavior settings.
 /// `holdToActivate` / `tapToActivate` are legacy app-wide toggles; W4 obsoletes them
 /// in favor of the per-binding `TriggerMode` carried inside each `TriggerBinding`.
-struct BehaviorConfig: Codable {
+struct BehaviorConfig: Codable, Equatable {
     var holdToActivate: Bool
     var tapToActivate: Bool
     var dismissOnClickOutside: Bool

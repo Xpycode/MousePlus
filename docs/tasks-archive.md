@@ -1,8 +1,13 @@
 # Completed Tasks
 
-**Total archived:** 7
-**Last updated:** 2026-09-01
+**Total archived:** 12
+**Last updated:** 2026-09-03
 
+- [x] (2026-09-03) Wave 6: Pass migration, editor-to-runtime, full-test, build, and UI-constraint gates
+- [x] (2026-09-03) Wave 5: Complete reset/recovery and accessibility integration
+- [x] (2026-09-02) Wave 4: Extend editor state and add layout, orientation, color, and safe preview controls
+- [x] (2026-09-02) Waves 2–3: Integrate runtime state, rendering, center Settings, hit testing, and outer-ring policies
+- [x] (2026-09-02) Wave 1: Add customization configuration, per-band geometry, contrast/color resolution, and native AppKit controls
 - [x] (2026-09-01) Wave 7: pass automated, adversarial, accessibility, and reduced T12 live gates
 - [x] (2026-09-01) Wave 6: complete runtime live-apply/error integration and real default actions
 - [x] (2026-09-01) Wave 4: replace tabbed Settings, migrate panes, embed Menu Items, and retire the second editor

@@ -4,6 +4,193 @@ import XCTest
 
 @MainActor
 final class SettingsWorkspaceCoordinatorTests: XCTestCase {
+    func testResetAtomicallyDefaultsItemsLayoutAndAllColorOverridesOnly() async {
+        let initial = customizedHUDConfiguration()
+        let persistence = RecordingConfigurationPersistence(initial)
+        let coordinator = makeCoordinator(persistence)
+        await coordinator.load()
+
+        let reset = await coordinator.resetMenuItems()
+
+        XCTAssertTrue(reset)
+        let saved = await persistence.current
+        XCTAssertEqual(saved.inner, RingMenuItem.sampleInnerItems)
+        XCTAssertEqual(saved.middle, RingMenuItem.sampleItems)
+        XCTAssertEqual(saved.hudCustomization, .default)
+        XCTAssertEqual(saved.triggers, initial.triggers)
+        XCTAssertEqual(saved.appearance, initial.appearance)
+        XCTAssertEqual(saved.behavior, initial.behavior)
+        XCTAssertEqual(coordinator.workspaceState.reset, .undoAvailable)
+        XCTAssertTrue(coordinator.workspaceState.durableBackupAvailable)
+    }
+
+    func testUndoResetAtomicallyRestoresLayoutAndInheritedAndPerItemColors() async {
+        let initial = customizedHUDConfiguration()
+        let persistence = RecordingConfigurationPersistence(initial)
+        let coordinator = makeCoordinator(persistence)
+        await coordinator.load()
+        let reset = await coordinator.resetMenuItems()
+        XCTAssertTrue(reset)
+
+        let undone = await coordinator.undoMenuItemsReset()
+
+        XCTAssertTrue(undone)
+        let saved = await persistence.current
+        assertHUDMenuState(saved, equals: initial)
+        XCTAssertEqual(saved.triggers, initial.triggers)
+        XCTAssertEqual(saved.appearance, initial.appearance)
+        XCTAssertEqual(saved.behavior, initial.behavior)
+        XCTAssertEqual(coordinator.workspaceState.reset, .idle)
+    }
+
+    func testFailedBackupLeavesEntirePreResetHUDStateUntouched() async {
+        let initial = customizedHUDConfiguration()
+        let persistence = RecordingConfigurationPersistence(initial)
+        await persistence.setBackupFailure(TestFailure.write)
+        let coordinator = makeCoordinator(persistence)
+        await coordinator.load()
+
+        let reset = await coordinator.resetMenuItems()
+
+        XCTAssertFalse(reset)
+        assertHUDMenuState(coordinator.configuration, equals: initial)
+        let saved = await persistence.current
+        assertHUDMenuState(saved, equals: initial)
+        XCTAssertTrue(coordinator.dirtyFields.isEmpty)
+        XCTAssertFalse(coordinator.workspaceState.durableBackupAvailable)
+        guard case .failed = coordinator.workspaceState.reset else {
+            return XCTFail("Backup failure must report a failed reset")
+        }
+    }
+
+    func testFailedResetSaveAndCloseBarrierPreserveFullRecoverablePreResetHUDState() async throws {
+        let initial = customizedHUDConfiguration()
+        let persistence = RecordingConfigurationPersistence(initial)
+        let coordinator = makeCoordinator(persistence)
+        await coordinator.load()
+        await persistence.setSaveFailure(TestFailure.write)
+
+        let reset = await coordinator.resetMenuItems()
+        XCTAssertFalse(reset)
+        XCTAssertEqual(coordinator.configuration.inner, RingMenuItem.sampleInnerItems)
+        XCTAssertEqual(coordinator.configuration.middle, RingMenuItem.sampleItems)
+        XCTAssertEqual(coordinator.configuration.hudCustomization, .default)
+        XCTAssertEqual(coordinator.dirtyFields, [.menuItems])
+        XCTAssertTrue(coordinator.workspaceState.durableBackupAvailable)
+
+        let mayClose = await coordinator.requestClose()
+        XCTAssertFalse(mayClose)
+        guard case .blocked = coordinator.workspaceState.closeBarrier else {
+            return XCTFail("A failed reset write must block close")
+        }
+        let backup = try await persistence.loadBackup()
+        assertHUDMenuState(backup, equals: initial)
+
+        await persistence.setSaveFailure(nil)
+        let restoredBackup = await coordinator.restoreMenuItemsFromBackup()
+        XCTAssertTrue(restoredBackup)
+        let restored = await persistence.current
+        assertHUDMenuState(restored, equals: initial)
+        XCTAssertTrue(coordinator.dirtyFields.isEmpty)
+    }
+
+    func testHUDCustomizationAndItemOverrideSurviveConcurrentFieldEditRetryAndReload() async throws {
+        let persistence = RecordingConfigurationPersistence(Configuration())
+        let recorder = LiveApplyRecorder()
+        let coordinator = makeCoordinator(persistence, recorder: recorder)
+        await coordinator.load()
+        let itemID = try XCTUnwrap(coordinator.menuEditorModel.middle.first?.id)
+        coordinator.menuEditorModel.selection = SlotSelection(band: .middle, itemID: itemID, subItemID: nil)
+        coordinator.menuEditorModel.hudCustomization.middle.layout.angularOffset = 73
+        let binding = try XCTUnwrap(coordinator.menuEditorModel.binding(forItem: itemID, band: .middle))
+        binding.wrappedValue.iconColor = HUDColor(red: 0.8, green: 0.2, blue: 0.1)
+        coordinator.menuItemsDidChange()
+        coordinator.edit([.behavior]) { $0.behavior.dismissOnEscape = false }
+        await persistence.setSaveFailure(TestFailure.write)
+
+        let firstFlush = await coordinator.flush()
+        XCTAssertFalse(firstFlush)
+        XCTAssertEqual(coordinator.dirtyFields, [.menuItems, .behavior])
+        XCTAssertEqual(coordinator.menuEditorModel.selection?.itemID, itemID)
+        XCTAssertTrue(recorder.events.isEmpty)
+
+        await persistence.setSaveFailure(nil)
+        let retried = await coordinator.retry()
+        XCTAssertTrue(retried)
+        let saved = await persistence.current
+        XCTAssertEqual(saved.hudCustomization.middle.layout.angularOffset, 73)
+        XCTAssertEqual(saved.middle.first(where: { $0.id == itemID })?.iconColor, HUDColor(red: 0.8, green: 0.2, blue: 0.1))
+        XCTAssertFalse(saved.behavior.dismissOnEscape)
+        XCTAssertEqual(recorder.events.last?.hudCustomization, saved.hudCustomization)
+        XCTAssertEqual(coordinator.menuEditorModel.selection?.itemID, itemID)
+
+        await coordinator.load()
+        XCTAssertEqual(coordinator.menuEditorModel.hudCustomization.middle.layout.angularOffset, 73)
+        XCTAssertEqual(coordinator.menuEditorModel.middle.first(where: { $0.id == itemID })?.iconColor, HUDColor(red: 0.8, green: 0.2, blue: 0.1))
+    }
+
+    func testBackupRestoreRestoresHUDCustomizationAndItemOverrides() async throws {
+        var backup = Configuration()
+        backup.hudCustomization.outerRingVisibility = .alwaysHidden
+        backup.middle[0].wedgeColor = HUDColor(red: 0.1, green: 0.4, blue: 0.7)
+        let persistence = RecordingConfigurationPersistence(backup)
+        let coordinator = makeCoordinator(persistence)
+        await coordinator.load()
+        try await persistence.createBackup()
+        await coordinator.load()
+        coordinator.menuEditorModel.hudCustomization.outerRingVisibility = .alwaysVisible
+        coordinator.menuEditorModel.middle[0].wedgeColor = nil
+        coordinator.menuItemsDidChange()
+        let savedEdit = await coordinator.flush()
+        XCTAssertTrue(savedEdit)
+
+        let restoredBackup = await coordinator.restoreMenuItemsFromBackup()
+        XCTAssertTrue(restoredBackup)
+        let restored = await persistence.current
+        XCTAssertEqual(restored.hudCustomization.outerRingVisibility, .alwaysHidden)
+        XCTAssertEqual(restored.middle[0].wedgeColor, HUDColor(red: 0.1, green: 0.4, blue: 0.7))
+    }
+
+    private func customizedHUDConfiguration() -> Configuration {
+        var configuration = Configuration()
+        configuration.triggers.mouseButton = .mouseButton(buttonNumber: 7, mode: .tapToggle)
+        configuration.appearance.deadZone = 37
+        configuration.behavior.dismissOnEscape = false
+        configuration.hudCustomization.inner.layout = HUDRingLayout(
+            slotCountMode: .fixed,
+            fixedSlotCount: 7,
+            angularOffset: 31
+        )
+        configuration.hudCustomization.middle.layout = HUDRingLayout(
+            slotCountMode: .fixed,
+            fixedSlotCount: 8,
+            angularOffset: 73
+        )
+        configuration.hudCustomization.outerRingVisibility = .alwaysHidden
+        configuration.hudCustomization.iconOrientation = .radial
+        configuration.hudCustomization.wedgeColor = HUDColor(red: 0.1, green: 0.2, blue: 0.3)
+        configuration.hudCustomization.iconColor = HUDColor(red: 0.9, green: 0.8, blue: 0.7)
+        configuration.hudCustomization.inner.appearance.wedgeColor = HUDColor(red: 0.2, green: 0.3, blue: 0.4)
+        configuration.hudCustomization.middle.appearance.iconColor = HUDColor(red: 0.7, green: 0.6, blue: 0.5)
+        configuration.hudCustomization.outerAppearance.iconOrientation = .tangential
+        configuration.hudCustomization.outerAppearance.wedgeColor = HUDColor(red: 0.4, green: 0.3, blue: 0.2)
+        configuration.inner[0].wedgeColor = HUDColor(red: 0.3, green: 0.5, blue: 0.7)
+        configuration.middle[0].iconColor = HUDColor(red: 0.8, green: 0.4, blue: 0.2)
+        configuration.middle[0].subItems?[0].wedgeColor = HUDColor(red: 0.6, green: 0.2, blue: 0.4)
+        return configuration
+    }
+
+    private func assertHUDMenuState(
+        _ actual: Configuration,
+        equals expected: Configuration,
+        file: StaticString = #filePath,
+        line: UInt = #line
+    ) {
+        XCTAssertEqual(actual.inner, expected.inner, file: file, line: line)
+        XCTAssertEqual(actual.middle, expected.middle, file: file, line: line)
+        XCTAssertEqual(actual.hudCustomization, expected.hudCustomization, file: file, line: line)
+    }
+
     func testRapidEditsCoalesceIntoOneSave() async {
         let persistence = RecordingConfigurationPersistence(Configuration())
         let coordinator = makeCoordinator(persistence)
@@ -261,8 +448,10 @@ private actor RecordingConfigurationPersistence: ConfigurationPersisting {
     private(set) var saveCount = 0
     private var loadFailure: Error?
     private var saveFailure: Error?
+    private var backupFailure: Error?
     private var gatedSaveFailure: Error?
     private var gatedSaveContinuation: CheckedContinuation<Void, Never>?
+    private var backup: Configuration?
 
     init(_ configuration: Configuration) {
         current = configuration
@@ -287,6 +476,20 @@ private actor RecordingConfigurationPersistence: ConfigurationPersisting {
         current = configuration
     }
 
+    func hasBackup() async -> Bool {
+        backup != nil
+    }
+
+    func createBackup() async throws {
+        if let backupFailure { throw backupFailure }
+        backup = current
+    }
+
+    func loadBackup() async throws -> Configuration {
+        guard let backup else { throw TestFailure.write }
+        return backup
+    }
+
     func mutateCurrent(_ mutation: (inout Configuration) -> Void) {
         mutation(&current)
     }
@@ -297,6 +500,10 @@ private actor RecordingConfigurationPersistence: ConfigurationPersisting {
 
     func setSaveFailure(_ error: Error?) {
         saveFailure = error
+    }
+
+    func setBackupFailure(_ error: Error?) {
+        backupFailure = error
     }
 
     func gateNextSaveWithFailure(_ error: Error) {

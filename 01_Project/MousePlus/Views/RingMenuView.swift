@@ -2,7 +2,7 @@ import SwiftUI
 
 /// The concentric wedge ("pie") menu.
 ///
-/// Two aligned rings share spoke geometry (§2.1):
+/// Two independently configured top-level rings:
 ///   - **inner** band: symbol-only quick actions (`r0…r1`)
 ///   - **middle** band: labeled items, each direct or expandable (`r1…r2`)
 /// plus an **on-demand outer** band (`r2…r3`) that grows as a localized arc from
@@ -20,6 +20,17 @@ struct RingMenuView: View {
     /// wedge overlay; disabling this prevents hover events from replacing that
     /// persistent editor selection.
     var interactionEnabled = true
+
+    /// Hold-release commits through the global trigger-up event. Tap-toggle
+    /// commits from the in-panel pointer release. Keeping these paths exclusive
+    /// prevents an expandable parent from being committed twice on one release.
+    var commitsOnPointerRelease = true
+
+    /// Runtime and preview use distinct stable namespaces. The preview supplies
+    /// a selection callback so VoiceOver activation edits without executing.
+    var accessibilityIdentifierPrefix = "hud.wedge"
+    var exposesCenterSettings = true
+    var onAccessibilitySelection: ((ActiveSelection) -> Void)?
 
     // T11: sourced from `AppearanceConfig` via the view model (persisted in Settings):
     //   - `keepSpokeLit`: also keep inner wedge `p` lit on the live branch (§2.3).
@@ -39,8 +50,7 @@ struct RingMenuView: View {
     private var center: CGPoint { CGPoint(x: size / 2, y: size / 2) }
 
     private var radii: BandRadii { viewModel.radii }
-    private var spokeCount: Int { viewModel.spokeCount }
-    private var isExpanded: Bool { viewModel.expandedParentIndex != nil }
+    private var geometry: TopLevelRingGeometry { viewModel.geometry }
 
     var body: some View {
         ZStack {
@@ -54,12 +64,19 @@ struct RingMenuView: View {
                 .fill(.secondary.opacity(0.3))
                 .frame(width: radii.r0 * 2, height: radii.r0 * 2)
 
+            HUDCenterSettingsControl {
+                viewModel.activateCenterSettings()
+            }
+            .frame(width: radii.r0 * 1.6, height: radii.r0 * 1.6)
+            .allowsHitTesting(interactionEnabled)
+            .accessibilityHidden(!exposesCenterSettings)
+
             innerBand
             middleBand
 
             // Outer band — localized arc, only while expanded. Wrapped so it can
             // scale/opacity in from the parent wedge centroid (T7).
-            if isExpanded {
+            if viewModel.isOuterRingVisible {
                 outerBand
                     .transition(
                         .scale(scale: 0.1, anchor: parentCentroidUnitPoint)
@@ -89,71 +106,94 @@ struct RingMenuView: View {
                     guard interactionEnabled else { return }
                     viewModel.updateActive(at: value.location, center: center)
                 }
-                .onEnded { _ in
+                .onEnded { value in
                     guard interactionEnabled else { return }
-                    viewModel.commitActive()
+                    guard commitsOnPointerRelease else { return }
+                    viewModel.commit(at: value.location, center: center)
                 }
         )
-        // Tap-toggle: a plain click commits the active wedge.
-        .onTapGesture {
-            guard interactionEnabled else { return }
-            viewModel.commitActive()
-        }
     }
 
     // MARK: - Bands
 
-    /// Inner symbol-only band. `N` wedges; indices past `innerItems` are dim
-    /// padding placeholders so spokes stay aligned with the middle band (§2.1).
+    /// Inner symbol-only band. Fixed but unused slots remain part of `geometry`
+    /// without producing a SwiftUI or accessibility element.
     private var innerBand: some View {
-        ForEach(0..<spokeCount, id: \.self) { index in
-            let angles = RadialGeometry.wedgeAngles(
-                band: .inner, index: index, spokeCount: spokeCount,
-                expandedParentIndex: viewModel.expandedParentIndex,
-                outerCount: viewModel.outerItems.count
-            )
-            let isPlaceholder = index >= viewModel.innerItems.count
-            WedgeView(
-                item: item(in: viewModel.innerItems, at: index),
-                startAngle: angles.start,
-                endAngle: angles.end,
-                innerRadius: radii.r0,
-                outerRadius: radii.r1,
-                centroid: centroid(.inner, index),
-                size: size,
-                symbolOnly: true,
-                isHighlighted: isActive(.inner, index),
-                dimmed: dimmed(band: .inner, index: index),
-                dimOpacity: dimOpacity,
-                isPlaceholder: isPlaceholder
-            )
+        ForEach(Array(0..<geometry.inner.slotCount), id: \.self) { index in
+            if index < viewModel.innerItems.count {
+                let item = viewModel.innerItems[index]
+                let angles = RadialGeometry.wedgeAngles(
+                    band: .inner, index: index, geometry: geometry,
+                    expandedParentIndex: viewModel.expandedParentIndex,
+                    outerCount: viewModel.outerItems.count
+                )
+                WedgeView(
+                    item: item,
+                    startAngle: angles.start,
+                    endAngle: angles.end,
+                    innerRadius: radii.r0,
+                    outerRadius: radii.r1,
+                    centroid: centroid(.inner, index),
+                    size: size,
+                    symbolOnly: true,
+                    isHighlighted: isActive(.inner, index),
+                    dimmed: dimmed(band: .inner, index: index),
+                    dimOpacity: dimOpacity,
+                    presentation: presentation(
+                        for: item,
+                        band: .inner,
+                        selected: isActive(.inner, index),
+                        offBranch: dimmed(band: .inner, index: index)
+                    )
+                )
+                .hudWedgeAccessibility(
+                    presentation: wedgeAccessibility(item, band: .inner, index: index),
+                    activate: { accessibilityActivate(.inner, index) }
+                )
+            }
         }
     }
 
-    /// Middle labeled band. Same spoke geometry as inner; placeholder past
-    /// `middleItems`.
+    /// Middle labeled band, using its own effective slot count and rotation.
     private var middleBand: some View {
-        ForEach(0..<spokeCount, id: \.self) { index in
-            let angles = RadialGeometry.wedgeAngles(
-                band: .middle, index: index, spokeCount: spokeCount,
-                expandedParentIndex: viewModel.expandedParentIndex,
-                outerCount: viewModel.outerItems.count
-            )
-            let isPlaceholder = index >= viewModel.middleItems.count
-            WedgeView(
-                item: item(in: viewModel.middleItems, at: index),
-                startAngle: angles.start,
-                endAngle: angles.end,
-                innerRadius: radii.r1,
-                outerRadius: radii.r2,
-                centroid: centroid(.middle, index),
-                size: size,
-                symbolOnly: false,
-                isHighlighted: isActive(.middle, index),
-                dimmed: dimmed(band: .middle, index: index),
-                dimOpacity: dimOpacity,
-                isPlaceholder: isPlaceholder
-            )
+        ForEach(Array(0..<geometry.middle.slotCount), id: \.self) { index in
+            if index < viewModel.middleItems.count {
+                let item = viewModel.middleItems[index]
+                let angles = RadialGeometry.wedgeAngles(
+                    band: .middle, index: index, geometry: geometry,
+                    expandedParentIndex: viewModel.expandedParentIndex,
+                    outerCount: viewModel.outerItems.count
+                )
+                let hiddenParent = item.hasSubItems &&
+                    viewModel.hiddenSubmenuUnavailableReason != nil
+                WedgeView(
+                    item: item,
+                    startAngle: angles.start,
+                    endAngle: angles.end,
+                    innerRadius: radii.r1,
+                    outerRadius: radii.r2,
+                    centroid: centroid(.middle, index),
+                    size: size,
+                    symbolOnly: false,
+                    isHighlighted: isActive(.middle, index),
+                    dimmed: dimmed(band: .middle, index: index),
+                    dimOpacity: dimOpacity,
+                    presentation: presentation(
+                        for: item,
+                        band: .middle,
+                        selected: isActive(.middle, index),
+                        offBranch: dimmed(band: .middle, index: index)
+                    ),
+                    showsExpandAffordance: !hiddenParent
+                )
+                .hudWedgeAccessibility(
+                    presentation: wedgeAccessibility(
+                        item, band: .middle, index: index,
+                        unavailableReason: hiddenParent ? viewModel.hiddenSubmenuUnavailableReason : nil
+                    ),
+                    activate: hiddenParent ? nil : { accessibilityActivate(.middle, index) }
+                )
+            }
         }
     }
 
@@ -169,7 +209,7 @@ struct RingMenuView: View {
     private var outerBand: some View {
         ForEach(Array(viewModel.outerItems.enumerated()), id: \.element.id) { index, outerItem in
             let angles = RadialGeometry.wedgeAngles(
-                band: .outer, index: index, spokeCount: spokeCount,
+                band: .outer, index: index, geometry: geometry,
                 expandedParentIndex: viewModel.expandedParentIndex,
                 outerCount: viewModel.outerItems.count
             )
@@ -184,17 +224,63 @@ struct RingMenuView: View {
                 symbolOnly: false,
                 isHighlighted: isActive(.outer, index),
                 dimmed: false,
-                isPlaceholder: false
+                presentation: presentation(
+                    for: outerItem,
+                    band: .outer,
+                    selected: isActive(.outer, index),
+                    offBranch: false
+                )
+            )
+            .hudWedgeAccessibility(
+                presentation: wedgeAccessibility(outerItem, band: .outer, index: index),
+                activate: { accessibilityActivate(.outer, index) }
             )
         }
     }
 
     // MARK: - Geometry helpers
 
+    private func presentation(
+        for item: RingMenuItem,
+        band: Band,
+        selected: Bool,
+        offBranch: Bool
+    ) -> WedgePresentation {
+        let secondary = HUDColor(nsColor: .secondaryLabelColor)
+            ?? HUDColor(red: 0.5, green: 0.5, blue: 0.5)
+        let normalWedge = HUDColor(
+            red: secondary.red,
+            green: secondary.green,
+            blue: secondary.blue,
+            alpha: 0.2
+        )
+        let accent = HUDColor(nsColor: .controlAccentColor) ?? normalWedge
+        let foreground = HUDColor(nsColor: .labelColor) ?? .white
+        let resolution = viewModel.colorResolution(
+            for: item,
+            band: band,
+            application: .init(
+                wedge: selected ? accent : normalWedge,
+                icon: selected ? .white : foreground
+            ),
+            backdrop: HUDColor(nsColor: .windowBackgroundColor) ?? .black
+        )
+        let state: WedgePresentation.State = selected
+            ? .selected
+            : (offBranch ? .offBranch(opacity: dimOpacity) : .normal)
+        return WedgePresentation(
+            wedgeColor: resolution.requestedWedge,
+            iconColor: resolution.renderedIcon,
+            labelColor: resolution.renderedLabel,
+            orientation: viewModel.iconOrientation(for: band),
+            state: state
+        )
+    }
+
     private func centroid(_ band: Band, _ index: Int) -> CGPoint {
         RadialGeometry.centroid(
             band: band, index: index, center: center, radii: radii,
-            spokeCount: spokeCount,
+            geometry: geometry,
             expandedParentIndex: viewModel.expandedParentIndex,
             outerCount: viewModel.outerItems.count
         )
@@ -211,17 +297,28 @@ struct RingMenuView: View {
 
     // MARK: - State helpers
 
-    /// Item at `index`, or a blank placeholder item for padding wedges so
-    /// `WedgeView` always has something to render.
-    private func item(in items: [RingMenuItem], at index: Int) -> RingMenuItem {
-        guard index >= 0, index < items.count else {
-            return RingMenuItem(label: "", icon: "", actionType: .custom)
-        }
-        return items[index]
-    }
-
     private func isActive(_ band: Band, _ index: Int) -> Bool {
         viewModel.activeSelection == ActiveSelection(band: band, index: index)
+    }
+
+    private func wedgeAccessibility(
+        _ item: RingMenuItem, band: Band, index: Int, unavailableReason: String? = nil
+    ) -> RingWedgeAccessibility {
+        let name = band == .inner ? "Inner" : (band == .middle ? "Middle" : "Outer")
+        return RingWedgeAccessibility(
+            item: item, band: name, position: index, selected: isActive(band, index),
+            unavailableReason: unavailableReason,
+            identifierPrefix: accessibilityIdentifierPrefix
+        )
+    }
+
+    private func accessibilityActivate(_ band: Band, _ index: Int) {
+        let selection = ActiveSelection(band: band, index: index)
+        if let onAccessibilitySelection { onAccessibilitySelection(selection) }
+        else {
+            viewModel.activeSelection = selection
+            viewModel.commitActive()
+        }
     }
 
     /// Dimming (§2.3): when something is expanded, everything dims to 0.30 EXCEPT
@@ -234,9 +331,39 @@ struct RingMenuView: View {
         case .middle:
             return index != parent
         case .inner:
-            return !(keepSpokeLit && index == parent)
+            return !(keepSpokeLit && index == RadialGeometry.alignedIndex(
+                sourceIndex: parent,
+                sourceGeometry: geometry.middle,
+                targetGeometry: geometry.inner
+            ))
         case .outer:
             return false
+        }
+    }
+}
+
+private extension View {
+    @ViewBuilder
+    func hudWedgeAccessibility(
+        presentation: RingWedgeAccessibility,
+        activate: (() -> Void)?
+    ) -> some View {
+        if let activate {
+            self
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel(presentation.label)
+                .accessibilityValue(presentation.value)
+                .accessibilityIdentifier(presentation.identifier)
+                .accessibilityAddTraits(presentation.isSelected ? .isSelected : [])
+                .accessibilityAction { activate() }
+        } else {
+            self
+                .disabled(true)
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel(presentation.label)
+                .accessibilityValue(presentation.value)
+                .accessibilityIdentifier(presentation.identifier)
+                .accessibilityAddTraits(presentation.isSelected ? .isSelected : [])
         }
     }
 }

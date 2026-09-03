@@ -10,18 +10,28 @@ struct TestActionControl: View {
             for: item,
             contextAvailability: contextAvailability
         )
+        let displayedResult = controller.displayedResult.flatMap {
+            $0.itemID == item.id ? $0 : nil
+        }
         VStack(alignment: .leading, spacing: 4) {
             HStack(spacing: 8) {
                 AppKitButton(
-                    title: controller.isRunning ? "Testing…" : "Test Action",
-                    isEnabled: presentation.isEnabled,
+                    title: buttonTitle(for: displayedResult),
+                    isEnabled: displayedResult != nil || presentation.isEnabled,
                     accessibilityIdentifier: "menuItems.testAction",
-                    accessibilityValue: presentation.explanation ?? (controller.isRunning ? "Testing" : "Ready")
+                    accessibilityValue: displayedResult.map {
+                        "\($0.result.userFacingText). Activate to dismiss."
+                    } ?? presentation.explanation ?? (controller.isRunning ? "Testing" : "Ready")
                 ) {
                     Task { @MainActor in
-                        await controller.test(item, contextAvailability: contextAvailability)
+                        if displayedResult != nil {
+                            await controller.dismissResult()
+                        } else {
+                            await controller.test(item, contextAvailability: contextAvailability)
+                        }
                     }
                 }
+                .help(displayedResult == nil ? "Run this configured action" : "Dismiss the test result")
 
                 if let targetName = presentation.targetName {
                     Text("Target: \(targetName)")
@@ -42,21 +52,17 @@ struct TestActionControl: View {
                     .foregroundStyle(.red)
             }
 
-            if let result = controller.displayedResult, result.itemID == item.id {
-                HStack(alignment: .firstTextBaseline, spacing: 8) {
-                    Text(result.result.userFacingText)
-                        .font(.caption)
-                        .foregroundStyle(result.result.isSuccess ? .green : .red)
-                    AppKitButton(title: "Dismiss", accessibilityIdentifier: "menuItems.testAction.dismiss") {
-                        Task { @MainActor in await controller.dismissResult() }
-                    }
-                }
-            }
         }
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("menuItems.testAction.status")
         .task(id: item.id) {
             await controller.restoreResult(for: item.id)
         }
+    }
+
+    private func buttonTitle(for result: SettingsActionResult?) -> String {
+        if controller.isRunning { return "Testing…" }
+        guard let result else { return "Test Action" }
+        return result.result.isSuccess ? "✓ Action completed" : "Action failed — dismiss"
     }
 }

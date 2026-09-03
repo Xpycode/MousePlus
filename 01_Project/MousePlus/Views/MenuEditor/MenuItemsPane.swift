@@ -25,7 +25,7 @@ struct MenuItemsPane: View {
         MenuEditorWorkspace(
             model: coordinator.menuEditorModel,
             onReset: resetMenuItems,
-            trailingToolbar: {
+            actionAccessory: {
                 if let selectedItem {
                     TestActionControl(
                         item: selectedItem,
@@ -33,18 +33,23 @@ struct MenuItemsPane: View {
                         controller: testActionController
                     )
                 }
+            },
+            menuAccessory: {
                 recoveryAndStatus
             }
         )
-        // Only the selected-item form inside MenuEditorWorkspace scrolls. The
-        // band selector, preview, spoke count, and actions remain pinned.
-        .frame(minWidth: 860, minHeight: 600)
+        // The item form and customization column scroll independently. The band
+        // selector, preview, spoke count, and actions remain pinned.
+        .frame(minWidth: 880, minHeight: 600)
         .onChange(of: coordinator.menuEditorModel.inner) { _, _ in
             dismissTestResultForEditedSelection()
             coordinator.menuItemsDidChange()
         }
         .onChange(of: coordinator.menuEditorModel.middle) { _, _ in
             dismissTestResultForEditedSelection()
+            coordinator.menuItemsDidChange()
+        }
+        .onChange(of: coordinator.menuEditorModel.hudCustomization) { _, _ in
             coordinator.menuItemsDidChange()
         }
         .confirmationDialog(

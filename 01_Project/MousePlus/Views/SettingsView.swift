@@ -18,17 +18,40 @@ struct SettingsView: View {
     }
 
     var body: some View {
-        SettingsSidebarShell(selection: $selection, searchable: false) { section in
-            switch section {
-            case .general:
-                GeneralSettingsPane(coordinator: coordinator)
-            case .triggers:
-                TriggersSettingsView(coordinator: coordinator)
-            case .ringAppearance:
-                RingAppearanceSettingsPane(coordinator: coordinator)
-            case .menuItems:
-                MenuItemsPane(coordinator: coordinator, requestedItemID: $requestedMenuItemID)
+        HStack(spacing: 0) {
+            List(selection: $selection) {
+                ForEach(SettingsSection.orderedCases(), id: \.self) { section in
+                    Label(section.title, systemImage: section.systemImage)
+                        .tag(section)
+                }
             }
+            .listStyle(.sidebar)
+            .frame(width: 200)
+
+            // HSplitView extends its divider through the unified title area.
+            // Start this local boundary below the title instead.
+            Divider()
+                .padding(.top, 52)
+
+            Group {
+                if let selection {
+                    switch selection {
+                    case .general:
+                        GeneralSettingsPane(coordinator: coordinator)
+                    case .triggers:
+                        TriggersSettingsView(coordinator: coordinator)
+                    case .ringAppearance:
+                        RingAppearanceSettingsPane(coordinator: coordinator)
+                    case .menuItems:
+                        MenuItemsPane(coordinator: coordinator, requestedItemID: $requestedMenuItemID)
+                    }
+                } else {
+                    Text("Select a category")
+                        .foregroundStyle(.secondary)
+                }
+            }
+            .padding()
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
         .frame(minWidth: 1120, minHeight: 680)
         .background(SettingsWindowCloseBarrier(coordinator: coordinator).frame(width: 0, height: 0))

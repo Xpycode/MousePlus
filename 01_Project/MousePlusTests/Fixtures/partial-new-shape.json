@@ -1,0 +1,34 @@
+{
+  "inner": [
+    {
+      "id": "30000000-0000-0000-0000-000000000001",
+      "label": "Partial inner",
+      "icon": "circle",
+      "actionType": "custom",
+      "actionData": "inner"
+    },
+    {
+      "id": "30000000-0000-0000-0000-000000000002",
+      "label": "Partial inner two",
+      "icon": "circle.fill",
+      "actionType": "custom",
+      "actionData": "inner-two"
+    }
+  ],
+  "middle": [
+    {
+      "id": "30000000-0000-0000-0000-000000000003",
+      "label": "Partial middle",
+      "icon": "square",
+      "actionType": "partialFutureAction",
+      "actionData": "partial-opaque-payload"
+    }
+  ],
+  "hudCustomization": {
+    "inner": {
+      "layout": { "slotCountMode": "fixed", "fixedSlotCount": 6 }
+    },
+    "outerRingVisibility": "alwaysHidden",
+    "wedgeColor": { "red": 0.2, "green": 0.3, "blue": 0.4, "alpha": 0.8 }
+  }
+}

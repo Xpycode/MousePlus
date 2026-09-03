@@ -6,11 +6,13 @@
 <!-- Ideas and future work. Added by /interview, user input, or discovered during development. -->
 <!-- Priority: top = highest, bottom = lowest -->
 
-- [ ] Add per-item tile and icon colors, including accessible contrast handling and a default/inherit option
+- [ ] Clarify Menu & Rings scope with Menu/Inner/Middle/Outer subtabs; add per-ring label visibility and optional upright/radial/tangential label orientation with readable auto-flipping
 
 ## Current Sprint
 <!-- Active work. Populated by /plan or /execute. Keep focused (3-7 tasks). -->
 <!-- When done: /log moves to tasks-archive.md -->
+
+- [ ] Wave 7: Complete signed live verification and adversarial review
 
 ---
 

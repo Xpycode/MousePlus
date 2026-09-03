@@ -8,41 +8,70 @@
 import SwiftUI
 
 /// Reusable, persistence-neutral editor composition embedded in Settings.
-struct MenuEditorWorkspace<TrailingToolbar: View>: View {
+struct MenuEditorWorkspace<ActionAccessory: View, MenuAccessory: View>: View {
     @Bindable var model: MenuEditorModel
     var onReset: () -> Void
-    @ViewBuilder var trailingToolbar: () -> TrailingToolbar
+    @ViewBuilder var actionAccessory: () -> ActionAccessory
+    @ViewBuilder var menuAccessory: () -> MenuAccessory
 
     @State private var showResetConfirm = false
+    @State private var inspectorSelection = 0
 
     var body: some View {
         VStack(spacing: 12) {
-            topBar
-
             // Keep the preview in a fixed column. A resizable HSplitView lets
             // the selected form's changing intrinsic size renegotiate both pane
             // widths, which visibly shifts the ring as selections change.
             HStack(spacing: 12) {
                 // The default ring is 448pt square. A stable 480pt column leaves
                 // breathing room without coupling its position to the form.
-                RingPreviewSelector(model: model)
-                    .frame(width: 480)
-                    .frame(maxHeight: .infinity)
+                VStack(spacing: 8) {
+                    topBar
+                    RingPreviewSelector(model: model)
+                        .frame(maxHeight: .infinity)
+                }
+                .frame(width: 480)
+                .frame(maxHeight: .infinity)
 
-                // Right pane: `Form` already owns native scrolling. Wrapping it
-                // in another ScrollView can clip its leading labels.
-                SlotEditorForm(model: model)
-                    .padding(.vertical, 4)
-                    .frame(minWidth: 400, maxWidth: .infinity, maxHeight: .infinity)
+                // One inspector uses the available height without competing
+                // nested panes. Selecting a wedge routes directly to its editor;
+                // menu-wide controls remain one explicit tab away.
+                VStack(spacing: 8) {
+                    AppKitSegmentedControl(
+                        labels: ["Menu & Rings", "Selected Item"],
+                        selection: $inspectorSelection,
+                        accessibilityLabel: "Menu Items inspector",
+                        accessibilityIdentifier: "menuItems.inspector"
+                    )
+                    .frame(maxWidth: 300)
+
+                    if inspectorSelection == 0 {
+                        VStack(spacing: 8) {
+                            ScrollView {
+                                HUDCustomizationControls(model: model)
+                                    .padding(.vertical, 4)
+                            }
+                            Divider()
+                            AppKitButton(
+                                title: "Reset Menu Items…",
+                                accessibilityIdentifier: "menuItems.reset"
+                            ) {
+                                showResetConfirm = true
+                            }
+                            menuAccessory()
+                        }
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    } else {
+                        SlotEditorForm(model: model, actionAccessory: actionAccessory)
+                            .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    }
+                }
+                .frame(minWidth: 380, maxWidth: .infinity, maxHeight: .infinity)
             }
-
-            Divider()
-
-            bottomToolbar
         }
         .padding(16)
         .confirmationDialog(
-            "Reset Menu Items only? Inner and middle ring items will be replaced with defaults. Triggers, appearance, and behavior will not change. A recoverable backup will be created first.",
+            "Reset Menu Items and HUD customization? Inner and middle ring items, fixed/automatic slot counts, angular offsets, outer-ring visibility, icon orientations, and menu/ring/item wedge and icon color overrides will return to defaults. Triggers, general appearance, and behavior will not change. A recoverable backup will be created first.",
             isPresented: $showResetConfirm,
             titleVisibility: .visible
         ) {
@@ -51,12 +80,17 @@ struct MenuEditorWorkspace<TrailingToolbar: View>: View {
             }
             Button("Cancel", role: .cancel) {}
         }
+        .onChange(of: model.selection) { oldSelection, newSelection in
+            if let newSelection, newSelection != oldSelection {
+                inspectorSelection = 1
+            }
+        }
     }
 
     // MARK: - Top bar
 
     private var topBar: some View {
-        HStack {
+        HStack(spacing: 10) {
             // Band selector — also retargets where "Add" inserts.
             AppKitSegmentedControl(
                 labels: ["Inner", "Middle"],
@@ -66,22 +100,14 @@ struct MenuEditorWorkspace<TrailingToolbar: View>: View {
             )
             .frame(maxWidth: 220)
 
-            Spacer()
-
-            // Spoke-usage readout for the active band.
-            Text("\(model.spokesUsed) of 8 spokes used")
+            // Keep capacity beside the control it describes instead of using
+            // a full-width status row above both inspectors.
+            Text("\(model.spokesUsed)/8 used")
                 .font(.caption)
                 .foregroundStyle(.secondary)
-        }
-    }
 
-    // MARK: - Bottom toolbar
+            Spacer(minLength: 0)
 
-    private var bottomToolbar: some View {
-        HStack(alignment: .top, spacing: 12) {
-            // Add to the active band; disabled (with an inline note) when THAT
-            // band is full — the cap is per-band, so a full middle ring must
-            // not block adding inner items (and vice versa).
             AppKitButton(
                 title: addButtonTitle,
                 isEnabled: !model.atCap(for: model.activeBand),
@@ -89,28 +115,8 @@ struct MenuEditorWorkspace<TrailingToolbar: View>: View {
             ) {
                 model.addItem(to: model.activeBand)
             }
-
-            if model.atCap(for: model.activeBand) {
-                Text("Max 8 spokes")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-
-            Spacer()
-
-            AppKitButton(
-                title: "Reset Menu Items…",
-                accessibilityIdentifier: "menuItems.reset"
-            ) {
-                showResetConfirm = true
-            }
-
-            trailingToolbar()
+            .help(model.atCap(for: model.activeBand) ? "Maximum 8 spokes" : addButtonTitle)
         }
-        // Test-action validation and result text appears below its button. Keep
-        // that feedback from changing the toolbar's reported height, which would
-        // otherwise shrink the editor row and move the vertically-centred ring.
-        .frame(height: 76, alignment: .top)
     }
 
     /// Label for the Add button, reflecting the active band.

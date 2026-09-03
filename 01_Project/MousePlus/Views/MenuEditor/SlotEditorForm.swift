@@ -13,12 +13,14 @@
 //  state rather than trapping.
 //
 
+import AppKit
 import SwiftUI
 
 /// Detail editor for whatever `model.selection` points at.
-struct SlotEditorForm: View {
+struct SlotEditorForm<ActionAccessory: View>: View {
 
     @Bindable var model: MenuEditorModel
+    @ViewBuilder var actionAccessory: () -> ActionAccessory
     @State private var labelFocused = false
 
     var body: some View {
@@ -94,9 +96,21 @@ struct SlotEditorForm: View {
         Form {
             // 1. Context header.
             Section {
-                Text(contextHeader)
-                    .font(.headline)
-                    .foregroundStyle(.secondary)
+                HStack {
+                    Text(contextHeader)
+                        .font(.headline)
+                        .foregroundStyle(.secondary)
+                    Spacer()
+                    AppKitButton(
+                        title: "Delete",
+                        systemImageName: "trash",
+                        accessibilityLabel: "Delete this slot",
+                        accessibilityIdentifier: "menuItems.delete"
+                    ) {
+                        model.removeSelectedItem()
+                    }
+                    .help("Delete this slot")
+                }
             }
 
             // 2. Icon + (optional) label.
@@ -115,11 +129,13 @@ struct SlotEditorForm: View {
                         accessibilityIdentifier: "menuItems.editor.label"
                     )
                 }
+                itemColorControls(item: item)
             }
 
             // 3. Action type + type-aware data control.
             Section("Action") {
                 ActionDataEditor(item: item)
+                actionAccessory()
             }
 
             // 4. Sub-items — middle top-level only (depth cap 3).
@@ -133,6 +149,90 @@ struct SlotEditorForm: View {
             }
         }
         .formStyle(.grouped)
+    }
+
+    @ViewBuilder
+    private func itemColorControls(item: Binding<RingMenuItem>) -> some View {
+        if let selection = model.selection,
+           let wedgeBinding = colorBinding(for: .wedge),
+           let iconBinding = colorBinding(for: .icon) {
+            let resolution = model.colorResolution(for: item.wrappedValue, selection: selection)
+
+            LabeledContent("Wedge color") {
+                AppKitColorWell(
+                    color: wedgeBinding,
+                    defaultCustomColor: resolution.requestedWedge.nsColor,
+                    accessibilityLabel: "Item wedge color",
+                    accessibilityIdentifier: "menuItems.editor.wedgeColor"
+                )
+            }
+            LabeledContent("Icon color") {
+                AppKitColorWell(
+                    color: iconBinding,
+                    defaultCustomColor: resolution.requestedIcon.nsColor,
+                    accessibilityLabel: "Item icon color",
+                    accessibilityIdentifier: "menuItems.editor.iconColor"
+                )
+            }
+
+            LabeledContent("Requested") {
+                HStack(spacing: 10) {
+                    colorSample(resolution.requestedWedge, label: "Requested wedge color")
+                    colorSample(resolution.requestedIcon, label: "Requested icon color")
+                }
+            }
+
+            if resolution.renderedIcon != resolution.requestedIcon
+                || (!isInnerTopLevel && resolution.renderedLabel != resolution.requestedLabel) {
+                Label {
+                    Text(contrastNotice(for: resolution))
+                } icon: {
+                    Image(systemName: "info.circle")
+                }
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .accessibilityIdentifier("menuItems.editor.colorContrastNotice")
+            }
+        }
+    }
+
+    private func colorBinding(for role: RingMenuItem.ColorRole) -> Binding<NSColor?>? {
+        guard let selection = model.selection, let itemID = selection.itemID else { return nil }
+        if let subItemID = selection.subItemID {
+            return model.colorBinding(forSubItem: subItemID, ofMiddle: itemID, role: role)
+        }
+        return model.colorBinding(forItem: itemID, band: selection.band, role: role)
+    }
+
+    private func colorSample(_ color: HUDColor, label: String) -> some View {
+        Circle()
+            .fill(Color(nsColor: color.nsColor))
+            .overlay(Circle().stroke(.secondary, lineWidth: 1))
+            .frame(width: 18, height: 18)
+            .accessibilityLabel(label)
+            .accessibilityValue(colorDescription(color))
+    }
+
+    private func colorDescription(_ color: HUDColor) -> String {
+        String(
+            format: "sRGB red %.0f percent, green %.0f percent, blue %.0f percent, opacity %.0f percent",
+            color.red * 100, color.green * 100, color.blue * 100, color.alpha * 100
+        )
+    }
+
+    private func contrastNotice(for resolution: HUDColorResolver.Resolution) -> String {
+        let iconChanged = resolution.renderedIcon != resolution.requestedIcon
+        let labelChanged = !isInnerTopLevel && resolution.renderedLabel != resolution.requestedLabel
+        switch (iconChanged, labelChanged) {
+        case (true, true):
+            return "The preview uses contrast-safe icon and label colors. Your requested colors are preserved."
+        case (true, false):
+            return "The preview uses a contrast-safe icon color. Your requested color is preserved."
+        case (false, true):
+            return "The preview uses a contrast-safe label color. Your requested color is preserved."
+        case (false, false):
+            return ""
+        }
     }
 
     // MARK: - Context header
@@ -246,16 +346,6 @@ struct SlotEditorForm: View {
             }
 
             Spacer()
-
-            AppKitButton(
-                title: "Delete",
-                systemImageName: "trash",
-                accessibilityLabel: "Delete this slot",
-                accessibilityIdentifier: "menuItems.delete"
-            ) {
-                model.removeSelectedItem()
-            }
-            .help("Delete this slot")
         }
     }
 }
