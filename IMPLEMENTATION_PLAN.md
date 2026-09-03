@@ -59,13 +59,13 @@ Close the sustained-use HUD redesign by fixing every failure found during signed
 
 ### Wave 3 — Movement and lifecycle access (UI confirmation gate)
 
-- [ ] **3.1: Add thresholded center dragging for tap-toggle HUDs** → `01_Project/MousePlus/Views/Components/HUDCenterSettingsControl.swift`, `01_Project/MousePlus/Controllers/RingWindowController.swift`, `01_Project/MousePlus/Views/RingMenuView.swift`, tests
+- [x] **3.1: Add thresholded center dragging for tap-toggle HUDs** → `01_Project/MousePlus/Views/Components/HUDCenterSettingsControl.swift`, `01_Project/MousePlus/Controllers/RingWindowController.swift`, `01_Project/MousePlus/Views/RingMenuView.swift`, tests
   - Proposed interaction: the existing center Settings control remains the sole affordance; a click opens Settings, while movement beyond 4 pt becomes a panel drag. Enable dragging only for tap-toggle invocations and clamp the moved panel to the active screen.
   - UI gate: confirm this interaction before implementation; do not add a raw SwiftUI control.
   - Success: click and drag are mutually exclusive, drag never executes a wedge, coordinate-space hit testing remains correct after movement, and hold-release remains pointer-anchored.
   - Backpressure: gesture-state unit tests, screen-clamp tests, and signed drag/click verification.
 
-- [ ] **3.2: Provide a visible quit path and verify status-item rendering** → `01_Project/MousePlus/Views/GeneralSettingsPane.swift`, `01_Project/MousePlus/Controllers/MenuBarController.swift`, `01_Project/MousePlus/MousePlusApp.swift`, tests
+- [x] **3.2: Provide a visible quit path and verify status-item rendering** → `01_Project/MousePlus/Views/GeneralSettingsPane.swift`, `01_Project/MousePlus/Controllers/MenuBarController.swift`, `01_Project/MousePlus/MousePlusApp.swift`, tests
   - Proposed placement: native AppKit “Quit MousePlus” button in General, following existing `AppKitButton` wiring; retain the menu command and make the template status image explicit and correctly sized.
   - UI gate: confirm General-pane placement before implementation.
   - Success: Quit works from General and the menu when visible; a signed relaunch preserves configuration and re-arms triggers.
@@ -110,5 +110,5 @@ Close the sustained-use HUD redesign by fixing every failure found during signed
 |------|---------|-----------|---------|
 | 1 | 2026-09-03 | 2026-09-03 | Circular reorder and shared outer-ring policy implemented; 35 focused tests passed |
 | 2 | 2026-09-03 | 2026-09-03 | Circular dismissal, policy-gated outer surfaces, and neutral preview selection implemented; 48 combined focused tests passed |
-| 3 | | | |
+| 3 | 2026-09-03 | 2026-09-03 | Thresholded tap-toggle HUD dragging and visible quit/status-item access implemented; 11 combined focused tests passed |
 | 4 | | | |
