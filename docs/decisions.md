@@ -4,6 +4,25 @@ This file tracks the WHY behind technical and design decisions.
 
 ---
 
+## 2026-09-03 - Runtime geometry and lifecycle closure invariants
+
+**Context:** Adversarial review of the sustained-use HUD remediation found that the overlay panel
+remained sized for the default outer radius even when customization increased `r3`, and that Quit
+could terminate during the Settings coordinator's debounced save. Translucent wedge contrast was
+also calculated against a deterministic backdrop while SwiftUI rendered the requested alpha color
+over context-dependent material.
+
+**Decision:** Derive each HUD panel's square size from the live configured `r3`; route every visible
+Quit action through the Settings coordinator's durability barrier and refuse termination when a
+pending save fails; draw the same composited wedge color used by foreground contrast resolution.
+
+**Consequences:** Custom-size HUD geometry, clipping, dismissal, and display clamping share one live
+radius. Quit/relaunch cannot silently discard a pending edit. Preview and runtime use deterministic
+wedge pixels and their icon/label contrast claims match the actual drawn base color. Material remains
+the backing surface but no longer changes translucent configured wedge colors by host context.
+
+---
+
 ## 2026-09-03 - HUD remediation interaction and presentation boundaries
 
 **Context:** Signed review exposed four related ambiguities: transparent corners of the square panel

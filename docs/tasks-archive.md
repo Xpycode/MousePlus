@@ -1,8 +1,9 @@
 # Completed Tasks
 
-**Total archived:** 14
+**Total archived:** 15
 **Last updated:** 2026-09-03
 
+- [x] (2026-09-03) Wave 3: Add confirmed HUD movement and visible lifecycle controls
 - [x] (2026-09-03) Wave 2: Fix circular dismissal, outer geometry, and preview/runtime color fidelity
 - [x] (2026-09-03) Wave 1: Fix circular reordering and unify outer-ring policy state
 - [x] (2026-09-03) Wave 6: Pass migration, editor-to-runtime, full-test, build, and UI-constraint gates

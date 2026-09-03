@@ -12,7 +12,6 @@
 <!-- Active work. Populated by /plan or /execute. Keep focused (3-7 tasks). -->
 <!-- When done: /log moves to tasks-archive.md -->
 
-- [x] Wave 3: Add confirmed HUD movement and visible lifecycle controls
 - [ ] Wave 4: Run adversarial, automated, signed-live, and documentation closure gates
 
 ---
