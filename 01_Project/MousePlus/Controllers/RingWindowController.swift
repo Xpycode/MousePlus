@@ -18,17 +18,6 @@ final class RingWindowController {
     private var panel: NSPanel?
     private var hostingView: FirstMouseHostingView<AnyView>?
 
-    /// Side length of the (square) overlay panel.
-    ///
-    /// Derived from the outermost band radius (`r3`) so the full ring — plus a
-    /// little breathing room for shadow/hover affordances — always fits:
-    /// `side = 2 * r3 + pad` (`IMPLEMENTATION_PLAN.md` §2.1). With the default
-    /// `BandRadii` (`r3 = 224`) and `pad = 24` this is `472pt`.
-    private let panelSide: CGFloat = {
-        let pad: CGFloat = 24
-        return 2 * BandRadii().r3 + pad
-    }()
-
     var isVisible: Bool {
         panel?.isVisible ?? false
     }
@@ -47,9 +36,9 @@ final class RingWindowController {
         )
     }
 
-    func show<Content: View>(at point: NSPoint, content: Content) {
-        let panel = createPanel()
-        let side = panelSide
+    func show<Content: View>(at point: NSPoint, outerRadius: CGFloat, content: Content) {
+        let side = HUDPanelGeometry.squareSide(outerRadius: outerRadius)
+        let panel = createPanel(side: side)
         let squareSize = NSSize(width: side, height: side)
 
         let hostingView = FirstMouseHostingView(rootView: AnyView(content))
@@ -118,9 +107,9 @@ final class RingWindowController {
         return origin
     }
 
-    private func createPanel() -> NSPanel {
+    private func createPanel(side: CGFloat) -> NSPanel {
         let panel = NSPanel(
-            contentRect: NSRect(origin: .zero, size: NSSize(width: panelSide, height: panelSide)),
+            contentRect: NSRect(origin: .zero, size: NSSize(width: side, height: side)),
             styleMask: [.borderless, .nonactivatingPanel],
             backing: .buffered,
             defer: false
@@ -153,6 +142,11 @@ enum HUDDismissalGeometry {
 }
 
 enum HUDPanelGeometry {
+    /// Full HUD diameter plus breathing room for shadows and hover affordances.
+    static func squareSide(outerRadius: CGFloat, padding: CGFloat = 24) -> CGFloat {
+        max(0, 2 * outerRadius + padding)
+    }
+
     static func clampedOrigin(_ origin: CGPoint, size: CGSize, in visibleFrame: CGRect) -> CGPoint {
         CGPoint(
             x: clamped(origin.x, extent: size.width, min: visibleFrame.minX, max: visibleFrame.maxX),

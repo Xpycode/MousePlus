@@ -295,7 +295,10 @@ struct RingMenuView: View {
             backdrop: HUDColor(nsColor: .windowBackgroundColor) ?? .black
         )
         return WedgePresentation(
-            wedgeColor: resolution.requestedWedge,
+            // Draw the same deterministic composite used for contrast checks.
+            // Otherwise translucent overrides blend against SwiftUI material,
+            // which differs between the live panel and Settings preview.
+            wedgeColor: resolution.renderedWedge,
             iconColor: resolution.renderedIcon,
             labelColor: resolution.renderedLabel,
             orientation: viewModel.iconOrientation(for: band),

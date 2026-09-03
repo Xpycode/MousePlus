@@ -60,6 +60,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// status item cannot be seen.
     @MainActor static var quitApplication: (() -> Void)?
 
+    /// Installed by the Settings workspace while it exists so termination can
+    /// cross the same durability barrier as closing the Settings window.
+    @MainActor static var flushPendingSettingsChanges: (() async -> Bool)?
+
     private var menuBarController: MenuBarController?
     private var ringWindowController: RingWindowController?
     private var triggerService: TriggerService?
@@ -135,7 +139,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func setupMenuBar() {
         Self.quitApplication = {
-            NSApp.terminate(nil)
+            Task { @MainActor in
+                _ = await Self.performApplicationQuit(
+                    flush: Self.flushPendingSettingsChanges,
+                    terminate: { NSApp.terminate(nil) }
+                )
+            }
         }
 
         menuBarController = MenuBarController()
@@ -152,6 +161,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         menuBarController?.onQuitClicked = {
             Self.quitApplication?()
         }
+    }
+
+    /// Returns false and leaves the process running when pending configuration
+    /// cannot be made durable. This prevents Quit from racing autosave.
+    @discardableResult
+    static func performApplicationQuit(
+        flush: (() async -> Bool)?,
+        terminate: () -> Void
+    ) async -> Bool {
+        guard await (flush?() ?? true) else { return false }
+        terminate()
+        return true
     }
 
     private func showInputRecorder() {
@@ -244,7 +265,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 controller?.movePanel(by: delta)
             } : nil
         )
-        controller.show(at: mouseLocation, content: view)
+        controller.show(
+            at: mouseLocation,
+            outerRadius: ringViewModel.radii.r3,
+            content: view
+        )
 
         startDismissMonitor()
     }

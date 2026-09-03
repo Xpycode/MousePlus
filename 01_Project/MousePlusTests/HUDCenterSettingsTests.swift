@@ -91,6 +91,12 @@ final class HUDCenterSettingsTests: XCTestCase {
         )
     }
 
+    func testPanelSideTracksConfiguredOuterRadius() {
+        XCTAssertEqual(HUDPanelGeometry.squareSide(outerRadius: 150), 324)
+        XCTAssertEqual(HUDPanelGeometry.squareSide(outerRadius: 224), 472)
+        XCTAssertEqual(HUDPanelGeometry.squareSide(outerRadius: 300), 624)
+    }
+
     func testPanelLargerThanScreenPinsToMinimumEdges() {
         XCTAssertEqual(
             HUDPanelGeometry.clampedOrigin(

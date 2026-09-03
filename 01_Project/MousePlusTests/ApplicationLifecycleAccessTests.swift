@@ -6,6 +6,7 @@ import XCTest
 final class ApplicationLifecycleAccessTests: XCTestCase {
     override func tearDown() {
         AppDelegate.quitApplication = nil
+        AppDelegate.flushPendingSettingsChanges = nil
         super.tearDown()
     }
 
@@ -36,5 +37,32 @@ final class ApplicationLifecycleAccessTests: XCTestCase {
         XCTAssertTrue(image.isTemplate)
         XCTAssertEqual(MenuBarController.statusButtonAccessibilityIdentifier, "menuBar.statusItem")
         XCTAssertEqual(MenuBarController.quitMenuItemAccessibilityIdentifier, "menuBar.quitMousePlus")
+    }
+
+    func testQuitFlushesPendingSettingsBeforeTermination() async {
+        var events: [String] = []
+
+        let didQuit = await AppDelegate.performApplicationQuit(
+            flush: {
+                events.append("flush")
+                return true
+            },
+            terminate: { events.append("terminate") }
+        )
+
+        XCTAssertTrue(didQuit)
+        XCTAssertEqual(events, ["flush", "terminate"])
+    }
+
+    func testQuitDoesNotTerminateWhenPendingSettingsCannotBeSaved() async {
+        var didTerminate = false
+
+        let didQuit = await AppDelegate.performApplicationQuit(
+            flush: { false },
+            terminate: { didTerminate = true }
+        )
+
+        XCTAssertFalse(didQuit)
+        XCTAssertFalse(didTerminate)
     }
 }
