@@ -15,6 +15,8 @@ import SwiftUI
 struct RingMenuView: View {
     @Bindable var viewModel: RingViewModel
     @Environment(\.accessibilityReduceMotion) private var accessibilityReduceMotion
+    @State private var hasAppeared = false
+    @State private var outerMotionState = HUDOuterBranchMotionState()
 
     /// Whether this view should drive selection from pointer input. The menu
     /// editor renders the real ring as a preview, but owns selection through its
@@ -43,23 +45,24 @@ struct RingMenuView: View {
     //   - `dimOpacity`: opacity of off-branch wedges when something is expanded (§2.3).
     private var keepSpokeLit: Bool { viewModel.appearance.keepSpokeLit }
     private var dimOpacity: Double { viewModel.appearance.dimOpacity }
-    private var hoverMotion: HUDMotionPresentationDescriptor {
-        // The menu editor uses the real ring for its preview. Its selection is
-        // persistent editor state, not runtime hover feedback, so it must stay
-        // animation-free even when the saved runtime preference is enabled.
+    private func motion(for role: HUDMotionRole) -> HUDMotionPresentationDescriptor {
+        // The embedded editor preview must remain animation-free.
         guard interactionEnabled else { return .instant }
         return HUDMotionPolicy.resolve(
-            role: .hover,
+            role: role,
             configuration: viewModel.appearance.motion,
             reduceMotion: accessibilityReduceMotion
         )
     }
-    private var outerExpansionMotion: HUDMotionPresentationDescriptor {
-        guard interactionEnabled else { return .instant }
-        return HUDMotionPolicy.resolve(
-            role: .outerExpansion,
-            configuration: viewModel.appearance.motion,
-            reduceMotion: accessibilityReduceMotion
+    private var hoverMotion: HUDMotionPresentationDescriptor { motion(for: .hover) }
+    private var outerExpansionMotion: HUDMotionPresentationDescriptor { motion(for: .outerExpansion) }
+
+    private var outerBranchIdentity: HUDOuterBranchIdentity {
+        HUDOuterBranchIdentity(
+            parentID: viewModel.expandedParentIndex.flatMap {
+                viewModel.middleItems.indices.contains($0) ? viewModel.middleItems[$0].id : nil
+            },
+            items: viewModel.isOuterRingVisible ? viewModel.outerItems : []
         )
     }
 
@@ -78,9 +81,18 @@ struct RingMenuView: View {
     }
 
     var body: some View {
+        let identity = outerBranchIdentity
+        let nextMotionState = outerMotionState.updating(identity)
+        let expansion = nextMotionState.isReplacement ? motion(for: .branchChange) : outerExpansionMotion
+        let branchMotion = motion(for: .branchChange)
+        let summonMotion = motion(for: .summon)
+        // Resolve eagerly: an outgoing view must never read the next branch's
+        // mutable model while SwiftUI retains it for its removal transition.
+        let wedges = outerWedgeSnapshots
+
         ZStack {
             // Persistent backing stops at the middle band's outer edge. The
-            // on-demand outer surface is rendered with `outerBand` below so a
+            // on-demand outer surface is rendered with the branch below so a
             // hidden submenu never leaves a misleading r2…r3 halo.
             Circle()
                 .fill(.ultraThinMaterial)
@@ -110,15 +122,42 @@ struct RingMenuView: View {
             innerBand
             middleBand
 
-            // The render-only reveal is driven by one shared phase, so full-circle
-            // Apps wedges begin together and hit testing still sees final geometry.
-            if viewModel.isOuterRingVisible {
-                HUDOuterBandMotion(descriptor: outerExpansionMotion) { progress in
-                    outerBand(revealProgress: progress)
+            // Removing this owner also discards any older branches still in
+            // flight, so Escape/reset cannot leave a fading ghost behind.
+            if identity.parentID != nil {
+                ZStack {
+                    if viewModel.isOuterRingVisible {
+                        HUDOuterBandMotion(descriptor: expansion) { progress in
+                            ZStack {
+                                ForEach(wedges) { wedge in
+                                    wedge.render(descriptor: expansion, progress: progress)
+                                }
+                            }
+                        }
+                        .id(identity)
+                        .transition(HUDOuterBranchTransition())
+                    }
                 }
+                .animation(
+                    branchMotion.effect != .instant
+                        ? .easeOut(duration: branchMotion.duration) : nil,
+                    value: identity
+                )
+                .transition(.identity)
             }
         }
         .frame(width: size, height: size)
+        // Only the rendered content fades. AppKit installs the panel at its
+        // final frame/alpha, and all pointer geometry is already authoritative.
+        .opacity(summonMotion.effect == .instant || hasAppeared ? 1 : 0)
+        .onAppear {
+            withAnimation(summonMotion.effect == .instant ? nil : .easeOut(duration: summonMotion.duration)) {
+                hasAppeared = true
+            }
+        }
+        .onChange(of: identity, initial: true) { _, newIdentity in
+            outerMotionState = outerMotionState.updating(newIdentity)
+        }
         // Single hit-test surface — the whole square is interactive (§2.2).
         .contentShape(Rectangle())
         // Pointer movement (tap-toggle / hover) drives the active wedge.
@@ -238,80 +277,47 @@ struct RingMenuView: View {
         }
     }
 
-    /// Outer band — a localized arc of the expanded parent's sub-items (§2.3).
-    /// Always lit (it IS the live branch).
-    ///
-    /// Iterates the items themselves keyed by stable `id`, NOT `0..<count`. A
-    /// constant-range `ForEach(0..<count)` captures the range at graph-build time;
-    /// when `outerItems` empties on commit/collapse/reset, SwiftUI re-renders the
-    /// stale indices and `outerItems[index]` traps "Index out of range" (crashed
-    /// the app on selecting a sub-item, 2026-05-31). Enumerate so `index` (the arc
-    /// offset the geometry needs) comes from the *current* snapshot.
-    private func outerBand(revealProgress: CGFloat) -> some View {
-        ZStack {
-            ForEach(Array(viewModel.outerItems.enumerated()), id: \.element.id) { index, outerItem in
-                let finalAngles = RadialGeometry.wedgeAngles(
-                    band: .outer, index: index, geometry: geometry,
-                    expandedParentIndex: viewModel.expandedParentIndex,
-                    outerCount: viewModel.outerItems.count,
-                    outerLayout: viewModel.outerRingLayout
-                )
-                let motionFrame = HUDOuterBandMotionFrame.resolve(
-                    layout: viewModel.outerRingLayout,
-                    descriptor: outerExpansionMotion,
-                    progress: revealProgress,
-                    parentMidpoint: expandedParentMidpoint,
-                    finalStartAngle: finalAngles.start,
-                    finalEndAngle: finalAngles.end,
-                    innerRadius: radii.r2,
-                    outerRadius: radii.r3
-                )
-                OuterWedgeBacking(
-                    startAngle: motionFrame.startAngle,
-                    endAngle: motionFrame.endAngle,
-                    innerRadius: motionFrame.innerRadius,
-                    outerRadius: motionFrame.outerRadius,
-                    size: size
-                )
-                .opacity(motionFrame.contentOpacity)
-                .accessibilityHidden(true)
-
-                WedgeView(
-                    item: outerItem,
-                    iconSource: iconSource(for: outerItem),
-                    startAngle: motionFrame.startAngle,
-                    endAngle: motionFrame.endAngle,
-                    contentStartAngle: finalAngles.start,
-                    contentEndAngle: finalAngles.end,
-                    innerRadius: motionFrame.innerRadius,
-                    outerRadius: motionFrame.outerRadius,
-                    contentInnerRadius: radii.r2,
-                    contentOuterRadius: radii.r3,
-                    centroid: centroid(.outer, index),
-                    size: size,
-                    labelPresentation: labelPresentation(
-                        for: outerItem,
-                        band: .outer,
-                        startAngle: finalAngles.start,
-                        endAngle: finalAngles.end
-                    ),
-                    isHighlighted: isActive(.outer, index),
-                    dimmed: false,
-                    presentation: presentation(
-                        for: outerItem,
-                        band: .outer,
-                        hovered: isActive(.outer, index),
-                        offBranch: false
-                    ),
-                    hoverMotion: hoverMotion,
-                    showsSelectionMarker: isPersistentSelection(.outer, index)
-                )
-                .opacity(motionFrame.contentOpacity)
-                .hudWedgeAccessibility(
-                    presentation: wedgeAccessibility(outerItem, band: .outer, index: index),
-                    activate: { accessibilityActivate(.outer, index) }
-                )
-            }
+    /// Every field used to render an outgoing branch is a value snapshot,
+    /// including app icons, geometry, labels, and accessibility metadata.
+    private var outerWedgeSnapshots: [HUDOuterWedgeSnapshot] {
+        viewModel.outerItems.enumerated().map { index, item in
+            let angles = RadialGeometry.wedgeAngles(
+                band: .outer, index: index, geometry: geometry,
+                expandedParentIndex: viewModel.expandedParentIndex,
+                outerCount: viewModel.outerItems.count,
+                outerLayout: viewModel.outerRingLayout
+            )
+            let parentID = outerBranchIdentity.parentID
+            return HUDOuterWedgeSnapshot(
+                item: item,
+                iconSource: iconSource(for: item),
+                startAngle: angles.start,
+                endAngle: angles.end,
+                radii: radii,
+                centroid: centroid(.outer, index),
+                size: size,
+                layout: viewModel.outerRingLayout,
+                parentMidpoint: expandedParentMidpoint,
+                labelPresentation: labelPresentation(
+                    for: item, band: .outer, startAngle: angles.start, endAngle: angles.end
+                ),
+                presentation: presentation(
+                    for: item, band: .outer, hovered: isActive(.outer, index), offBranch: false
+                ),
+                isHighlighted: isActive(.outer, index),
+                hoverMotion: hoverMotion,
+                showsSelectionMarker: isPersistentSelection(.outer, index),
+                accessibility: wedgeAccessibility(item, band: .outer, index: index),
+                activate: {
+                    // A retained transition must never activate an old index in
+                    // the new branch, even if an accessibility callback is queued.
+                    guard outerBranchIdentity.parentID == parentID,
+                          viewModel.isOuterRingVisible,
+                          viewModel.outerItems.indices.contains(index),
+                          viewModel.outerItems[index] == item else { return }
+                    accessibilityActivate(.outer, index)
+                }
+            )
         }
     }
 
@@ -449,7 +455,7 @@ struct RingMenuView: View {
     }
 }
 
-private extension View {
+extension View {
     @ViewBuilder
     func hudWedgeAccessibility(
         presentation: RingWedgeAccessibility,

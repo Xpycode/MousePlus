@@ -180,8 +180,11 @@ final class RingRuntimeInteractionTests: XCTestCase {
     }
 
     func testRuntimeHostForwardsPrimaryMouseUpForTapToggleCommit() throws {
-        let side = HUDPanelGeometry.squareSide(outerRadius: 224)
-        let host = RingHostingView(rootView: EmptyView())
+        let model = makeModel(motion: maximumMotion)
+        let side = HUDPanelGeometry.squareSide(outerRadius: model.radii.r3)
+        let host = RingHostingView(rootView: RingMenuView(
+            viewModel: model, commitsOnPointerRelease: false
+        ))
         host.frame = CGRect(x: 0, y: 0, width: side, height: side)
         let window = NSWindow(contentRect: host.frame, styleMask: .borderless,
                               backing: .buffered, defer: false)
@@ -194,7 +197,7 @@ final class RingRuntimeInteractionTests: XCTestCase {
             forwardedCenter = center
         }
 
-        let localPoint = CGPoint(x: 82, y: 117)
+        let localPoint = CGPoint(x: 32, y: 47)
         let windowPoint = CGPoint(x: localPoint.x, y: side - localPoint.y)
         let event = try XCTUnwrap(NSEvent.mouseEvent(
             with: .leftMouseUp,
@@ -217,16 +220,28 @@ final class RingRuntimeInteractionTests: XCTestCase {
     }
 
     func testTapToggleReHitTestsFinalLocationBeforeCommit() {
-        let model = makeModel()
+        let model = makeModel(motion: maximumMotion)
+        model.isVisible = true
         var closes = 0
-        model.requestClose = { closes += 1 }
-        model.activeSelection = ActiveSelection(band: .inner, index: 0)
+        model.requestClose = {
+            XCTAssertNil(model.activeSelection)
+            XCTAssertNil(model.expandedParentIndex)
+            XCTAssertTrue(model.outerItems.isEmpty)
+            model.isVisible = false
+            closes += 1
+        }
+        defer { model.requestClose = nil }
+        model.updateActive(at: point(model, .inner, 0), center: .zero)
 
+        // Both final-position paths run in the same synchronous turn as opening,
+        // without yielding. Rendering the summon fade is a separate live check.
         XCTAssertEqual(model.commit(at: .zero, center: .zero), .noSelection)
+        XCTAssertNil(model.activeSelection)
         XCTAssertEqual(closes, 0)
 
         XCTAssertEqual(model.commit(at: point(model, .inner, 1), center: .zero), .executed)
         XCTAssertEqual(closes, 1)
+        XCTAssertFalse(model.isVisible)
     }
 
     func testTapToggleRevealAutoExpandsOnNaturalParentHoverBeforeClick() {
@@ -257,8 +272,9 @@ final class RingRuntimeInteractionTests: XCTestCase {
         XCTAssertFalse(AppDelegate.keepsRingOpen(after: .unavailable))
     }
 
-    func testRevealHoverSwitchesExpandableBranchesWithoutExecuting() {
-        let model = makeModel(outerVisibility: .revealBeyondInnerRing)
+    func testRevealBranchReplacementIsImmediatelySelectableWithMaximumMotion() {
+        let model = makeModel(outerVisibility: .revealBeyondInnerRing,
+                              motion: maximumMotion)
         model.middleItems[1].subItems = [item("Other outer")]
         var closes = 0
         model.requestClose = { closes += 1 }
@@ -271,6 +287,16 @@ final class RingRuntimeInteractionTests: XCTestCase {
         XCTAssertEqual(model.expandedParentIndex, 1)
         XCTAssertEqual(model.outerItems.map(\.label), ["Other outer"])
         XCTAssertEqual(closes, 0)
+
+        // The replacement is selectable immediately, even while a view could
+        // still be crossfading the previous branch's rendered content.
+        model.updateActive(at: point(model, .outer, 0), center: .zero)
+        XCTAssertEqual(model.activeSelection, ActiveSelection(band: .outer, index: 0))
+        XCTAssertEqual(model.activeSelection.flatMap(model.item(for:))?.id,
+                       model.middleItems[1].subItems?.first?.id)
+        XCTAssertEqual(model.commitActive(), .executed)
+        XCTAssertEqual(closes, 1)
+        XCTAssertTrue(model.outerItems.isEmpty)
     }
 
     func testAlwaysStillRequiresCommitAndHiddenStillSuppressesHoverExpansion() {
@@ -339,7 +365,7 @@ final class RingRuntimeInteractionTests: XCTestCase {
     }
 
     func testEscapeCollapsesThenRequestsCloseAndCloseResetsInvocation() {
-        let model = makeModel()
+        let model = makeModel(motion: maximumMotion)
         _ = model.commit(at: point(model, .middle, 0), center: .zero)
 
         XCTAssertFalse(model.handleEscape())
@@ -354,12 +380,21 @@ final class RingRuntimeInteractionTests: XCTestCase {
         XCTAssertFalse(model.hasRevealedOuterRing)
     }
 
+    private var maximumMotion: HUDMotionConfiguration {
+        HUDMotionConfiguration(isEnabled: true,
+                               baseDuration: HUDMotionPolicy.maximumDuration,
+                               summon: .fade, hover: .emphasis,
+                               outerExpansion: .radialReveal,
+                               branchChange: .crossfade)
+    }
+
     private func makeModel(
         innerSlots: Int = 2,
         middleSlots: Int = 2,
         middleOffsetDegrees: Double = 0,
         hiddenOuter: Bool = false,
-        outerVisibility: OuterRingVisibility? = nil
+        outerVisibility: OuterRingVisibility? = nil,
+        motion: HUDMotionConfiguration = .default
     ) -> RingViewModel {
         var customization = HUDCustomization.default
         customization.inner.layout = HUDRingLayout(
@@ -377,7 +412,8 @@ final class RingRuntimeInteractionTests: XCTestCase {
             inner: [item("Inner 0"), item("Inner 1")],
             middle: [parent, item("Direct")],
             appearance: AppearanceConfig(deadZone: 10, innerEdge: 20,
-                                         middleEdge: 30, outerEdge: 40),
+                                         middleEdge: 30, outerEdge: 40,
+                                         motion: motion),
             hudCustomization: customization
         )
         let model = RingViewModel()

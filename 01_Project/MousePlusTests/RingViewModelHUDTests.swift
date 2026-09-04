@@ -351,31 +351,50 @@ final class RingViewModelHUDTests: XCTestCase {
         }
     }
 
-    /// A `reset()` issued before the async `.runningApps` fetch resolves must
-    /// discard the late result — the epoch/parent-index guard in `expand()`.
-    func testDynamicSourceRunningAppsLateResultIsDiscardedAfterReset() async {
+    /// Pending Apps results must not replace a newer static branch or restore a
+    /// reset invocation, even with the longest branch crossfade configured.
+    /// This uses the real workspace service, whose completion is not injectable;
+    /// the bounded drain follows the population regression above.
+    func testDynamicSourceRunningAppsLateResultIsDiscardedAfterRepointAndReset() async {
         var customization = HUDCustomization.default
         customization.outerRingVisibility = .alwaysVisible
         var middle = [item("Apps")]
         middle[0].dynamicSource = .runningApps
+        var snap = item("Snap")
+        snap.subItems = [item("Left"), item("Right")]
+        middle.append(snap)
         let config = Configuration(
             inner: [],
             middle: middle,
             triggers: .default,
             appearance: AppearanceConfig(deadZone: 10, innerEdge: 20,
-                                         middleEdge: 30, outerEdge: 40),
+                                         middleEdge: 30, outerEdge: 40,
+                                         motion: HUDMotionConfiguration(
+                                            baseDuration: HUDMotionPolicy.maximumDuration
+                                         )),
             hudCustomization: customization
         )
-        let model = RingViewModel()
-        model.load(from: config)
+        for resetAfterRepoint in [false, true] {
+            let model = RingViewModel()
+            model.load(from: config)
 
-        model.expand(0)
-        model.reset()
-        for _ in 0..<5 { await Task.yield() }
-        try? await Task.sleep(nanoseconds: 30_000_000)
+            // All mutations occur before the main actor yields to the Apps task.
+            model.expand(0)
+            model.expand(1)
+            XCTAssertEqual(model.outerItems.map(\.id), snap.subItems?.map(\.id))
+            if resetAfterRepoint { model.reset() }
+            for _ in 0..<5 { await Task.yield() }
+            try? await Task.sleep(nanoseconds: 30_000_000)
 
-        XCTAssertTrue(model.outerItems.isEmpty)
-        XCTAssertNil(model.expandedParentIndex)
+            if resetAfterRepoint {
+                XCTAssertTrue(model.outerItems.isEmpty)
+                XCTAssertNil(model.expandedParentIndex)
+            } else {
+                XCTAssertEqual(model.outerItems.map(\.id), snap.subItems?.map(\.id))
+                XCTAssertEqual(model.expandedParentIndex, 1)
+            }
+            XCTAssertTrue(model.dynamicIcons.isEmpty)
+        }
     }
 
     func testConditionalOuterHitTargetsExistOnDirectArrival() {
