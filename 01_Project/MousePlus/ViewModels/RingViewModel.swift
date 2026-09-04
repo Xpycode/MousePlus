@@ -1,3 +1,4 @@
+import AppKit
 import SwiftUI
 
 /// A cursor-driven selection: which band, and which item index within it.
@@ -89,6 +90,15 @@ final class RingViewModel {
     var expandedParentIndex: Int?
     /// Current cursor-driven selection, or nil for the dead zone / out of bounds.
     var activeSelection: ActiveSelection?
+
+    /// Runtime-only icons for `.runningApps`-sourced outer items, keyed by item
+    /// `id`. Side dictionary — never persisted, never touches the `Codable` model.
+    private(set) var dynamicIcons: [RingMenuItem.ID: NSImage] = [:]
+
+    /// Bumped on every `expand()` call (and on `collapse()`/`reset()`) so a stale
+    /// in-flight async fetch from a since-collapsed or re-pointed expansion can
+    /// never assign late.
+    private var expansionEpoch = 0
 
     /// Band edge radii (defaults from §2.1). Sourced from `AppearanceConfig` via `load(from:)`.
     var radii = BandRadii()
@@ -321,22 +331,46 @@ final class RingViewModel {
     }
 
     /// Expand a middle wedge: point `expandedParentIndex` at it and populate the
-    /// outer band from its sub-items. Switching branches = just call with a
-    /// different index (re-points in place, no explicit collapse needed).
+    /// outer band from its sub-items (`.none`) or a runtime source (`.runningApps`).
+    /// Switching branches = just call with a different index (re-points in place,
+    /// no explicit collapse needed).
     func expand(_ parentIndex: Int) {
         guard parentIndex >= 0, parentIndex < middleItems.count else { return }
-        let items = middleItems[parentIndex].subItems ?? []
-        guard OuterRingPolicyState.parentIsAvailable(
-            policy: hudCustomization.outerRingVisibility, itemCount: items.count
-        ) else { return }
-        expandedParentIndex = parentIndex
-        outerItems = items
+        expansionEpoch += 1
+        let parent = middleItems[parentIndex]
+
+        switch parent.dynamicSource {
+        case .none:
+            let items = parent.subItems ?? []
+            guard OuterRingPolicyState.parentIsAvailable(
+                policy: hudCustomization.outerRingVisibility, itemCount: items.count
+            ) else { return }
+            expandedParentIndex = parentIndex
+            outerItems = items
+
+        case .runningApps:
+            expandedParentIndex = parentIndex
+            // Transient empty arc — no "Loading…" placeholder; `NSWorkspace`
+            // enumeration is effectively instant (APP_SWITCHER_PLAN.md §3).
+            outerItems = []
+            Task {
+                // TODO(Wave 4): capture `let epoch = expansionEpoch` before this
+                // Task, call AppSwitcherService.runningApps(), map the result to
+                // RingMenuItems (actionType: .appSwitch, actionData: bundleIdentifier),
+                // stash icons into dynamicIcons, cap at ~12, then
+                //   guard epoch == expansionEpoch, expandedParentIndex == parentIndex
+                //   else { return }
+                // before assigning outerItems.
+            }
+        }
     }
 
     /// Collapse the outer band back to root (keeps any active selection).
     func collapse() {
         expandedParentIndex = nil
         outerItems = []
+        dynamicIcons = [:]
+        expansionEpoch += 1
     }
 
     /// Returns `true` when Escape should close the invocation. An expanded
@@ -359,6 +393,8 @@ final class RingViewModel {
         activeSelection = nil
         expandedParentIndex = nil
         outerItems = []
+        dynamicIcons = [:]
+        expansionEpoch += 1
         outerRingPolicyState = OuterRingPolicyState()
     }
 

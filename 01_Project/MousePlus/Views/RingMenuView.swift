@@ -150,6 +150,7 @@ struct RingMenuView: View {
                 )
                 WedgeView(
                     item: item,
+                    iconSource: iconSource(for: item),
                     startAngle: angles.start,
                     endAngle: angles.end,
                     innerRadius: radii.r0,
@@ -192,6 +193,7 @@ struct RingMenuView: View {
                     viewModel.hiddenSubmenuUnavailableReason != nil
                 WedgeView(
                     item: item,
+                    iconSource: iconSource(for: item),
                     startAngle: angles.start,
                     endAngle: angles.end,
                     innerRadius: radii.r1,
@@ -252,6 +254,7 @@ struct RingMenuView: View {
 
                 WedgeView(
                     item: outerItem,
+                    iconSource: iconSource(for: outerItem),
                     startAngle: angles.start,
                     endAngle: angles.end,
                     innerRadius: radii.r2,
@@ -280,6 +283,12 @@ struct RingMenuView: View {
     }
 
     // MARK: - Geometry helpers
+
+    /// A dynamic-source item with a fetched icon renders that live app icon;
+    /// everything else falls back to its configured SF Symbol.
+    private func iconSource(for item: RingMenuItem) -> IconSource {
+        viewModel.dynamicIcons[item.id].map { .appIcon($0) } ?? .sfSymbol(item.icon)
+    }
 
     private func presentation(
         for item: RingMenuItem,

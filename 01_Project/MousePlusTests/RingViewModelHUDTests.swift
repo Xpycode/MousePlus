@@ -209,6 +209,48 @@ final class RingViewModelHUDTests: XCTestCase {
         XCTAssertEqual(closeRequests, 0)
     }
 
+    /// Regression guard (Wave 2): a `.none`-sourced middle wedge must expand
+    /// synchronously from its static `subItems`, identically to before
+    /// `expand()` grew a `dynamicSource` switch.
+    func testStaticSubItemsStillExpandSynchronouslyAndUnchanged() {
+        let model = makeModel()
+        let children = model.middleItems[0].subItems ?? []
+        XCTAssertFalse(children.isEmpty)
+
+        model.expand(0)
+
+        XCTAssertEqual(model.expandedParentIndex, 0)
+        XCTAssertEqual(model.outerItems.map(\.label), children.map(\.label))
+        XCTAssertTrue(model.dynamicIcons.isEmpty)
+    }
+
+    /// A `.runningApps`-sourced wedge points the expansion at itself and shows
+    /// a transient empty arc (no "Loading…" placeholder) — population itself is
+    /// wired in a later wave.
+    func testDynamicSourceRunningAppsExpandsToTransientEmptyArc() {
+        var customization = HUDCustomization.default
+        customization.outerRingVisibility = .alwaysVisible
+        var middle = [item("Apps")]
+        middle[0].dynamicSource = .runningApps
+        let config = Configuration(
+            inner: [],
+            middle: middle,
+            triggers: .default,
+            appearance: AppearanceConfig(deadZone: 10, innerEdge: 20,
+                                         middleEdge: 30, outerEdge: 40),
+            hudCustomization: customization
+        )
+        let model = RingViewModel()
+        model.load(from: config)
+
+        model.expand(0)
+
+        XCTAssertEqual(model.expandedParentIndex, 0)
+        XCTAssertTrue(model.outerItems.isEmpty)
+        XCTAssertTrue(model.dynamicIcons.isEmpty)
+        XCTAssertFalse(model.isOuterRingVisible)
+    }
+
     func testConditionalOuterHitTargetsExistOnlyAfterReveal() {
         let model = conditionalModel()
         model.expand(0)

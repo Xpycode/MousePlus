@@ -59,6 +59,9 @@ struct OuterWedgeBacking: View {
 struct WedgeView: View {
     /// The menu item this wedge represents.
     let item: RingMenuItem
+    /// Where this wedge's glyph comes from — an SF Symbol (tinted with
+    /// `iconColor`) or a live app icon (rendered full-color, never tinted).
+    let iconSource: IconSource
     /// Wedge angular start (view space, CW from +x). From `RadialGeometry.wedgeAngles`.
     let startAngle: Angle
     /// Wedge angular end (view space, CW from +x). From `RadialGeometry.wedgeAngles`.
@@ -91,6 +94,7 @@ struct WedgeView: View {
 
     init(
         item: RingMenuItem,
+        iconSource: IconSource,
         startAngle: Angle,
         endAngle: Angle,
         innerRadius: CGFloat,
@@ -106,6 +110,7 @@ struct WedgeView: View {
         showsExpandAffordance: Bool = true
     ) {
         self.item = item
+        self.iconSource = iconSource
         self.startAngle = startAngle
         self.endAngle = endAngle
         self.innerRadius = innerRadius
@@ -200,12 +205,7 @@ struct WedgeView: View {
         if labelPresentation.isCaptionVisible {
             VStack(spacing: 4) {
                 HStack(spacing: 3) {
-                    OrientedHUDIcon(
-                        systemName: SFSymbol.resolved(item.icon),
-                        orientation: presentation.orientation,
-                        wedgeMidpoint: normalizedMidpoint,
-                        color: iconColor
-                    )
+                    iconView(color: iconColor)
                     // Subtle "expandable" hint for items with sub-items.
                     if item.hasSubItems && showsExpandAffordance {
                         Image(systemName: "chevron.right")
@@ -226,12 +226,27 @@ struct WedgeView: View {
                     .rotationEffect(.degrees(labelPresentation.rotationDegrees))
             }
         } else {
+            iconView(color: iconColor)
+        }
+    }
+
+    /// Renders `iconSource`: an SF Symbol (tinted, oriented like today) or a
+    /// live app icon (full-color, never tinted, clipped to a rounded rect).
+    @ViewBuilder
+    private func iconView(color: Color) -> some View {
+        switch iconSource {
+        case .sfSymbol(let name):
             OrientedHUDIcon(
-                systemName: SFSymbol.resolved(item.icon),
+                systemName: SFSymbol.resolved(name),
                 orientation: presentation.orientation,
                 wedgeMidpoint: normalizedMidpoint,
-                color: iconColor
+                color: color
             )
+        case .appIcon(let nsImage):
+            Image(nsImage: nsImage)
+                .resizable()
+                .frame(width: 28, height: 28)
+                .clipShape(RoundedRectangle(cornerRadius: 6))
         }
     }
 }
@@ -268,6 +283,7 @@ struct WedgeView: View {
         // Symbol-only inner wedge (index 0).
         WedgeView(
             item: inner,
+            iconSource: .sfSymbol(inner.icon),
             startAngle: angles(.inner, 0).start, endAngle: angles(.inner, 0).end,
             innerRadius: radii.r0, outerRadius: radii.r1,
             centroid: centroid(.inner, 0), size: size,
@@ -280,6 +296,7 @@ struct WedgeView: View {
         // Labeled middle wedge (index 1).
         WedgeView(
             item: labeled,
+            iconSource: .sfSymbol(labeled.icon),
             startAngle: angles(.middle, 1).start, endAngle: angles(.middle, 1).end,
             innerRadius: radii.r1, outerRadius: radii.r2,
             centroid: centroid(.middle, 1), size: size
@@ -288,6 +305,7 @@ struct WedgeView: View {
         // Highlighted expandable middle wedge (index 2) — shows chevron hint.
         WedgeView(
             item: expandable,
+            iconSource: .sfSymbol(expandable.icon),
             startAngle: angles(.middle, 2).start, endAngle: angles(.middle, 2).end,
             innerRadius: radii.r1, outerRadius: radii.r2,
             centroid: centroid(.middle, 2), size: size,
@@ -297,6 +315,7 @@ struct WedgeView: View {
         // Dimmed middle wedge (index 3) — off the live branch.
         WedgeView(
             item: labeled,
+            iconSource: .sfSymbol(labeled.icon),
             startAngle: angles(.middle, 3).start, endAngle: angles(.middle, 3).end,
             innerRadius: radii.r1, outerRadius: radii.r2,
             centroid: centroid(.middle, 3), size: size,
