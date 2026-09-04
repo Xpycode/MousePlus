@@ -12,8 +12,6 @@ No queued backlog items.
 <!-- Active work. Populated by /plan or /execute. Keep focused (3-7 tasks). -->
 <!-- When done: /log moves to tasks-archive.md -->
 
-- [x] Task 1.1: Add tolerant label customization fields and compatibility defaults
-- [x] Task 1.2: Define label visibility and readable rotation as pure presentation policy
 - [ ] Task 2.1: Reorganize HUD customization into Menu/Inner/Middle/Outer tabs
 - [ ] Task 3.1: Integrate label policy across live HUD and preview
 - [ ] Task 3.2: Preserve label settings across every Settings write and recovery path
