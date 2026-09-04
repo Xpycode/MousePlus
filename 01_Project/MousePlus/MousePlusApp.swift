@@ -74,6 +74,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var triggerEventTask: Task<Void, Never>?
     private var configService: ConfigurationService?
     private var permissionsService = PermissionsService()
+    private let appSwitcherService = AppSwitcherService()
     private var onboardingWindowController: OnboardingWindowController?
     private var inputRecorderWindowController: InputRecorderWindowController?
 
@@ -102,6 +103,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         setupMenuBar()
         loadConfiguration()
+
+        Task { await appSwitcherService.startTrackingMRU() }
 
         if permissionsService.isGranted {
             setupTriggers()
