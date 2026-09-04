@@ -63,8 +63,12 @@ final class MenuEditorModelRegressionTests: XCTestCase {
 
         var loaded = Configuration(inner: [], middle: [item])
         loaded.hudCustomization.inner.layout.angularOffset = 42
+        loaded.hudCustomization.inner.appearance.labelVisible = true
+        loaded.hudCustomization.middle.appearance.labelOrientation = .radial
         model.load(from: loaded, preservingSelection: true)
         model.hudCustomization.outerRingVisibility = .alwaysHidden
+        model.hudCustomization.outerAppearance.labelVisible = false
+        model.hudCustomization.labelOrientation = .tangential
         let binding = try XCTUnwrap(model.binding(forItem: item.id, band: .middle))
         binding.wrappedValue.wedgeColor = HUDColor(red: 0.2, green: 0.3, blue: 0.4)
 
@@ -75,6 +79,10 @@ final class MenuEditorModelRegressionTests: XCTestCase {
         XCTAssertEqual(model.selection?.itemID, item.id)
         XCTAssertEqual(merged.hudCustomization.inner.layout.angularOffset, 42)
         XCTAssertEqual(merged.hudCustomization.outerRingVisibility, .alwaysHidden)
+        XCTAssertTrue(merged.hudCustomization.inner.appearance.labelVisible, "the loaded per-ring label override must survive load + merge")
+        XCTAssertEqual(merged.hudCustomization.middle.appearance.labelOrientation, .radial, "the loaded ring label orientation override must survive load + merge")
+        XCTAssertFalse(merged.hudCustomization.outerAppearance.labelVisible, "the in-editor label visibility edit must survive merge")
+        XCTAssertEqual(merged.hudCustomization.labelOrientation, .tangential, "the in-editor menu-level label orientation edit must survive merge")
         XCTAssertEqual(merged.middle.first?.wedgeColor, HUDColor(red: 0.2, green: 0.3, blue: 0.4))
         XCTAssertEqual(merged.appearance.deadZone, 61)
     }

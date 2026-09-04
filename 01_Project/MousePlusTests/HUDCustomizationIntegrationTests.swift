@@ -145,16 +145,23 @@ final class HUDCustomizationIntegrationTests: XCTestCase {
         await store.failNextSave()
         coordinator.menuEditorModel.hudCustomization.outerRingVisibility = .alwaysHidden
         coordinator.menuEditorModel.hudCustomization.middle.layout.angularOffset = 271
+        coordinator.menuEditorModel.hudCustomization.middle.appearance.labelVisible = false
+        coordinator.menuEditorModel.hudCustomization.outerAppearance.labelOrientation = .tangential
         coordinator.menuItemsDidChange()
 
         let failedFlush = await coordinator.flush()
         XCTAssertFalse(failedFlush)
         XCTAssertEqual(runtime.hudCustomization, .default, "failed saves never leak into live runtime")
+        XCTAssertTrue(runtime.isLabelVisible(for: .middle), "the runtime must still reflect the last durably-saved (default) label visibility")
         XCTAssertEqual(coordinator.menuEditorModel.hudCustomization.middle.layout.angularOffset, 271)
+        XCTAssertFalse(coordinator.menuEditorModel.hudCustomization.middle.appearance.labelVisible, "a failed save must not revert the editor's pending label edit")
+        XCTAssertEqual(coordinator.menuEditorModel.hudCustomization.outerAppearance.labelOrientation, .tangential)
         let retried = await coordinator.retry()
         XCTAssertTrue(retried)
         XCTAssertEqual(runtime.hudCustomization.outerRingVisibility, .alwaysHidden)
         XCTAssertEqual(runtime.hudCustomization.middle.layout.angularOffset, 271)
+        XCTAssertFalse(runtime.isLabelVisible(for: .middle), "retry must carry the label visibility edit through to the live runtime")
+        XCTAssertEqual(runtime.labelOrientation(for: .outer), .tangential, "retry must carry the label orientation edit through to the live runtime")
     }
 
     private func makeCoordinator(store: IntegrationPersistence, runtime: RingViewModel) -> SettingsWorkspaceCoordinator {

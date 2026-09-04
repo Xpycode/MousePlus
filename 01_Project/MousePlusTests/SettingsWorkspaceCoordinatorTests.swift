@@ -102,6 +102,9 @@ final class SettingsWorkspaceCoordinatorTests: XCTestCase {
         let itemID = try XCTUnwrap(coordinator.menuEditorModel.middle.first?.id)
         coordinator.menuEditorModel.selection = SlotSelection(band: .middle, itemID: itemID, subItemID: nil)
         coordinator.menuEditorModel.hudCustomization.middle.layout.angularOffset = 73
+        coordinator.menuEditorModel.hudCustomization.middle.appearance.labelVisible = false
+        coordinator.menuEditorModel.hudCustomization.middle.appearance.labelOrientation = .tangential
+        coordinator.menuEditorModel.hudCustomization.labelOrientation = .radial
         let binding = try XCTUnwrap(coordinator.menuEditorModel.binding(forItem: itemID, band: .middle))
         binding.wrappedValue.iconColor = HUDColor(red: 0.8, green: 0.2, blue: 0.1)
         coordinator.menuItemsDidChange()
@@ -119,6 +122,9 @@ final class SettingsWorkspaceCoordinatorTests: XCTestCase {
         XCTAssertTrue(retried)
         let saved = await persistence.current
         XCTAssertEqual(saved.hudCustomization.middle.layout.angularOffset, 73)
+        XCTAssertFalse(saved.hudCustomization.middle.appearance.labelVisible, "a failed save + retry must not revert the label visibility edit")
+        XCTAssertEqual(saved.hudCustomization.middle.appearance.labelOrientation, .tangential, "a failed save + retry must not revert the label orientation edit")
+        XCTAssertEqual(saved.hudCustomization.labelOrientation, .radial)
         XCTAssertEqual(saved.middle.first(where: { $0.id == itemID })?.iconColor, HUDColor(red: 0.8, green: 0.2, blue: 0.1))
         XCTAssertFalse(saved.behavior.dismissOnEscape)
         XCTAssertEqual(recorder.events.last?.hudCustomization, saved.hudCustomization)
@@ -126,12 +132,16 @@ final class SettingsWorkspaceCoordinatorTests: XCTestCase {
 
         await coordinator.load()
         XCTAssertEqual(coordinator.menuEditorModel.hudCustomization.middle.layout.angularOffset, 73)
+        XCTAssertFalse(coordinator.menuEditorModel.hudCustomization.middle.appearance.labelVisible, "a relaunch (reload) must not revert the persisted label visibility")
+        XCTAssertEqual(coordinator.menuEditorModel.hudCustomization.middle.appearance.labelOrientation, .tangential, "a relaunch (reload) must not revert the persisted label orientation")
         XCTAssertEqual(coordinator.menuEditorModel.middle.first(where: { $0.id == itemID })?.iconColor, HUDColor(red: 0.8, green: 0.2, blue: 0.1))
     }
 
     func testBackupRestoreRestoresHUDCustomizationAndItemOverrides() async throws {
         var backup = Configuration()
         backup.hudCustomization.outerRingVisibility = .alwaysHidden
+        backup.hudCustomization.inner.appearance.labelVisible = true
+        backup.hudCustomization.inner.appearance.labelOrientation = .radial
         backup.middle[0].wedgeColor = HUDColor(red: 0.1, green: 0.4, blue: 0.7)
         let persistence = RecordingConfigurationPersistence(backup)
         let coordinator = makeCoordinator(persistence)
@@ -139,6 +149,8 @@ final class SettingsWorkspaceCoordinatorTests: XCTestCase {
         try await persistence.createBackup()
         await coordinator.load()
         coordinator.menuEditorModel.hudCustomization.outerRingVisibility = .alwaysVisible
+        coordinator.menuEditorModel.hudCustomization.inner.appearance.labelVisible = false
+        coordinator.menuEditorModel.hudCustomization.inner.appearance.labelOrientation = .tangential
         coordinator.menuEditorModel.middle[0].wedgeColor = nil
         coordinator.menuItemsDidChange()
         let savedEdit = await coordinator.flush()
@@ -148,6 +160,8 @@ final class SettingsWorkspaceCoordinatorTests: XCTestCase {
         XCTAssertTrue(restoredBackup)
         let restored = await persistence.current
         XCTAssertEqual(restored.hudCustomization.outerRingVisibility, .alwaysHidden)
+        XCTAssertTrue(restored.hudCustomization.inner.appearance.labelVisible, "backup restore must bring back the backed-up label visibility, not the intervening edit")
+        XCTAssertEqual(restored.hudCustomization.inner.appearance.labelOrientation, .radial, "backup restore must bring back the backed-up label orientation, not the intervening edit")
         XCTAssertEqual(restored.middle[0].wedgeColor, HUDColor(red: 0.1, green: 0.4, blue: 0.7))
     }
 
@@ -174,6 +188,13 @@ final class SettingsWorkspaceCoordinatorTests: XCTestCase {
         configuration.hudCustomization.middle.appearance.iconColor = HUDColor(red: 0.7, green: 0.6, blue: 0.5)
         configuration.hudCustomization.outerAppearance.iconOrientation = .tangential
         configuration.hudCustomization.outerAppearance.wedgeColor = HUDColor(red: 0.4, green: 0.3, blue: 0.2)
+        configuration.hudCustomization.labelOrientation = .tangential
+        configuration.hudCustomization.inner.appearance.labelVisible = true
+        configuration.hudCustomization.inner.appearance.labelOrientation = .radial
+        configuration.hudCustomization.middle.appearance.labelVisible = false
+        configuration.hudCustomization.middle.appearance.labelOrientation = .tangential
+        configuration.hudCustomization.outerAppearance.labelVisible = false
+        configuration.hudCustomization.outerAppearance.labelOrientation = .upright
         configuration.inner[0].wedgeColor = HUDColor(red: 0.3, green: 0.5, blue: 0.7)
         configuration.middle[0].iconColor = HUDColor(red: 0.8, green: 0.4, blue: 0.2)
         configuration.middle[0].subItems?[0].wedgeColor = HUDColor(red: 0.6, green: 0.2, blue: 0.4)
@@ -238,6 +259,26 @@ final class SettingsWorkspaceCoordinatorTests: XCTestCase {
         XCTAssertEqual(saved.appearance.deadZone, 41)
         XCTAssertEqual(saved.triggers.mouseButton, .mouseButton(buttonNumber: 7, mode: .tapToggle))
         XCTAssertFalse(saved.behavior.dismissOnEscape)
+    }
+
+    func testFreshBaseMergePreservesHUDLabelFieldsAlongsideExternalEdit() async {
+        let persistence = RecordingConfigurationPersistence(Configuration())
+        let coordinator = makeCoordinator(persistence)
+        await coordinator.load()
+        coordinator.menuEditorModel.hudCustomization.inner.appearance.labelVisible = true
+        coordinator.menuEditorModel.hudCustomization.outerAppearance.labelOrientation = .radial
+        coordinator.menuItemsDidChange()
+
+        // Another writer (e.g. a concurrent Settings window save) changes an
+        // unrelated field on disk between this edit and the debounced flush.
+        await persistence.mutateCurrent { $0.appearance.deadZone = 66 }
+        let flushed = await coordinator.flush()
+        XCTAssertTrue(flushed)
+
+        let saved = await persistence.current
+        XCTAssertEqual(saved.appearance.deadZone, 66, "the fresh base must still carry the concurrent external edit")
+        XCTAssertTrue(saved.hudCustomization.inner.appearance.labelVisible, "a fresh-base merge must not drop the label visibility edit")
+        XCTAssertEqual(saved.hudCustomization.outerAppearance.labelOrientation, .radial, "a fresh-base merge must not drop the label orientation edit")
     }
 
     func testMidSessionCorruptionPreventsOverwrite() async {

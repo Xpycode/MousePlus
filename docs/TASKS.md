@@ -13,7 +13,7 @@ No queued backlog items.
 <!-- When done: /log moves to tasks-archive.md -->
 
 - [x] Task 3.1: Integrate label policy across live HUD and preview
-- [ ] Task 3.2: Preserve label settings across every Settings write and recovery path
+- [x] Task 3.2: Preserve label settings across every Settings write and recovery path
 - [ ] Tasks 4.1–4.2: Pass automated, adversarial, signed-live, and documentation closure gates
 
 ---

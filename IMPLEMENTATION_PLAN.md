@@ -68,7 +68,7 @@ Use the existing `AppKitSegmentedControl`, `AppKitSlider`, `AppKitCountControl`,
   - Success: preview/runtime parity holds for all rings, hidden labels leave icons centered sensibly, and visual visibility never erases accessibility names.
   - Backpressure: focused `RingViewModelHUDTests`, `HUDPreviewInteractionTests`, `WedgePresentationTests`, and accessibility cases.
 
-- [ ] **3.2: Preserve the new values across every Settings write path** → `01_Project/MousePlus/ViewModels/MenuEditorModel.swift`, `01_Project/MousePlus/ViewModels/SettingsWorkspaceCoordinator.swift`, persistence/integration tests
+- [x] **3.2: Preserve the new values across every Settings write path** → `01_Project/MousePlus/ViewModels/MenuEditorModel.swift`, `01_Project/MousePlus/ViewModels/SettingsWorkspaceCoordinator.swift`, persistence/integration tests
   - Verify edit, debounce save, fresh-base merge, retry, reset/undo, durable backup restore, live apply, and relaunch paths carry all new fields.
   - Success: concurrent unrelated edits and recovery operations cannot revert label settings or lose unknown action data.
   - Backpressure: focused `MenuEditorModelRegressionTests`, `SettingsWorkspaceCoordinatorTests`, and `HUDCustomizationIntegrationTests`.
@@ -105,7 +105,7 @@ Use the existing `AppKitSegmentedControl`, `AppKitSlider`, `AppKitCountControl`,
 |------|---------|-----------|---------|
 | 1 | 2026-09-04 | 2026-09-04 | `feat(wave-1): add label orientation model and pure presentation policy` |
 | 2 | 2026-09-04 | 2026-09-04 | `feat(wave-2): add Menu/Inner/Middle/Outer HUD customization tabs` |
-| 3 | 2026-09-04 | | `feat(wave-3): wire per-ring label visibility and orientation into runtime and preview` (3.1 only; 3.2 remains) |
+| 3 | 2026-09-04 | | `feat(wave-3): wire per-ring label visibility and orientation into runtime and preview` (3.1); `test(wave-3): verify label fields survive every Settings write path` (3.2) — Wave 3 complete |
 | 4 | | | |
 
 ---
