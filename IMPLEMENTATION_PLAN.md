@@ -54,7 +54,7 @@ Use the existing `AppKitSegmentedControl`, `AppKitSlider`, `AppKitCountControl`,
 
 ### Wave 2 — Scope-specific inspector tabs
 
-- [ ] **2.1: Replace stacked customization groups with Menu/Inner/Middle/Outer tabs** → `01_Project/MousePlus/Views/MenuEditor/HUDCustomizationControls.swift`, `01_Project/MousePlus/Views/MenuEditor/MenuEditorView.swift`, `01_Project/MousePlus/Views/AppKitControls/AppKitControls.swift`, UI/accessibility tests
+- [x] **2.1: Replace stacked customization groups with Menu/Inner/Middle/Outer tabs** → `01_Project/MousePlus/Views/MenuEditor/HUDCustomizationControls.swift`, `01_Project/MousePlus/Views/AppKitControls/AppKitControls.swift`, `01_Project/MousePlusTests/AppKitControlsTests.swift`
   - Implement the confirmed placement proposal with stable tab state, scope-owned control content, and unambiguous accessibility identifiers.
   - Rename only menu-root color choices to “Default”; retain “Inherit” for ring/item overrides and add concise hierarchy help.
   - Success: every control appears under exactly one owner tab, switching tabs preserves selection/active band, and keyboard/VoiceOver can identify and change each segment.
@@ -104,7 +104,7 @@ Use the existing `AppKitSegmentedControl`, `AppKitSlider`, `AppKitCountControl`,
 | Wave | Started | Completed | Commits |
 |------|---------|-----------|---------|
 | 1 | 2026-09-04 | 2026-09-04 | `feat(wave-1): add label orientation model and pure presentation policy` |
-| 2 | | | |
+| 2 | 2026-09-04 | 2026-09-04 | `feat(wave-2): add Menu/Inner/Middle/Outer HUD customization tabs` |
 | 3 | | | |
 | 4 | | | |
 

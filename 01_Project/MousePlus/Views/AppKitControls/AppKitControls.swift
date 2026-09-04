@@ -171,11 +171,16 @@ struct AppKitSegmentedControl: NSViewRepresentable {
     }
 }
 
-/// A native color well paired with an explicit Inherit state.
-/// `nil` represents inheritance; switching back to Custom restores the last chosen color.
+/// A native color well paired with an explicit inherit/default state.
+/// `nil` represents that state; switching back to Custom restores the last
+/// chosen color. `inheritTitle` lets callers distinguish a menu-root control
+/// (whose `nil` falls back to the application default, so it reads
+/// "Default") from a ring- or item-level override (whose `nil` reads
+/// "Inherit" because it falls back to its parent scope).
 struct AppKitColorWell: NSViewRepresentable {
     @Binding var color: NSColor?
     var defaultCustomColor: NSColor = .controlAccentColor
+    var inheritTitle: String = "Inherit"
     var isEnabled = true
     var accessibilityLabel: String
     var accessibilityIdentifier: String? = nil
@@ -186,7 +191,7 @@ struct AppKitColorWell: NSViewRepresentable {
 
     func makeNSView(context: Context) -> NSStackView {
         let inherit = NSButton(
-            checkboxWithTitle: "Inherit",
+            checkboxWithTitle: inheritTitle,
             target: context.coordinator,
             action: #selector(Coordinator.inheritChanged(_:))
         )

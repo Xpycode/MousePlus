@@ -11,13 +11,14 @@
 
 ## Now
 
-- **Phase:** Ring-controls reorganization underway; tab placement confirmed and Wave 1 foundations landed. <!-- Phase changed: 2026-09-04 -->
-- **Focus:** Build the Menu/Inner/Middle/Outer inspector tabs (Wave 2) on top of the new label model and presentation policy.
+- **Phase:** Ring-controls reorganization underway; Wave 2 inspector tabs landed on top of Wave 1's label model. <!-- Phase changed: 2026-09-04 -->
+- **Focus:** Wire the new per-ring label visibility/orientation fields into runtime and preview rendering (Wave 3).
 - **Blocker:** Advanced Logitech-button support is paused until raw MX4/MX3S captures resolve the HID++ strategy decision.
-- **Next:** Implement Task 2.1 — replace the stacked customization groups with the confirmed scope-owned tabs.
+- **Next:** Implement Task 3.1 — feed the resolved label presentation policy into `RingViewModel`/`RingMenuView`/`WedgeView`/`RingPreviewSelector` for Inner, Middle, and Outer wedges.
 
 ## Recent
 
+- **2026-09-04:** Completed Wave 2: replaced the stacked Menu/ring/Outer customization groups with a native Menu/Inner/Middle/Outer segmented-tab inspector, owned by local UI state so browsing a ring's settings never retargets the Menu Items band or selection. Outer-ring visibility moved from the Menu group into its own Outer tab; each scope now also exposes label visibility and label direction controls (previously model-only since Wave 1), menu-root colors read "Default" while ring/item overrides keep "Inherit" (`AppKitColorWell` gained an `inheritTitle` parameter), and a hierarchy help line explains item → ring → menu → application-default resolution. 232/232 focused-plus-full unit tests pass; a source audit found no raw SwiftUI interactive controls.
 - **2026-09-04:** Completed Wave 1: `HUDCustomization` gained a tolerant `LabelOrientation` model with per-ring overrides and compatibility defaults (inner hidden, middle/outer shown, upright), and a new pure `LabelPresentationPolicy` resolves per-ring label visibility and auto-flipping readable rotation independent of icon presentation. 230/231 tests pass (the one failure is a local UI-automation runner timeout, unrelated to the change).
 - **2026-09-04:** Confirmed the Menu/Inner/Middle/Outer tab ownership proposal in `IMPLEMENTATION_PLAN.md`, unblocking Wave 2.
 - **2026-09-04:** Planned the next HUD increment: four scope-specific customization tabs, clearer Default/Inherit semantics, and backward-compatible per-ring label visibility and readable orientation across preview and runtime.
