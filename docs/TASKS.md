@@ -6,13 +6,13 @@
 <!-- Ideas and future work. Added by /interview, user input, or discovered during development. -->
 <!-- Priority: top = highest, bottom = lowest -->
 
-No queued backlog items.
+- Add a "Restart MousePlus" item to the menu-bar menu (alongside Quit), matching what apps like BetterMouse offer, so a relaunch doesn't require Quit + manually reopening.
 
 ## Current Sprint
 <!-- Active work. Populated by /plan or /execute. Keep focused (3-7 tasks). -->
 <!-- When done: /log moves to tasks-archive.md -->
 
-- [ ] Tasks 4.1–4.2: Pass automated, adversarial, signed-live, and documentation closure gates
+- [x] Tasks 4.1–4.2: Pass automated, adversarial, signed-live, and documentation closure gates
 
 ---
 

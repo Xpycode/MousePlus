@@ -11,13 +11,14 @@
 
 ## Now
 
-- **Phase:** Ring-controls reorganization underway; Wave 3 (runtime/preview wiring + persistence verification) is complete on top of Wave 1's label model and Wave 2's inspector tabs. Wave 4's adversarial/automated review (Task 4.1) is also complete. <!-- Phase changed: 2026-09-04 -->
-- **Focus:** Wave 4's remaining signed-live closure gate.
+- **Phase:** Ring-controls reorganization complete. All four waves (label model, inspector tabs, runtime/preview/persistence integration, and the closure gate) are done. <!-- Phase changed: 2026-09-04 -->
+- **Focus:** No active sprint; ready to pick up the next backlog item, e.g. the menu-bar Restart option or the next HUD action.
 - **Blocker:** Advanced Logitech-button support is paused until raw MX4/MX3S captures resolve the HID++ strategy decision.
-- **Next:** Task 4.2 — clean signed live verification and close documentation.
+- **Next:** Pick the next backlog item — a menu-bar "Restart MousePlus" item, or resume the HUD action roadmap (screenshots is the smallest unfinished action).
 
 ## Recent
 
+- **2026-09-04:** Completed Task 4.2: clean-rebuilt the signed Debug app on the stable per-machine identity and launched it; user quit and relaunched the signed build directly and confirmed it works, closing the persistence/trigger-re-arming portion of the checklist (the tab/light-dark/per-ring/label-circle detail was already verified structurally by Task 4.1's code review). Wave 4 and the full ring-controls reorganization are closed. User also asked for a menu-bar "Restart MousePlus" item (like BetterMouse offers); logged to the backlog rather than implemented immediately.
 - **2026-09-04:** Completed Task 4.1: adversarial review of the complete Wave 1–3 change set (tab-state identity, compact-width truncation, migration defaults, flip-boundary orientation, empty labels, submenu expansion, hidden-label centering, VoiceOver naming, reset/merge races) found and fixed one SHOULD_FIX — `WedgeView`'s caption had no width cap, letting a long Inner-ring label (newly toggleable) overlap neighboring wedges; fixed with a chord-width cap plus truncation/scale-down fallback. One low-severity dead-code suggestion was left as non-blocking. Full MousePlus test target and `git diff --check` clean; no forbidden raw SwiftUI controls introduced.
 - **2026-09-04:** Completed Task 3.2: added explicit label-field (`labelVisible`/`labelOrientation`) coverage to every Settings write path — in-editor edit + merge, debounced/failed-save retry, fresh-base merge against a concurrent external edit, reset/undo, durable backup restore, live apply, and relaunch (reload) — confirming a failed save or an unrelated concurrent edit can never revert a label setting. Extended `MenuEditorModelRegressionTests`, `SettingsWorkspaceCoordinatorTests` (including a new fresh-base-merge test and a strengthened `customizedHUDConfiguration` fixture), and `HUDCustomizationIntegrationTests`; no production code changes were needed since `hudCustomization` was already threaded through every path as one unit. 235/235 tests pass; a clean Debug build succeeded. Wave 3 is complete.
 - **2026-09-04:** Completed Task 3.1: `RingViewModel` gained `labelOrientation(for:)`/`isLabelVisible(for:)` mirroring the existing icon-orientation inheritance, and `WedgeView` now resolves caption visibility and readable rotation from `LabelPresentation` instead of a per-band `symbolOnly` flag — so any ring's label can be shown or hidden and rotated independently of its icon. `RingMenuView` feeds the same resolved policy to Inner, Middle, and Outer wedges; `RingPreviewSelector` gets it for free by rendering through the same `RingMenuView`. 233/233 tests pass (232 prior + 1 new compatibility-default test), plus 2 new assertions extending an existing integration test; a clean Debug build succeeded and no `symbolOnly` references remain.
@@ -35,9 +36,10 @@
 - **Unified Settings workspace:** 8/8 waves complete; automated, adversarial, accessibility, signed-build, and user-driven checks passed.
 - **Send Keystroke:** Complete; automated coverage and signed live verification passed.
 - **Ring UI:** Complete and live-verified.
+- **Ring-controls reorganization (Menu/Inner/Middle/Outer tabs + per-ring labels):** 4/4 waves complete; automated, adversarial, signed-build, and user-driven checks passed.
 - **HUD actions:** Window snapping and keystroke delivery work; menu-bar mirror, app switching, system toggles, and screenshots remain.
 - **Trigger backend:** Keyboard and standard mouse paths work; advanced Logitech HID++ support remains undecided.
-- **Task tracker:** 0/1 current sprint; 21/22 tracked items complete overall (95%).
+- **Task tracker:** no active sprint; 22/23 tracked items complete overall (96%).
 
 ## Risks and Backlog
 
@@ -46,6 +48,7 @@
 - The menu-bar status icon and General Settings Quit fallback are signed-live verified on the M1 Max.
 - Settings writers may still replace a corrupt configuration with defaults; the full deferred-risk list is in `MENU_EDITOR_REVIEW.md`.
 - Consider screenshots next if onboarding is deferred; it is the smallest unfinished HUD action and establishes dismiss-before-action behavior.
+- Add a "Restart MousePlus" item to the menu-bar menu (alongside Quit), matching BetterMouse's offering — requested 2026-09-04, not yet scheduled.
 - Longer-term work includes the menu-bar mirror, recent-app switcher, system toggles, app-aware command rings, and alternative menu layouts.
 
 ## Infrastructure
@@ -70,4 +73,4 @@
 
 ## Resume
 
-The ring-controls reorganization is tracked in `IMPLEMENTATION_PLAN.md`. Waves 1–3 (label model, inspector tabs, and runtime/preview/persistence integration) are complete; Wave 4 (adversarial/automated review and signed-live closure) is next.
+The ring-controls reorganization tracked in `IMPLEMENTATION_PLAN.md` is complete (all four waves). No active sprint; next pickup is either the menu-bar "Restart MousePlus" backlog item or the next HUD action (screenshots).
