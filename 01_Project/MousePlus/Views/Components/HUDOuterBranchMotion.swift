@@ -56,8 +56,6 @@ struct HUDOuterWedgeSnapshot: Identifiable {
     let isHighlighted: Bool
     let hoverMotion: HUDMotionPresentationDescriptor
     let showsSelectionMarker: Bool
-    let accessibility: RingWedgeAccessibility
-    let activate: () -> Void
 
     var id: UUID { item.id }
 
@@ -86,7 +84,7 @@ struct HUDOuterWedgeSnapshot: Identifiable {
                 presentation: presentation, hoverMotion: hoverMotion,
                 showsSelectionMarker: showsSelectionMarker
             )
-            .hudWedgeAccessibility(presentation: accessibility, activate: activate)
+            .accessibilityHidden(true)
         }
         .opacity(frame.contentOpacity)
     }

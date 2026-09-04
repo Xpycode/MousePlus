@@ -43,6 +43,7 @@ struct RingMenuView: View {
     /// a selection callback so VoiceOver activation edits without executing.
     var accessibilityIdentifierPrefix = "hud.wedge"
     var exposesCenterSettings = true
+    var exposesWedgeAccessibility = true
     var onAccessibilitySelection: ((ActiveSelection) -> Void)?
     /// Preview-only editor selection, drawn as a neutral marker. Runtime leaves
     /// this nil and continues to use `activeSelection` exclusively for hover.
@@ -102,67 +103,74 @@ struct RingMenuView: View {
                 playbackEnabled: presentationMode != .staticEditor,
                 invocationID: openingReplayID
             ),
-            settleID: settleOpeningID
+            settleID: settleOpeningID,
+            deadZoneRadius: radii.r0,
+            revealRadius: radii.r2
         ) { openingFrame in
             ZStack {
-            // Persistent backing stops at the middle band's outer edge. The
-            // on-demand outer surface is rendered with the branch below so a
-            // hidden submenu never leaves a misleading r2…r3 halo.
-            Circle()
-                .fill(.ultraThinMaterial)
-                .frame(
-                    width: surfacePresentation.persistentOuterRadius * 2,
-                    height: surfacePresentation.persistentOuterRadius * 2
-                )
+                HUDOpeningArtwork(frame: openingFrame, size: size) {
+                    ZStack {
+                        persistentBacking(openingFrame)
 
-            // Dead-zone indicator (radius ~ r0) — cancel/back region.
-            Circle()
-                .fill(.secondary.opacity(0.3))
-                .frame(width: radii.r0 * 2, height: radii.r0 * 2)
+                        // Dead-zone indicator (radius ~ r0) — cancel/back region.
+                        Circle()
+                            .fill(.secondary.opacity(0.3))
+                            .frame(width: radii.r0 * 2, height: radii.r0 * 2)
 
-            HUDCenterSettingsControl(
-                action: { viewModel.activateCenterSettings() },
-                draggingEnabled: onCenterDrag != nil,
-                onDrag: { delta in
-                    // A center drag is panel manipulation, never wedge selection.
-                    viewModel.activeSelection = nil
-                    onCenterDrag?(delta)
-                }
-            )
-            .frame(width: radii.r0 * 1.6, height: radii.r0 * 1.6)
-            .allowsHitTesting(interactionEnabled)
-            .accessibilityHidden(!exposesCenterSettings)
+                        innerBand(openingFrame)
+                        middleBand(openingFrame)
 
-            innerBand
-            middleBand
-
-            // Removing this owner also discards any older branches still in
-            // flight, so Escape/reset cannot leave a fading ghost behind.
-            if identity.parentID != nil {
-                ZStack {
-                    if viewModel.isOuterRingVisible {
-                        HUDOuterBandMotion(descriptor: expansion) { progress in
+                        // Removing this owner also discards any older branches still in
+                        // flight, so Escape/reset cannot leave a fading ghost behind.
+                        if identity.parentID != nil {
                             ZStack {
-                                ForEach(wedges) { wedge in
-                                    wedge.render(descriptor: expansion, progress: progress)
+                                if viewModel.isOuterRingVisible {
+                                    HUDOuterBandMotion(descriptor: expansion) { progress in
+                                        ZStack {
+                                            ForEach(wedges) { wedge in
+                                                wedge.render(descriptor: expansion, progress: progress)
+                                            }
+                                        }
+                                    }
+                                    .id(identity)
+                                    .transition(HUDOuterBranchTransition())
                                 }
                             }
+                            .animation(
+                                branchMotion.effect != .instant
+                                    ? .easeOut(duration: branchMotion.duration) : nil,
+                                value: identity
+                            )
+                            .transition(.identity)
                         }
-                        .id(identity)
-                        .transition(HUDOuterBranchTransition())
                     }
                 }
-                .animation(
-                    branchMotion.effect != .instant
-                        ? .easeOut(duration: branchMotion.duration) : nil,
-                    value: identity
+
+                // This native control remains at final geometry. Fade retains
+                // its original opacity behavior; spatial effects show it now.
+                HUDCenterSettingsControl(
+                    action: {
+                        settleOpening()
+                        viewModel.activateCenterSettings()
+                    },
+                    draggingEnabled: onCenterDrag != nil,
+                    onDrag: { delta in
+                        // A center drag is panel manipulation, never wedge selection.
+                        settleOpening()
+                        viewModel.activeSelection = nil
+                        onCenterDrag?(delta)
+                    }
                 )
-                .transition(.identity)
+                .frame(width: radii.r0 * 1.6, height: radii.r0 * 1.6)
+                .opacity(openingFrame.centerOpacity)
+                .allowsHitTesting(interactionEnabled)
+                .accessibilityHidden(!exposesCenterSettings)
+
+                // Accessibility actions use final wedge geometry and never sit
+                // inside opening masks or Bloom's artwork transform.
+                accessibilityLayer
+                    .allowsHitTesting(false)
             }
-            }
-            // Only rendered content changes. AppKit installs the panel and
-            // authoritative pointer geometry at their final values.
-            .opacity(openingFrame.artworkOpacity)
             .frame(width: size, height: size)
         }
         .onChange(of: viewModel.activeSelection) { _, selection in
@@ -221,7 +229,7 @@ struct RingMenuView: View {
 
     /// Inner symbol-only band. Fixed but unused slots remain part of `geometry`
     /// without producing a SwiftUI or accessibility element.
-    private var innerBand: some View {
+    private func innerBand(_ openingFrame: HUDOpeningMotionFrame) -> some View {
         ForEach(Array(0..<geometry.inner.slotCount), id: \.self) { index in
             if index < viewModel.innerItems.count {
                 let item = viewModel.innerItems[index]
@@ -254,16 +262,14 @@ struct RingMenuView: View {
                     hoverMotion: hoverMotion,
                     showsSelectionMarker: isPersistentSelection(.inner, index)
                 )
-                .hudWedgeAccessibility(
-                    presentation: wedgeAccessibility(item, band: .inner, index: index),
-                    activate: { accessibilityActivate(.inner, index) }
-                )
+                .opacity(staggerOpacity(for: .inner, index: index, frame: openingFrame))
+                .accessibilityHidden(true)
             }
         }
     }
 
     /// Middle labeled band, using its own effective slot count and rotation.
-    private var middleBand: some View {
+    private func middleBand(_ openingFrame: HUDOpeningMotionFrame) -> some View {
         ForEach(Array(0..<geometry.middle.slotCount), id: \.self) { index in
             if index < viewModel.middleItems.count {
                 let item = viewModel.middleItems[index]
@@ -299,19 +305,160 @@ struct RingMenuView: View {
                     showsSelectionMarker: isPersistentSelection(.middle, index),
                     showsExpandAffordance: !hiddenParent
                 )
-                .hudWedgeAccessibility(
-                    presentation: wedgeAccessibility(
-                        item, band: .middle, index: index,
-                        unavailableReason: hiddenParent ? viewModel.hiddenSubmenuUnavailableReason : nil
-                    ),
-                    activate: hiddenParent ? nil : { accessibilityActivate(.middle, index) }
-                )
+                .opacity(staggerOpacity(for: .middle, index: index, frame: openingFrame))
+                .accessibilityHidden(true)
             }
         }
     }
 
+    /// The normal surface is one material disk. During stagger playback it is
+    /// temporarily split into final-geometry slots so backing and wedge content
+    /// share the same cadence; at completion the original seamless disk returns.
+    @ViewBuilder
+    private func persistentBacking(_ openingFrame: HUDOpeningMotionFrame) -> some View {
+        if openingFrame.effect == .staggeredSegments, openingFrame.progress < 1 {
+            ZStack {
+                staggeredBackingBand(
+                    .inner,
+                    innerRadius: radii.r0,
+                    outerRadius: radii.r1,
+                    frame: openingFrame
+                )
+                staggeredBackingBand(
+                    .middle,
+                    innerRadius: radii.r1,
+                    outerRadius: radii.r2,
+                    frame: openingFrame
+                )
+            }
+        } else {
+            Circle()
+                .fill(.ultraThinMaterial)
+                .frame(
+                    width: surfacePresentation.persistentOuterRadius * 2,
+                    height: surfacePresentation.persistentOuterRadius * 2
+                )
+        }
+    }
+
+    private func staggeredBackingBand(
+        _ band: Band,
+        innerRadius: CGFloat,
+        outerRadius: CGFloat,
+        frame: HUDOpeningMotionFrame
+    ) -> some View {
+        let bandGeometry = geometry.geometry(for: band)
+        return ForEach(Array(0..<bandGeometry.slotCount), id: \.self) { index in
+            let angles = RadialGeometry.wedgeAngles(
+                band: band,
+                index: index,
+                geometry: geometry,
+                expandedParentIndex: viewModel.expandedParentIndex,
+                outerCount: viewModel.outerItems.count
+            )
+            AnnularWedge(
+                startAngle: angles.start,
+                endAngle: angles.end,
+                innerRadius: innerRadius,
+                outerRadius: outerRadius
+            )
+            .fill(.ultraThinMaterial)
+            .frame(width: size, height: size)
+            .opacity(staggerOpacity(for: band, index: index, frame: frame))
+        }
+    }
+
+    private func staggerOpacity(
+        for band: Band,
+        index: Int,
+        frame: HUDOpeningMotionFrame
+    ) -> Double {
+        guard frame.effect == .staggeredSegments else { return 1 }
+        let bandGeometry = geometry.geometry(for: band)
+        let rank = HUDOpeningMotionFrame.staggerRank(
+            index: index,
+            slotCount: bandGeometry.slotCount,
+            angularOffset: bandGeometry.angularOffset
+        )
+        return HUDOpeningMotionFrame.staggerOpacity(
+            globalProgress: frame.progress,
+            rank: rank,
+            slotCount: bandGeometry.slotCount
+        )
+    }
+
+    @ViewBuilder
+    private var accessibilityLayer: some View {
+        if exposesWedgeAccessibility {
+            ZStack {
+                ForEach(Array(viewModel.innerItems.enumerated()), id: \.element.id) { index, item in
+                    accessibilityTarget(item, band: .inner, index: index)
+                }
+                ForEach(Array(viewModel.middleItems.enumerated()), id: \.element.id) { index, item in
+                    let hiddenParent = item.hasSubItems &&
+                        viewModel.hiddenSubmenuUnavailableReason != nil
+                    accessibilityTarget(
+                        item,
+                        band: .middle,
+                        index: index,
+                        unavailableReason: hiddenParent ? viewModel.hiddenSubmenuUnavailableReason : nil,
+                        activate: hiddenParent ? nil : { accessibilityActivate(.middle, index) }
+                    )
+                }
+                if viewModel.isOuterRingVisible {
+                    ForEach(Array(viewModel.outerItems.enumerated()), id: \.element.id) { index, item in
+                        accessibilityTarget(item, band: .outer, index: index) {
+                            guard viewModel.isOuterRingVisible,
+                                  viewModel.outerItems.indices.contains(index),
+                                  viewModel.outerItems[index] == item else { return }
+                            accessibilityActivate(.outer, index)
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    private func accessibilityTarget(
+        _ item: RingMenuItem,
+        band: Band,
+        index: Int,
+        unavailableReason: String? = nil,
+        activate: (() -> Void)? = nil
+    ) -> some View {
+        let angles = RadialGeometry.wedgeAngles(
+            band: band,
+            index: index,
+            geometry: geometry,
+            expandedParentIndex: viewModel.expandedParentIndex,
+            outerCount: viewModel.outerItems.count,
+            outerLayout: viewModel.outerRingLayout
+        )
+        let bandRadii: (inner: CGFloat, outer: CGFloat) = switch band {
+        case .inner: (radii.r0, radii.r1)
+        case .middle: (radii.r1, radii.r2)
+        case .outer: (radii.r2, radii.r3)
+        }
+        let action = activate ?? { accessibilityActivate(band, index) }
+        return AnnularWedge(
+            startAngle: angles.start,
+            endAngle: angles.end,
+            innerRadius: bandRadii.inner,
+            outerRadius: bandRadii.outer
+        )
+        .fill(Color.clear)
+        .frame(width: size, height: size)
+        .hudWedgeAccessibility(
+            presentation: wedgeAccessibility(
+                item, band: band, index: index, unavailableReason: unavailableReason
+            ),
+            activate: unavailableReason == nil ? action : nil
+        )
+    }
+
     /// Every field used to render an outgoing branch is a value snapshot,
-    /// including app icons, geometry, labels, and accessibility metadata.
+    /// including app icons, geometry, and labels. Accessibility lives in a
+    /// separate final-geometry layer outside opening transforms.
     private var outerWedgeSnapshots: [HUDOuterWedgeSnapshot] {
         viewModel.outerItems.enumerated().map { index, item in
             let angles = RadialGeometry.wedgeAngles(
@@ -320,7 +467,6 @@ struct RingMenuView: View {
                 outerCount: viewModel.outerItems.count,
                 outerLayout: viewModel.outerRingLayout
             )
-            let parentID = outerBranchIdentity.parentID
             return HUDOuterWedgeSnapshot(
                 item: item,
                 iconSource: iconSource(for: item),
@@ -339,17 +485,7 @@ struct RingMenuView: View {
                 ),
                 isHighlighted: isActive(.outer, index),
                 hoverMotion: hoverMotion,
-                showsSelectionMarker: isPersistentSelection(.outer, index),
-                accessibility: wedgeAccessibility(item, band: .outer, index: index),
-                activate: {
-                    // A retained transition must never activate an old index in
-                    // the new branch, even if an accessibility callback is queued.
-                    guard outerBranchIdentity.parentID == parentID,
-                          viewModel.isOuterRingVisible,
-                          viewModel.outerItems.indices.contains(index),
-                          viewModel.outerItems[index] == item else { return }
-                    accessibilityActivate(.outer, index)
-                }
+                showsSelectionMarker: isPersistentSelection(.outer, index)
             )
         }
     }
