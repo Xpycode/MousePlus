@@ -136,6 +136,59 @@ final class ConfigurationServiceTests: XCTestCase {
         XCTAssertEqual(decoded.appearance.motion, expected)
     }
 
+    func testEverySummonMotionStyleRoundTripsWithStableRawValue() throws {
+        let expectedRawValues = [
+            "off",
+            "fade",
+            "circularSweep",
+            "irisReveal",
+            "bloom",
+            "staggeredSegments",
+        ]
+
+        XCTAssertEqual(HUDSummonMotionStyle.allCases.map(\.rawValue), expectedRawValues)
+
+        for style in HUDSummonMotionStyle.allCases {
+            let configuration = Configuration(
+                appearance: AppearanceConfig(
+                    motion: HUDMotionConfiguration(summon: style)
+                )
+            )
+
+            let encoded = try JSONEncoder().encode(configuration)
+            let decoded = try JSONDecoder().decode(Configuration.self, from: encoded)
+
+            XCTAssertEqual(decoded.appearance.motion.summon, style)
+        }
+    }
+
+    func testMissingSummonMotionStyleKeepsFadeDefaultAndOtherFields() throws {
+        let json = """
+        {
+          "inner": [],
+          "middle": [],
+          "appearance": {
+            "motion": {
+              "isEnabled": false,
+              "baseDuration": 0.27,
+              "hover": "off",
+              "outerExpansion": "off",
+              "branchChange": "off"
+            }
+          }
+        }
+        """
+
+        let decoded = try JSONDecoder().decode(Configuration.self, from: Data(json.utf8))
+
+        XCTAssertEqual(decoded.appearance.motion.summon, .fade)
+        XCTAssertEqual(decoded.appearance.motion.isEnabled, false)
+        XCTAssertEqual(decoded.appearance.motion.baseDuration, 0.27)
+        XCTAssertEqual(decoded.appearance.motion.hover, .off)
+        XCTAssertEqual(decoded.appearance.motion.outerExpansion, .off)
+        XCTAssertEqual(decoded.appearance.motion.branchChange, .off)
+    }
+
     func testMalformedMotionFieldsFallBackIndependently() throws {
         let json = """
         {

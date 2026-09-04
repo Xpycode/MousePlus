@@ -69,6 +69,29 @@ final class HUDOuterBandMotionTests: XCTestCase {
         XCTAssertEqual(resolve(layout: .localizedArc, descriptor: radial, progress: 2).outerRadius, 224)
     }
 
+    func testSummonOnlyEffectsCannotBecomeOuterRevealEffects() {
+        let summonEffects: [HUDMotionPresentationEffect] = [
+            .circularSweep,
+            .irisReveal,
+            .bloom,
+            .staggeredSegments,
+        ]
+
+        for effect in summonEffects {
+            let frame = resolve(
+                layout: .localizedArc,
+                descriptor: HUDMotionPresentationDescriptor(effect: effect, duration: 0.15),
+                progress: 0
+            )
+
+            XCTAssertEqual(frame.startAngle.degrees, finalStart.degrees, accuracy: 0.000_001)
+            XCTAssertEqual(frame.endAngle.degrees, finalEnd.degrees, accuracy: 0.000_001)
+            XCTAssertEqual(frame.innerRadius, 150)
+            XCTAssertEqual(frame.outerRadius, 224)
+            XCTAssertEqual(frame.contentOpacity, 1)
+        }
+    }
+
     private func resolve(
         layout: OuterRingLayout,
         descriptor: HUDMotionPresentationDescriptor,

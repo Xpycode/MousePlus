@@ -92,9 +92,9 @@ struct HUDOuterBandMotionFrame: Equatable {
                 outerRadius: interpolate(innerRadius, outerRadius, progress: progress),
                 contentOpacity: Double(progress)
             )
-        case .emphasis:
-            // Outer expansion never requests emphasis. Falling back to final
-            // geometry is safer than inventing an unsupported spatial effect.
+        case .emphasis, .circularSweep, .irisReveal, .bloom, .staggeredSegments:
+            // Outer expansion never requests hover or summon-only effects.
+            // Falling back to final geometry is safer than coupling roles.
             return final(
                 startAngle: finalStartAngle,
                 endAngle: finalEndAngle,

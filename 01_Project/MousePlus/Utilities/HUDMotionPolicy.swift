@@ -12,6 +12,10 @@ enum HUDMotionPresentationEffect: Equatable, Sendable {
     case fade
     case emphasis
     case radialReveal
+    case circularSweep
+    case irisReveal
+    case bloom
+    case staggeredSegments
 }
 
 struct HUDMotionPresentationDescriptor: Equatable, Sendable {
@@ -37,8 +41,20 @@ enum HUDMotionPolicy {
         let requestedEffect: HUDMotionPresentationEffect
         switch role {
         case .summon:
-            guard configuration.summon == .fade else { return .instant }
-            requestedEffect = .fade
+            switch configuration.summon {
+            case .off:
+                return .instant
+            case .fade:
+                requestedEffect = .fade
+            case .circularSweep:
+                requestedEffect = .circularSweep
+            case .irisReveal:
+                requestedEffect = .irisReveal
+            case .bloom:
+                requestedEffect = .bloom
+            case .staggeredSegments:
+                requestedEffect = .staggeredSegments
+            }
         case .hover:
             guard configuration.hover == .emphasis else { return .instant }
             requestedEffect = .emphasis
@@ -65,7 +81,7 @@ enum HUDMotionPolicy {
 
     private static func isSpatial(_ effect: HUDMotionPresentationEffect) -> Bool {
         switch effect {
-        case .emphasis, .radialReveal:
+        case .emphasis, .radialReveal, .circularSweep, .irisReveal, .bloom, .staggeredSegments:
             return true
         case .instant, .fade:
             return false

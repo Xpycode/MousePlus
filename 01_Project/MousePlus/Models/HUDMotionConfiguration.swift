@@ -3,6 +3,10 @@ import Foundation
 enum HUDSummonMotionStyle: String, Codable, CaseIterable, Equatable, Sendable {
     case off
     case fade
+    case circularSweep
+    case irisReveal
+    case bloom
+    case staggeredSegments
 }
 
 enum HUDHoverMotionStyle: String, Codable, CaseIterable, Equatable, Sendable {

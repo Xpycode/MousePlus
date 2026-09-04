@@ -56,6 +56,48 @@ final class HUDMotionPolicyTests: XCTestCase {
         XCTAssertEqual(resolve(.branchChange, configuration), .instant)
     }
 
+    func testEverySummonStyleResolvesForMasterSwitchAndReduceMotion() {
+        let expectedEffects: [HUDSummonMotionStyle: HUDMotionPresentationEffect] = [
+            .off: .instant,
+            .fade: .fade,
+            .circularSweep: .circularSweep,
+            .irisReveal: .irisReveal,
+            .bloom: .bloom,
+            .staggeredSegments: .staggeredSegments,
+        ]
+
+        for style in HUDSummonMotionStyle.allCases {
+            for isEnabled in [false, true] {
+                for reduceMotion in [false, true] {
+                    var configuration = HUDMotionConfiguration.default
+                    configuration.summon = style
+                    configuration.isEnabled = isEnabled
+
+                    let descriptor = HUDMotionPolicy.resolve(
+                        role: .summon,
+                        configuration: configuration,
+                        reduceMotion: reduceMotion
+                    )
+
+                    let expectedEffect: HUDMotionPresentationEffect
+                    if !isEnabled || style == .off {
+                        expectedEffect = .instant
+                    } else if reduceMotion && style != .fade {
+                        expectedEffect = .fade
+                    } else {
+                        expectedEffect = expectedEffects[style] ?? .instant
+                    }
+
+                    XCTAssertEqual(
+                        descriptor.effect,
+                        expectedEffect,
+                        "style=\(style), isEnabled=\(isEnabled), reduceMotion=\(reduceMotion)"
+                    )
+                }
+            }
+        }
+    }
+
     func testDurationIsClampedAndNonFiniteValuesUseDefault() {
         var configuration = HUDMotionConfiguration.default
 
