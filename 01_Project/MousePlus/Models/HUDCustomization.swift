@@ -14,8 +14,18 @@ enum OuterRingVisibility: String, Codable, CaseIterable, Sendable {
     case alwaysHidden
 }
 
-/// Orientation of an icon relative to its wedge. Labels always remain upright.
+/// Orientation of an icon relative to its wedge.
 enum IconOrientation: String, Codable, CaseIterable, Sendable {
+    case upright
+    case radial
+    case tangential
+}
+
+/// Orientation of a wedge's label text, resolved independently from icon
+/// orientation. `radial`/`tangential` are auto-flipped into a readable
+/// half-plane by the presentation layer; the persisted value only records
+/// intent.
+enum LabelOrientation: String, Codable, CaseIterable, Sendable {
     case upright
     case radial
     case tangential
@@ -68,28 +78,49 @@ struct HUDRingLayout: Codable, Equatable, Sendable {
 
 /// Optional ring-level presentation overrides. `nil` means inherit from the
 /// menu default (and ultimately the application's current presentation).
+///
+/// `labelVisible` is the exception: it has no menu-level default to inherit,
+/// so it is always resolved explicitly. Its compatibility default differs by
+/// owning ring (inner hidden, middle/outer shown), so tolerant decoding
+/// threads that default in via `init(from:defaultLabelVisible:)` rather than
+/// this type's own fallback.
 struct HUDRingAppearance: Codable, Equatable, Sendable {
     var iconOrientation: IconOrientation?
+    var labelOrientation: LabelOrientation?
+    var labelVisible: Bool
     var wedgeColor: HUDColor?
     var iconColor: HUDColor?
 
     init(
         iconOrientation: IconOrientation? = nil,
+        labelOrientation: LabelOrientation? = nil,
+        labelVisible: Bool = true,
         wedgeColor: HUDColor? = nil,
         iconColor: HUDColor? = nil
     ) {
         self.iconOrientation = iconOrientation
+        self.labelOrientation = labelOrientation
+        self.labelVisible = labelVisible
         self.wedgeColor = wedgeColor
         self.iconColor = iconColor
     }
 
     private enum CodingKeys: String, CodingKey {
-        case iconOrientation, wedgeColor, iconColor
+        case iconOrientation, labelOrientation, labelVisible, wedgeColor, iconColor
     }
 
     init(from decoder: Decoder) throws {
+        try self.init(from: decoder, defaultLabelVisible: true)
+    }
+
+    /// Tolerant decode that lets the owning ring supply its own
+    /// compatibility default for `labelVisible` when that field, or the
+    /// whole object, is missing or invalid.
+    init(from decoder: Decoder, defaultLabelVisible: Bool) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         iconOrientation = try? c.decode(IconOrientation.self, forKey: .iconOrientation)
+        labelOrientation = try? c.decode(LabelOrientation.self, forKey: .labelOrientation)
+        labelVisible = (try? c.decode(Bool.self, forKey: .labelVisible)) ?? defaultLabelVisible
         wedgeColor = try? c.decode(HUDColor.self, forKey: .wedgeColor)
         iconColor = try? c.decode(HUDColor.self, forKey: .iconColor)
     }
@@ -107,32 +138,50 @@ struct HUDRingCustomization: Codable, Equatable, Sendable {
     private enum CodingKeys: String, CodingKey { case layout, appearance }
 
     init(from decoder: Decoder) throws {
+        try self.init(from: decoder, defaultLabelVisible: true)
+    }
+
+    /// Tolerant decode that threads a ring-specific `labelVisible`
+    /// compatibility default down into `appearance`.
+    init(from decoder: Decoder, defaultLabelVisible: Bool) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         layout = (try? c.decode(HUDRingLayout.self, forKey: .layout)) ?? .init()
-        appearance = (try? c.decode(HUDRingAppearance.self, forKey: .appearance)) ?? .init()
+        appearance = (try? Self.decodeAppearance(from: c, defaultLabelVisible: defaultLabelVisible))
+            ?? HUDRingAppearance(labelVisible: defaultLabelVisible)
+    }
+
+    private static func decodeAppearance(
+        from container: KeyedDecodingContainer<CodingKeys>,
+        defaultLabelVisible: Bool
+    ) throws -> HUDRingAppearance {
+        let nested = try container.superDecoder(forKey: .appearance)
+        return try HUDRingAppearance(from: nested, defaultLabelVisible: defaultLabelVisible)
     }
 }
 
 /// Persisted customization for HUD geometry and presentation.
 ///
 /// Defaults deliberately reproduce the pre-customization HUD: item-derived
-/// slots, no rotation, upright icons, application-owned colors, and outer
-/// items presented whenever their parent is expanded.
+/// slots, no rotation, upright icons and labels, application-owned colors,
+/// outer items presented whenever their parent is expanded, and the inner
+/// ring's label hidden while the middle and outer rings' labels are shown.
 struct HUDCustomization: Codable, Equatable, Sendable {
     var inner: HUDRingCustomization
     var middle: HUDRingCustomization
     var outerAppearance: HUDRingAppearance
     var outerRingVisibility: OuterRingVisibility
     var iconOrientation: IconOrientation
+    var labelOrientation: LabelOrientation
     var wedgeColor: HUDColor?
     var iconColor: HUDColor?
 
     init(
-        inner: HUDRingCustomization = .init(),
+        inner: HUDRingCustomization = .init(appearance: .init(labelVisible: false)),
         middle: HUDRingCustomization = .init(),
         outerAppearance: HUDRingAppearance = .init(),
         outerRingVisibility: OuterRingVisibility = .alwaysVisible,
         iconOrientation: IconOrientation = .upright,
+        labelOrientation: LabelOrientation = .upright,
         wedgeColor: HUDColor? = nil,
         iconColor: HUDColor? = nil
     ) {
@@ -141,24 +190,47 @@ struct HUDCustomization: Codable, Equatable, Sendable {
         self.outerAppearance = outerAppearance
         self.outerRingVisibility = outerRingVisibility
         self.iconOrientation = iconOrientation
+        self.labelOrientation = labelOrientation
         self.wedgeColor = wedgeColor
         self.iconColor = iconColor
     }
 
     private enum CodingKeys: String, CodingKey {
         case inner, middle, outerAppearance, outerRingVisibility
-        case iconOrientation, wedgeColor, iconColor
+        case iconOrientation, labelOrientation, wedgeColor, iconColor
     }
 
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
-        inner = (try? c.decode(HUDRingCustomization.self, forKey: .inner)) ?? .init()
-        middle = (try? c.decode(HUDRingCustomization.self, forKey: .middle)) ?? .init()
-        outerAppearance = (try? c.decode(HUDRingAppearance.self, forKey: .outerAppearance)) ?? .init()
+        inner = (try? Self.decodeRing(from: c, forKey: .inner, defaultLabelVisible: false))
+            ?? HUDRingCustomization(appearance: .init(labelVisible: false))
+        middle = (try? Self.decodeRing(from: c, forKey: .middle, defaultLabelVisible: true))
+            ?? .init()
+        outerAppearance = (try? Self.decodeAppearance(from: c, forKey: .outerAppearance, defaultLabelVisible: true))
+            ?? .init()
         outerRingVisibility = (try? c.decode(OuterRingVisibility.self, forKey: .outerRingVisibility)) ?? .alwaysVisible
         iconOrientation = (try? c.decode(IconOrientation.self, forKey: .iconOrientation)) ?? .upright
+        labelOrientation = (try? c.decode(LabelOrientation.self, forKey: .labelOrientation)) ?? .upright
         wedgeColor = try? c.decode(HUDColor.self, forKey: .wedgeColor)
         iconColor = try? c.decode(HUDColor.self, forKey: .iconColor)
+    }
+
+    private static func decodeRing(
+        from container: KeyedDecodingContainer<CodingKeys>,
+        forKey key: CodingKeys,
+        defaultLabelVisible: Bool
+    ) throws -> HUDRingCustomization {
+        let nested = try container.superDecoder(forKey: key)
+        return try HUDRingCustomization(from: nested, defaultLabelVisible: defaultLabelVisible)
+    }
+
+    private static func decodeAppearance(
+        from container: KeyedDecodingContainer<CodingKeys>,
+        forKey key: CodingKeys,
+        defaultLabelVisible: Bool
+    ) throws -> HUDRingAppearance {
+        let nested = try container.superDecoder(forKey: key)
+        return try HUDRingAppearance(from: nested, defaultLabelVisible: defaultLabelVisible)
     }
 
     static let `default` = HUDCustomization()
