@@ -1,6 +1,6 @@
 # HUD Motion v1 — Implementation Plan
 
-> **Status:** In progress. Wave 1 completed 2026-09-04; Wave 2 is next.
+> **Status:** In progress. Waves 1–2 completed 2026-09-04; Wave 3 is next.
 > **Source:** `docs/sessions/2026-09-04.md` §HUD animation feasibility and
 > `docs/decisions.md` §HUD motion is role-based and presentation-only.
 
@@ -127,7 +127,7 @@ animation-free; it previously suffered layout jumps from runtime spring/scale an
 
 ### Wave 2 — Scoped wedge and outer-band presentation
 
-- [ ] **2.1: Replace the blanket spring with scoped hover and branch-dimming feedback**
+- [x] **2.1: Replace the blanket spring with scoped hover and branch-dimming feedback**
   → `01_Project/MousePlus/Views/RingMenuView.swift`,
   `01_Project/MousePlus/Views/Components/WedgeView.swift`
   - Remove the container-wide `animation(... value: activeSelection/expandedParentIndex)` modifiers.
@@ -139,7 +139,7 @@ animation-free; it previously suffered layout jumps from runtime spring/scale an
     emphasis interpolates; Off and master-disabled modes snap.
   - Backpressure: focused `RingViewModelHUDTests`, then authoritative Debug build.
 
-- [ ] **2.2: Implement localized and full-circle outer-ring reveal presentations**
+- [x] **2.2: Implement localized and full-circle outer-ring reveal presentations**
   → `01_Project/MousePlus/Views/Components/HUDOuterBandMotion.swift` (new),
   `01_Project/MousePlus/Views/RingMenuView.swift`,
   `01_Project/MousePlus/Views/Components/WedgeView.swift`
@@ -248,7 +248,7 @@ with prior HUD closure gates, but implementation can proceed through the automat
 | Wave | Started | Completed | Commits |
 |------|---------|-----------|---------|
 | 1 | 2026-09-04 | 2026-09-04 | `2fa266a`, `582513d` |
-| 2 | | | |
+| 2 | 2026-09-04 | 2026-09-04 | `6bec144`, `2f1a208` |
 | 3 | | | |
 | 4 | | | |
 | 5 | | | |
