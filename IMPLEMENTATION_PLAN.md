@@ -1,103 +1,76 @@
 # Implementation Plan
 
-> Reorganize HUD customization into scope-specific tabs and add independently configurable, readable labels without changing existing configurations by default.
+> Build the shared dynamic-expansion foundation (`DynamicSource`, async epoch-guarded `expand()`, `IconSource`) and the `AppSwitcherService`, then wire a middle "Apps" wedge to expand into MRU-ordered running apps with real icons.
 
 ## Goal
 
-Replace the stacked Menu/ring control groups with Menu, Inner, Middle, and Outer tabs, clarify inheritance wording, and add per-ring label visibility and orientation that render consistently in preview and the live HUD.
+Ship the Dynamic App Switcher (HUD Feature C): a middle wedge whose outer ring is populated at expansion time from `NSWorkspace.runningApplications`, MRU-ordered, with real app icons, committing through the existing `.appSwitch` action path unchanged.
 
 ## Acceptance Criteria
 
-- [ ] The Menu & Rings inspector contains a native AppKit segmented control with Menu, Inner, Middle, and Outer tabs; changing tabs does not change the selected menu item or active editing band.
-- [ ] Menu owns shared defaults, Inner and Middle own their layout plus appearance overrides, and Outer owns visibility plus appearance overrides; controls appear in only the scope that owns them.
-- [ ] Menu-level colors say “Default,” while ring- and item-level controls say “Inherit,” with concise help text explaining item → ring → menu → application-default resolution.
-- [ ] Inner, Middle, and Outer labels can each be shown or hidden; compatibility defaults preserve the current HUD (Inner hidden, Middle and Outer shown).
-- [ ] Labels support upright, radial, and tangential orientation with per-ring inheritance from a menu default; radial and tangential text automatically flips when needed so it is never upside down.
-- [ ] Label visibility and orientation use the same resolved geometry in preview and runtime, do not rotate icons or expand affordances, and do not create or remove accessibility names.
-- [ ] Missing, partial, and invalid persisted fields decode safely; canonical values round-trip through save, reset/undo, backup restore, merge, and relaunch without disturbing items or unknown actions.
-- [ ] Focused tests, the complete unit target, a clean signed Debug build, and user-driven light/dark verification pass.
+- [ ] `RingMenuItem` has a decode-tolerant `dynamicSource: DynamicSource` field (`.none` default); existing configs round-trip unchanged.
+- [ ] `RingViewModel.expand()` is async/epoch-guarded; the `.none` arm is byte-for-byte behaviorally identical to today (regression guard); `.runningApps` populates `outerItems` from `AppSwitcherService` without a "Loading…" placeholder.
+- [ ] `dynamicIcons` side dictionary never enters the `Codable` model; cleared on `reset()`/`collapse()`; a stale/late fetch after collapse or re-expansion can never assign (epoch guard proven, not just asserted).
+- [ ] `WedgeView` renders via an explicit `iconSource: IconSource` parameter; SF-symbol wedges are visually unchanged; app icons render full-color, untinted, clipped to a rounded rect.
+- [ ] `AppSwitcherService` enumerates regular running apps (self excluded), MRU-first via a launch-time-tracked `didActivateApplicationNotification` observer, alphabetical fallback, capped at ~12.
+- [ ] The sample "Apps" middle wedge uses `dynamicSource: .runningApps`; `RingPreviewSelector` shows a fixed placeholder set instead of querying `NSWorkspace` live.
+- [ ] Signed build + user-driven live verification: expanding "Apps" shows real running apps with correct icons/MRU order; committing one activates it; rapid re-pointing mid-fetch shows no stale assignment.
 
 ## Specs and Evidence
 
-- `specs/sustained-use-hud-redesign.md` — completed customization foundation and inheritance rules
-- `docs/PROJECT_STATE.md` — backlog scope and current project state
-- `docs/sessions/2026-09-04.md` — signed baseline: 217 tests and the completed HUD lifecycle gate
-
-## UI Placement Proposal (confirmed 2026-09-04)
-
-Keep the existing top-level **Menu & Rings / Selected Item** inspector switch. Inside **Menu & Rings**, replace the three vertically stacked group boxes with a second native segmented control: **Menu / Inner / Middle / Outer**.
-
-- **Menu:** default icon direction, default label direction, default wedge color, default icon color, and the inheritance explanation.
-- **Inner:** slot mode/count, rotation, icon direction override, label visibility, label direction override, wedge color, and icon color.
-- **Middle:** the same ring-owned controls as Inner.
-- **Outer:** outer-item visibility, label visibility, icon direction override, label direction override, wedge color, and icon color. Outer has no independent slot count or rotation because its arc geometry belongs to the expanded middle parent.
-
-Use the existing `AppKitSegmentedControl`, `AppKitSlider`, `AppKitCountControl`, and `AppKitColorWell`; add no raw SwiftUI interactive controls. The inspector remains fixed-width within the existing non-resizable `HStack`, so no new split view is introduced.
-
----
+- `docs/APP_SWITCHER_PLAN.md` — full design, ground truth, and phased task breakdown (source of this plan)
+- `docs/HUD_ACTIONS_PLAN.md` §1.2/§1.3 (shared foundation), §194–230 (Feature C spec)
+- `docs/PROJECT_STATE.md` — current project state
 
 ## Tasks
 
-### Wave 1 — Persistence and pure presentation policy
+### Wave 1 — Shared model types (parallel, no deps)
 
-- [x] **1.1: Add tolerant label customization fields and compatibility defaults** → `01_Project/MousePlus/Models/HUDCustomization.swift`, `01_Project/MousePlusTests/HUDCustomizationCodingTests.swift`, configuration fixtures
-  - Add a label-orientation type plus menu default and per-ring overrides; add explicit per-ring label visibility.
-  - Preserve current behavior for old files: Inner labels hidden, Middle and Outer labels shown, all labels upright.
-  - Success: missing/partial/unknown values preserve valid siblings, canonical values round-trip, and reset defaults remain compatible.
-  - Backpressure: focused `HUDCustomizationCodingTests` and `ConfigurationServiceTests` migration/round-trip cases.
+- [x] **Task 1.1**: Add `DynamicSource` enum (`.none`, `.runningApps`) and `dynamicSource` field to `RingMenuItem`, decode-tolerant default `.none` matching the existing `actionData`/`wedgeColor` tolerance pattern -> `01_Project/MousePlus/Models/RingMenuItem.swift`
+  - Backpressure: builds; a pre-existing `config.json` fixture decodes with `.none`; round-trips through encode/decode.
+- [x] **Task 1.2**: Add `IconSource` enum (`.sfSymbol(String)`, `.appIcon(NSImage)`) -> `01_Project/MousePlus/Models/IconSource.swift` (new)
+  - Backpressure: builds.
 
-- [x] **1.2: Define label visibility and readable rotation as pure resolved presentation** → `01_Project/MousePlus/Views/Components/LabelPresentationPolicy.swift` (new, alongside `OrientedHUDIcon.swift`/`WedgeView.swift`), focused tests
-  - Resolve menu → ring label orientation independently from icon orientation; normalize angles and auto-flip radial/tangential text into a readable half-plane.
-  - Keep accessibility labels independent from whether the visual caption is hidden.
-  - Success: boundary-angle matrices prove labels never render upside down and icon/chevron transforms remain unchanged.
-  - Backpressure: focused `WedgePresentationTests` covering all orientations, wrap boundaries, and visibility states.
+### Wave 2 — RingViewModel/WedgeView plumbing (depends on Wave 1)
 
-### Wave 2 — Scope-specific inspector tabs
+- [x] **Task 2.1**: Async, epoch-guarded `expand()`; `dynamicIcons: [RingMenuItem.ID: NSImage]` side dictionary; both cleared (and epoch bumped) in `reset()`/`collapse()`; `.none` arm unchanged behavior -> `01_Project/MousePlus/ViewModels/RingViewModel.swift`
+  - Backpressure: builds; existing static-`subItems` wedges (Snap, Menu, Custom) still expand synchronously, unchanged; focused `RingViewModelHUDTests` regression case for the `.none` path.
+  - Note: `.runningApps` arm is stubbed with a `TODO(Wave 4)`-marked `Task { }` — no `AppSwitcherService` reference added yet, by design.
+- [x] **Task 2.2**: `WedgeView` takes `iconSource: IconSource` instead of reading `item.icon` directly; `RingMenuView` computes it per wedge (`dynamicIcons[item.id].map { .appIcon($0) } ?? .sfSymbol(item.icon)`); app icons render untinted at 28×28, `RoundedRectangle(cornerRadius: 6)` clip -> `01_Project/MousePlus/Views/Components/WedgeView.swift`, `01_Project/MousePlus/Views/RingMenuView.swift`
+  - Backpressure: builds; existing SF-symbol wedges render identically (no visible diff on a static config).
 
-- [x] **2.1: Replace stacked customization groups with Menu/Inner/Middle/Outer tabs** → `01_Project/MousePlus/Views/MenuEditor/HUDCustomizationControls.swift`, `01_Project/MousePlus/Views/AppKitControls/AppKitControls.swift`, `01_Project/MousePlusTests/AppKitControlsTests.swift`
-  - Implement the confirmed placement proposal with stable tab state, scope-owned control content, and unambiguous accessibility identifiers.
-  - Rename only menu-root color choices to “Default”; retain “Inherit” for ring/item overrides and add concise hierarchy help.
-  - Success: every control appears under exactly one owner tab, switching tabs preserves selection/active band, and keyboard/VoiceOver can identify and change each segment.
-  - Backpressure: focused `AppKitControlsTests`, `WorkspaceAccessibilityTests`, and a source audit excluding forbidden SwiftUI controls.
+### Wave 3 — AppSwitcherService (parallel with Wave 1/2, no file overlap)
 
-### Wave 3 — Runtime, preview, and persistence integration
+- [x] **Task 3.1**: `AppEntry` struct + `actor AppSwitcherService` (`startTrackingMRU()`, `runningApps()`): enumerate `NSWorkspace.shared.runningApplications` filtered to `.regular` policy, self excluded; MRU-first via a `didActivateApplicationNotification` observer started at launch, alphabetical fallback; cap ~12; actor-isolated with a `@MainActor` hop for the `NSWorkspace` read, matching `WindowService`'s pattern -> `01_Project/MousePlus/Services/AppSwitcherService.swift` (new)
+  - Backpressure: builds; a debug dump of `runningApps()` shows correct names/bundleIDs/icons, MRU-ordered.
+- [x] **Task 3.2**: Call `startTrackingMRU()` once at launch, alongside other launch-time services (e.g. `PermissionsService`) -> `01_Project/MousePlus/MousePlusApp.swift`
+  - Backpressure: builds; MRU map updates as apps are activated (verify via debug log).
 
-- [x] **3.1: Render per-ring label visibility and readable orientation everywhere** → `01_Project/MousePlus/ViewModels/RingViewModel.swift`, `01_Project/MousePlus/Views/RingMenuView.swift`, `01_Project/MousePlus/Views/Components/WedgeView.swift`, `01_Project/MousePlus/Views/MenuEditor/RingPreviewSelector.swift`, related tests
-  - Feed the same resolved label policy to runtime and preview for Inner, Middle, and Outer wedges.
-  - Rotate only the caption around its own center; icons and expand affordances retain their independently resolved presentation.
-  - Success: preview/runtime parity holds for all rings, hidden labels leave icons centered sensibly, and visual visibility never erases accessibility names.
-  - Backpressure: focused `RingViewModelHUDTests`, `HUDPreviewInteractionTests`, `WedgePresentationTests`, and accessibility cases.
+### Wave 4 — Wire the switcher into the ring (depends on Wave 2 + Wave 3)
 
-- [x] **3.2: Preserve the new values across every Settings write path** → `01_Project/MousePlus/ViewModels/MenuEditorModel.swift`, `01_Project/MousePlus/ViewModels/SettingsWorkspaceCoordinator.swift`, persistence/integration tests
-  - Verify edit, debounce save, fresh-base merge, retry, reset/undo, durable backup restore, live apply, and relaunch paths carry all new fields.
-  - Success: concurrent unrelated edits and recovery operations cannot revert label settings or lose unknown action data.
-  - Backpressure: focused `MenuEditorModelRegressionTests`, `SettingsWorkspaceCoordinatorTests`, and `HUDCustomizationIntegrationTests`.
+- [x] **Task 4.1**: Implement the `.runningApps` arm added in Task 2.1: map `[AppEntry]` → `RingMenuItem(actionType: .appSwitch, actionData: bundleIdentifier)`, stash icons into `dynamicIcons`, cap 12 -> `01_Project/MousePlus/ViewModels/RingViewModel.swift`
+  - Backpressure: builds; expanding "Apps" with several apps running shows real icons + correct MRU order.
+- [x] **Task 4.2**: Update the sample "Apps" middle wedge to `dynamicSource: .runningApps` (drop its static 3-item `subItems`); preview special-case — `RingPreviewSelector`/editor preview renders a fixed 3–4 item placeholder set instead of querying `NSWorkspace` live -> `01_Project/MousePlus/Models/RingMenuItem.swift`, wherever `RingPreviewSelector` resolves preview content
+  - Backpressure: builds; Settings → Menu Items preview shows placeholder app slots, not a live/empty query.
+  - Note: `hasSubItems` (`RingMenuItem.swift`) had to be extended to also treat `dynamicSource != .none` as expandable — it previously meant "subItems is non-empty" and gated expand-vs-execute, the expand chevron, the hidden-submenu warning, and the editor's `expandedMiddleParent()` lookup everywhere in the codebase. Dropping Apps' static `subItems` without this fix would have silently made it non-expandable again.
 
-### Wave 4 — Closure gate
+### Wave 5 — Closure gate (verification)
 
-- [x] **4.1: Run focused adversarial and automated verification** → complete change set
-  - Review tab-state identity, compact-width label truncation, migration defaults, orientation discontinuities near flip boundaries, empty labels, submenu expansion, hidden labels, VoiceOver naming, and reset/merge races.
-  - Success: no unresolved high-severity finding; every affected focused suite and the complete unit target pass.
-  - Backpressure: focused suites, full MousePlus test target, forbidden-control audit, and `git diff --check`.
-  - Outcome: adversarial review of the complete Wave 1–3 diff found one SHOULD_FIX — `WedgeView`'s caption `Text` had no width cap, newly reachable at the Inner ring now that labels can be toggled on there, allowing long labels to overlap neighboring wedges. Fixed by capping the caption to its wedge's mid-radius chord width with `.truncationMode(.tail)` and `.minimumScaleFactor(0.6)` as a safety net (`WedgeView.swift`). One SUGGESTION (unread `LabelPresentation.accessibilityLabel` field — VoiceOver naming is correctly handled by the separate `RingWedgeAccessibility` path) was left as non-blocking. All other checklist items (tab-state identity, migration defaults, flip-boundary orientation, empty labels, submenu expansion, hidden-label centering, VoiceOver, reset/merge races) were verified clean by reading the actual code paths, not just trusting test names. `git diff --check` clean, no forbidden raw SwiftUI controls introduced, full MousePlus test target green before and after the fix.
-
-- [x] **4.2: Run clean signed live verification and close documentation** → complete application, `docs/PROJECT_STATE.md`, `docs/TASKS.md`, session log
-  - Verify all four tabs at minimum window width, light/dark preview and runtime parity, each ring’s show/hide behavior, readable radial/tangential labels around a full circle, persistence after immediate Quit, and trigger re-arming.
-  - Success: signed user confirmation is recorded and tracker/spec/state claims agree.
-  - Backpressure: clean signed Debug build plus user-driven screenshots and quit/relaunch verification.
-  - Outcome: clean-rebuilt the signed Debug app (stable per-machine `Developer ID Application: GREGOR MÜLLER (FDMSRXXN73)` identity) and launched it. User quit MousePlus and relaunched the signed build directly (not just the General-pane path already covered by the prior HUD lifecycle gate), confirming persistence and trigger re-arming hold on a real quit/relaunch cycle; user reported it "seems to work fine." The detailed tab/light-dark/per-ring show-hide/label-circle checklist was already verified structurally by Task 4.1's adversarial code review rather than re-walked live item-by-item. Wave 4 is closed; the ring-controls reorganization is complete.
-
----
+- [ ] **Task 5.1**: Focused + full automated suite, forbidden-control audit, `git diff --check` -> complete change set
+  - Backpressure: focused suites for RingViewModel/WedgeView/AppSwitcherService, full MousePlus test target green, no raw SwiftUI interactive controls introduced.
+- [ ] **Task 5.2**: Signed build + user-driven live verification (no synthetic input, per project rule) — user presses their trigger, expands "Apps" with 4+ regular apps running, confirms real names/icons/MRU order, commits one and confirms activation; rapid re-point mid-fetch confirms no stale assignment
+  - Backpressure: signed Debug build; user confirmation recorded in session log and `PROJECT_STATE.md`.
 
 ## Operational Learnings
 
-- Current Inner captions are suppressed structurally with `symbolOnly`; label controls require a resolved presentation policy rather than scattering additional band checks.
-- `model.activeBand` controls item insertion and selection. The new customization tab must own separate UI state so viewing Middle settings cannot silently retarget Add or item editing.
-- Outer items inherit their geometry from the expanded Middle parent, so the Outer tab must not imply independent slot-count or rotation ownership.
+- Window Snap never needed a dynamic-source concept — its 8 directions are static `subItems`. The app switcher is the first feature that needs live, runtime-populated `outerItems`; an epoch counter (not a boolean) is required because hover-driven reveal can re-point from one dynamic wedge straight to another mid-fetch.
+- `NSImage` must never enter the `Codable` model — `IconSource`/`dynamicIcons` is a side dictionary on the view model only, cleared on `reset()`/`collapse()`.
+- No public running-app z-order/MRU API exists on macOS 14; MRU is self-tracked from `didActivateApplicationNotification`, starting empty until the app has seen at least one activation (alphabetical fallback until then).
+- Feature A (menu mirror, `APP_COMMANDS_PLAN.md`) will consume the same `DynamicSource`/async-`expand()` machinery unchanged — do not fork a second version if it lands later.
 
 ## Blocked Tasks
 
-- None. The placement proposal is confirmed; Wave 2 UI implementation may proceed once Wave 1 lands.
+- None.
 
 ---
 
@@ -105,10 +78,11 @@ Use the existing `AppKitSegmentedControl`, `AppKitSlider`, `AppKitCountControl`,
 
 | Wave | Started | Completed | Commits |
 |------|---------|-----------|---------|
-| 1 | 2026-09-04 | 2026-09-04 | `feat(wave-1): add label orientation model and pure presentation policy` |
-| 2 | 2026-09-04 | 2026-09-04 | `feat(wave-2): add Menu/Inner/Middle/Outer HUD customization tabs` |
-| 3 | 2026-09-04 | | `feat(wave-3): wire per-ring label visibility and orientation into runtime and preview` (3.1); `test(wave-3): verify label fields survive every Settings write path` (3.2) — Wave 3 complete |
-| 4 | 2026-09-04 | | `fix(wave-4): cap wedge caption width to its wedge chord` (4.1) |
+| 1 | 2026-09-04 | 2026-09-04 | `feat(wave-1): add DynamicSource and IconSource model types` |
+| 2 | 2026-09-04 | 2026-09-04 | `feat(wave-2): wire async epoch-guarded expand() and per-wedge iconSource` |
+| 3 | 2026-09-04 | 2026-09-04 | `feat(wave-3): add AppSwitcherService for MRU running-app enumeration` |
+| 4 | 2026-09-04 | 2026-09-04 | `feat(wave-4): wire AppSwitcherService into .runningApps expand() + preview placeholder` |
+| 5 | | | |
 
 ---
 *Delete this file when all tasks complete. Archive the outcome in the session log.*

@@ -161,6 +161,15 @@ struct RingPreviewSelector: View {
     @State private var preview = RingViewModel()
     private let canvasSide: CGFloat = 448
 
+    /// Fixed stand-in for `.runningApps` parents — the editor preview never
+    /// queries the live `AppSwitcherService`/`NSWorkspace`.
+    private static let runningAppsPreviewPlaceholder: [RingMenuItem] = [
+        RingMenuItem(label: "Safari", icon: "safari", actionType: .appSwitch, actionData: "com.apple.Safari"),
+        RingMenuItem(label: "Finder", icon: "folder", actionType: .appSwitch, actionData: "com.apple.finder"),
+        RingMenuItem(label: "Mail", icon: "envelope", actionType: .appSwitch, actionData: "com.apple.mail"),
+        RingMenuItem(label: "Messages", icon: "message", actionType: .appSwitch, actionData: "com.apple.MobileSMS"),
+    ]
+
     var body: some View {
         let side = 2 * preview.radii.r3
         let scale = HUDPreviewInteractionSnapshot.fitScale(
@@ -227,6 +236,7 @@ struct RingPreviewSelector: View {
             model.selection = SlotSelection(band: band, itemID: items[index].id, subItemID: nil)
         case let .selectOuter(index):
             guard let parent = expandedMiddleParent(),
+                  parent.item.dynamicSource == .none,
                   let subs = parent.item.subItems, subs.indices.contains(index) else { return }
             model.activeBand = .middle
             model.selection = SlotSelection(band: .middle, itemID: parent.item.id,
@@ -239,8 +249,16 @@ struct RingPreviewSelector: View {
         preview.innerItems = model.inner
         preview.middleItems = model.middle
         preview.hudCustomization = model.hudCustomization
-        if let parent = expandedMiddleParent() { preview.expand(parent.index) }
-        else { preview.reset() }
+        if let parent = expandedMiddleParent() {
+            if parent.item.dynamicSource == .runningApps {
+                preview.expandedParentIndex = parent.index
+                preview.outerItems = Self.runningAppsPreviewPlaceholder
+            } else {
+                preview.expand(parent.index)
+            }
+        } else {
+            preview.reset()
+        }
         preview.innerItems = model.inner
         preview.middleItems = model.middle
         preview.hudCustomization = model.hudCustomization

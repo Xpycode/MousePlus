@@ -251,6 +251,64 @@ final class RingViewModelHUDTests: XCTestCase {
         XCTAssertFalse(model.isOuterRingVisible)
     }
 
+    /// `AppSwitcherService` reads live `NSWorkspace.shared.runningApplications`,
+    /// so its contents can't be controlled here — this asserts the invariant the
+    /// population path guarantees instead: every outer item it produces commits
+    /// through `.appSwitch` with a non-empty bundle identifier.
+    func testDynamicSourceRunningAppsPopulatesAppSwitchItemsAfterFetchCompletes() async {
+        var customization = HUDCustomization.default
+        customization.outerRingVisibility = .alwaysVisible
+        var middle = [item("Apps")]
+        middle[0].dynamicSource = .runningApps
+        let config = Configuration(
+            inner: [],
+            middle: middle,
+            triggers: .default,
+            appearance: AppearanceConfig(deadZone: 10, innerEdge: 20,
+                                         middleEdge: 30, outerEdge: 40),
+            hudCustomization: customization
+        )
+        let model = RingViewModel()
+        model.load(from: config)
+
+        model.expand(0)
+        for _ in 0..<5 { await Task.yield() }
+        try? await Task.sleep(nanoseconds: 30_000_000)
+
+        XCTAssertEqual(model.expandedParentIndex, 0)
+        for outerItem in model.outerItems {
+            XCTAssertEqual(outerItem.actionType, .appSwitch)
+            XCTAssertFalse(outerItem.actionData.isEmpty)
+        }
+    }
+
+    /// A `reset()` issued before the async `.runningApps` fetch resolves must
+    /// discard the late result — the epoch/parent-index guard in `expand()`.
+    func testDynamicSourceRunningAppsLateResultIsDiscardedAfterReset() async {
+        var customization = HUDCustomization.default
+        customization.outerRingVisibility = .alwaysVisible
+        var middle = [item("Apps")]
+        middle[0].dynamicSource = .runningApps
+        let config = Configuration(
+            inner: [],
+            middle: middle,
+            triggers: .default,
+            appearance: AppearanceConfig(deadZone: 10, innerEdge: 20,
+                                         middleEdge: 30, outerEdge: 40),
+            hudCustomization: customization
+        )
+        let model = RingViewModel()
+        model.load(from: config)
+
+        model.expand(0)
+        model.reset()
+        for _ in 0..<5 { await Task.yield() }
+        try? await Task.sleep(nanoseconds: 30_000_000)
+
+        XCTAssertTrue(model.outerItems.isEmpty)
+        XCTAssertNil(model.expandedParentIndex)
+    }
+
     func testConditionalOuterHitTargetsExistOnlyAfterReveal() {
         let model = conditionalModel()
         model.expand(0)

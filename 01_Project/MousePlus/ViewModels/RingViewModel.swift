@@ -150,13 +150,16 @@ final class RingViewModel {
 
     private let actionService: ActionService
     private let actionResultRouter: ActionResultRouter
+    private let appSwitcherService: AppSwitcherService
 
     init(
         actionService: ActionService = ActionService(),
-        actionResultRouter: ActionResultRouter = ActionResultRouter()
+        actionResultRouter: ActionResultRouter = ActionResultRouter(),
+        appSwitcherService: AppSwitcherService = AppSwitcherService()
     ) {
         self.actionService = actionService
         self.actionResultRouter = actionResultRouter
+        self.appSwitcherService = appSwitcherService
     }
 
     /// Pure UI callback the owner (AppDelegate) sets to dismiss the panel after a
@@ -353,14 +356,22 @@ final class RingViewModel {
             // Transient empty arc — no "Loading…" placeholder; `NSWorkspace`
             // enumeration is effectively instant (APP_SWITCHER_PLAN.md §3).
             outerItems = []
+            let epoch = expansionEpoch
             Task {
-                // TODO(Wave 4): capture `let epoch = expansionEpoch` before this
-                // Task, call AppSwitcherService.runningApps(), map the result to
-                // RingMenuItems (actionType: .appSwitch, actionData: bundleIdentifier),
-                // stash icons into dynamicIcons, cap at ~12, then
-                //   guard epoch == expansionEpoch, expandedParentIndex == parentIndex
-                //   else { return }
-                // before assigning outerItems.
+                let entries = await appSwitcherService.runningApps()
+                let items = entries.map { entry in
+                    RingMenuItem(label: entry.name, icon: "app.fill",
+                                actionType: .appSwitch, actionData: entry.id)
+                }
+                var icons: [RingMenuItem.ID: NSImage] = [:]
+                for (item, entry) in zip(items, entries) {
+                    icons[item.id] = entry.icon
+                }
+
+                guard epoch == self.expansionEpoch,
+                      self.expandedParentIndex == parentIndex else { return }
+                self.dynamicIcons = icons
+                self.outerItems = items
             }
         }
     }

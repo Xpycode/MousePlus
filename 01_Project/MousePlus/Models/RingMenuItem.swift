@@ -49,6 +49,7 @@ struct RingMenuItem: Identifiable, Codable, Hashable {
     }
 
     var hasSubItems: Bool {
+        if dynamicSource != .none { return true }
         guard let subItems else { return false }
         return !subItems.isEmpty
     }
@@ -148,11 +149,7 @@ extension RingMenuItem {
             label: "Apps",
             icon: "square.grid.2x2",
             actionType: .appSwitch,
-            subItems: [
-                RingMenuItem(label: "Safari", icon: "safari", actionType: .appSwitch, actionData: "com.apple.Safari"),
-                RingMenuItem(label: "Finder", icon: "folder", actionType: .appSwitch, actionData: "com.apple.finder"),
-                RingMenuItem(label: "Terminal", icon: "terminal", actionType: .appSwitch, actionData: "com.apple.Terminal"),
-            ]
+            dynamicSource: .runningApps
         ),
         RingMenuItem(
             label: "Snap",

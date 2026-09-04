@@ -11,13 +11,16 @@
 
 ## Now
 
-- **Phase:** Ring-controls reorganization complete. All four waves (label model, inspector tabs, runtime/preview/persistence integration, and the closure gate) are done. <!-- Phase changed: 2026-09-04 -->
-- **Focus:** No active sprint; ready to pick up the next HUD action.
-- **Blocker:** Advanced Logitech-button support is paused until raw MX4/MX3S captures resolve the HID++ strategy decision.
-- **Next:** Resume the HUD action roadmap; screenshots is the smallest unfinished action.
+- **Phase:** Ring-controls reorganization complete; executing the App Switcher (Feature C) implementation plan. <!-- Phase changed: 2026-09-04 -->
+- **Focus:** App Switcher (`APP_SWITCHER_PLAN.md` / `IMPLEMENTATION_PLAN.md`) — Waves 1–4 of 5 done (shared `DynamicSource`/`IconSource` model types, async epoch-guarded `RingViewModel.expand()` + `WedgeView` icon plumbing, `AppSwitcherService`, and now the `.runningApps` fetch wired into `expand()` with the sample "Apps" wedge switched over and an editor-preview placeholder). Only Wave 5 (signed-build + live verification closure gate) remains. System toggles (`SYSTEM_TOGGLES_PLAN.md`) and Help/Feedback/Tip/Appearance (`APP_CHROME_SETTINGS_PLAN.md`) are still queued behind it.
+- **Blocker:** Advanced Logitech-button support is paused until raw MX4/MX3S captures resolve the HID++ strategy decision. Separately, `APP_CHROME_SETTINGS_PLAN.md`'s Leave-a-Tip button needs a tip-jar platform/URL from the user before it can ship.
+- **Next:** Wave 5 — full automated suite + forbidden-control audit + `git diff --check` (Task 5.1), then a signed Debug build with user-driven live verification of the "Apps" wedge (real names/icons/MRU order, commit-to-activate, no stale assignment on rapid re-point) (Task 5.2).
 
 ## Recent
 
+- **2026-09-04:** Executed Wave 4 of the App Switcher plan via a fresh-context subagent: `RingViewModel.expand()`'s `.runningApps` arm now fetches from the same launch-tracked `AppSwitcherService` instance (epoch/parent-index guarded against stale late results), the sample "Apps" wedge dropped its static `subItems` for `dynamicSource: .runningApps`, and `RingPreviewSelector` renders a fixed 4-app placeholder instead of querying `NSWorkspace` live. Also fixed `RingMenuItem.hasSubItems` to treat a non-`.none` `dynamicSource` as expandable too — every call site that gated expand-vs-execute, the expand chevron, and the hidden-submenu warning depended on that property, and dropping Apps' static `subItems` would have silently broken all of them without the fix. Two new epoch-guard regression tests added; full 243-test suite and a clean Debug build passed. Wave 5 (signed live verification) is next.
+- **2026-09-04:** Executed Waves 1–3 of the App Switcher plan via parallel fresh-context subagents: `DynamicSource`/`IconSource` model types, async epoch-guarded `RingViewModel.expand()` with an untinted `IconSource`-driven `WedgeView`/`RingMenuView` icon path, and a new `AppSwitcherService` actor (self-tracked MRU via `didActivateApplicationNotification`, capped at 12). Each wave built clean and was committed separately; Wave 4 (wiring the service into the still-stubbed `.runningApps` fetch) is next.
+- **2026-09-04:** Wrote full phased implementation plans for the two remaining HUD actions without one — `APP_SWITCHER_PLAN.md` (Feature C) and `SYSTEM_TOGGLES_PLAN.md` (Feature D), reconciled against the current `ActionService`/`RingViewModel` code (both correct several stale assumptions in the 2026-05-30 `HUD_ACTIONS_PLAN.md` sketch). Also scoped a new `APP_CHROME_SETTINGS_PLAN.md` for Help/Feedback/Leave-a-tip/Appearance, placed in Settings (a new "About" sidebar section) rather than the status-item menu, per user decision — MousePlus has no traditional app menu bar to hang them on. The tip-jar URL is an open blocker before that plan's Feedback/Tip wave can fully ship.
 - **2026-09-04:** Added, signed-live-verified, committed, and pushed a menu-bar “Restart MousePlus” command. It flushes pending settings, launches a fresh app instance, and only then terminates the current process; failed saves or launches leave the current process running. Added lifecycle regression coverage.
 
 - **2026-09-04:** Completed Task 4.2: clean-rebuilt the signed Debug app on the stable per-machine identity and launched it; user quit and relaunched the signed build directly and confirmed it works, closing the persistence/trigger-re-arming portion of the checklist (the tab/light-dark/per-ring/label-circle detail was already verified structurally by Task 4.1's code review). Wave 4 and the full ring-controls reorganization are closed. User also asked for a menu-bar "Restart MousePlus" item (like BetterMouse offers); logged to the backlog rather than implemented immediately.
@@ -68,6 +71,10 @@
 - Sustained-use HUD redesign specification: `../specs/sustained-use-hud-redesign.md`
 - Sustained-use HUD redesign implementation plan: `../IMPLEMENTATION_PLAN.md`
 - HUD action roadmap: `HUD_ACTIONS_PLAN.md`
+- App menu-bar mirror (Feature A) implementation plan: `APP_COMMANDS_PLAN.md`
+- Dynamic app switcher (Feature C) implementation plan: `APP_SWITCHER_PLAN.md`
+- System toggles (Feature D) implementation plan: `SYSTEM_TOGGLES_PLAN.md`
+- Help/Feedback/Tip/Appearance Settings plan: `APP_CHROME_SETTINGS_PLAN.md`
 - Send Keystroke implementation record: `SEND_KEYSTROKE_PLAN.md`
 - Menu-editor findings and deferred risks: `MENU_EDITOR_REVIEW.md`
 - HID captures and evidence: `fixtures/`

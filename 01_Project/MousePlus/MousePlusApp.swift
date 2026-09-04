@@ -93,7 +93,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             self?.actionErrorHUDController.show(failure)
         }
     }
-    private lazy var ringViewModel = RingViewModel(actionResultRouter: actionResultRouter)
+    private lazy var ringViewModel = RingViewModel(actionResultRouter: actionResultRouter,
+                                                    appSwitcherService: appSwitcherService)
     private var dismissMonitor: DismissMonitor?
     let settingsActionContextProvider = SettingsActionContextProvider()
 
