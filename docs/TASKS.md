@@ -16,7 +16,7 @@
 - [x] Task 1.2: Add a pure Reduce Motion-aware semantic motion policy resolver.
 - [x] Task 2.1: Replace the blanket spring with scoped hover and branch-dimming feedback.
 - [x] Task 2.2: Implement localized and full-circle outer-ring reveal presentations.
-- [ ] Task 3.1: Add a short summon fade and intentional outer-branch crossfade.
+- [x] Task 3.1: Add a short summon fade and intentional outer-branch crossfade.
 - [ ] Task 4.1: Expand Ring Appearance → Animation with role-specific native controls.
 - [ ] Task 5.1: Complete automated, adversarial, performance, accessibility, and signed-live verification.
 

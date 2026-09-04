@@ -1,6 +1,6 @@
 # HUD Motion v1 — Implementation Plan
 
-> **Status:** In progress. Waves 1–2 completed 2026-09-04; Wave 3 is next.
+> **Status:** In progress. Waves 1–3 completed 2026-09-04; Wave 4 is next.
 > **Source:** `docs/sessions/2026-09-04.md` §HUD animation feasibility and
 > `docs/decisions.md` §HUD motion is role-based and presentation-only.
 
@@ -155,7 +155,7 @@ animation-free; it previously suffered layout jumps from runtime spring/scale an
 
 ### Wave 3 — Summon and branch lifecycle
 
-- [ ] **3.1: Add a short summon fade and intentional outer-branch crossfade**
+- [x] **3.1: Add a short summon fade and intentional outer-branch crossfade**
   → `01_Project/MousePlus/Views/RingMenuView.swift`,
   `01_Project/MousePlus/Controllers/RingWindowController.swift` only if a minimal lifecycle hook is
   required, `01_Project/MousePlusTests/RingViewModelHUDTests.swift`
@@ -249,7 +249,7 @@ with prior HUD closure gates, but implementation can proceed through the automat
 |------|---------|-----------|---------|
 | 1 | 2026-09-04 | 2026-09-04 | `2fa266a`, `582513d` |
 | 2 | 2026-09-04 | 2026-09-04 | `6bec144`, `2f1a208` |
-| 3 | | | |
+| 3 | 2026-09-04 | 2026-09-04 | `1d4e459` |
 | 4 | | | |
 | 5 | | | |
 

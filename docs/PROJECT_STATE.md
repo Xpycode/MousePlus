@@ -11,13 +11,14 @@
 
 ## Now
 
-- **Phase:** HUD Motion v1 implementation; Wave 2 of 5 complete. <!-- Phase changed: 2026-09-04 -->
-- **Focus:** Wave 2 replaced blanket springs with wedge-local hover feedback and added policy-driven localized/full-circle outer reveals while logical hit geometry remains final and immediate.
+- **Phase:** HUD Motion v1 implementation; Wave 3 of 5 complete. <!-- Phase changed: 2026-09-04 -->
+- **Focus:** Wave 3 added a view-local summon fade and outer-branch crossfades with frozen render snapshots; logical geometry, commits, and dismissal remain immediate.
 - **Blocker:** Advanced Logitech-button support is paused until raw MX4/MX3S captures resolve the HID++ strategy decision. `APP_CHROME_SETTINGS_PLAN.md`'s Leave-a-Tip button still needs a tip-jar platform/URL from the user.
-- **Next:** Execute Wave 3: add the view-local summon fade and key outer-branch crossfades to branch/content generation without changing immediate commit or dismissal behavior.
+- **Next:** Execute Wave 4: extend Ring Appearance → Animation with the four role controls, Motion speed, and the Reduce Motion note through the existing Settings coordinator.
 
 ## Recent
 
+- **2026-09-04:** Completed HUD Motion v1 Wave 3: summon fades without changing the panel; static and dynamic outer branches crossfade using frozen geometry/icons and guarded accessibility activation. Collapse removes the whole transition owner immediately. All 48 focused tests and the authoritative Debug build pass; signed visual and VoiceOver checks remain in Wave 5.
 - **2026-09-04:** Completed HUD Motion v1 Wave 2: hover emphasis is wedge-local, localized outer wedges unfold from their parent direction, full-circle Apps wedges reveal outward simultaneously, and Reduce Motion/Off modes avoid spatial presentation. All 39 focused tests and the authoritative Debug build pass; an independent review found no code defects, with live visual checks deferred to the closure gate.
 - **2026-09-04:** Completed HUD Motion v1 Wave 1: legacy animation settings migrate losslessly into independently tolerant role styles, and a pure policy resolves master/style/duration/Reduce Motion combinations without touching interaction state. All 21 focused tests pass.
 - **2026-09-04:** Audited HUD animation feasibility and created a five-wave Motion v1 plan for safe semantic effects, role-specific Settings controls, accessibility, and signed live verification.
@@ -34,7 +35,7 @@
 - **Ring-controls reorganization (Menu/Inner/Middle/Outer tabs + per-ring labels):** 4/4 waves complete; automated, adversarial, signed-build, and user-driven checks passed.
 - **HUD actions:** Window snapping and keystroke delivery work; App Switcher v1 is complete and signed-live verified, including MRU order and rapid re-point safety; menu-bar mirror, system toggles, and screenshots remain.
 - **Trigger backend:** Keyboard and standard mouse paths work; advanced Logitech HID++ support remains undecided.
-- **Task tracker:** 4/7 current sprint tasks complete; 26/30 tracked items complete overall (87%).
+- **Task tracker:** 5/7 current sprint tasks complete; 27/30 tracked items complete overall (90%).
 
 ## Risks and Backlog
 
