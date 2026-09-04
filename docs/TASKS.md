@@ -6,13 +6,18 @@
 <!-- Ideas and future work. Added by /interview, user input, or discovered during development. -->
 <!-- Priority: top = highest, bottom = lowest -->
 
-- [ ] Clarify Menu & Rings scope with Menu/Inner/Middle/Outer subtabs; rename root-level color “Inherit” to “Default” and explain the item → ring → menu → app-default hierarchy; add per-ring label visibility and optional upright/radial/tangential label orientation with readable auto-flipping
+No queued backlog items.
 
 ## Current Sprint
 <!-- Active work. Populated by /plan or /execute. Keep focused (3-7 tasks). -->
 <!-- When done: /log moves to tasks-archive.md -->
 
-No active tasks.
+- [x] Task 1.1: Add tolerant label customization fields and compatibility defaults
+- [x] Task 1.2: Define label visibility and readable rotation as pure presentation policy
+- [ ] Task 2.1: Reorganize HUD customization into Menu/Inner/Middle/Outer tabs
+- [ ] Task 3.1: Integrate label policy across live HUD and preview
+- [ ] Task 3.2: Preserve label settings across every Settings write and recovery path
+- [ ] Tasks 4.1–4.2: Pass automated, adversarial, signed-live, and documentation closure gates
 
 ---
 

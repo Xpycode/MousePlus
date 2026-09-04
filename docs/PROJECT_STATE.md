@@ -11,18 +11,20 @@
 
 ## Now
 
-- **Phase:** HUD redesign complete; selecting the next product increment. <!-- Phase changed: 2026-09-04 -->
-- **Focus:** Choose between onboarding and the next HUD action; screenshots are the smallest unfinished action.
+- **Phase:** Ring-controls reorganization underway; tab placement confirmed and Wave 1 foundations landed. <!-- Phase changed: 2026-09-04 -->
+- **Focus:** Build the Menu/Inner/Middle/Outer inspector tabs (Wave 2) on top of the new label model and presentation policy.
 - **Blocker:** Advanced Logitech-button support is paused until raw MX4/MX3S captures resolve the HID++ strategy decision.
-- **Next:** Decide whether to implement onboarding or the screenshot action next.
+- **Next:** Implement Task 2.1 — replace the stacked customization groups with the confirmed scope-owned tabs.
 
 ## Recent
 
+- **2026-09-04:** Completed Wave 1: `HUDCustomization` gained a tolerant `LabelOrientation` model with per-ring overrides and compatibility defaults (inner hidden, middle/outer shown, upright), and a new pure `LabelPresentationPolicy` resolves per-ring label visibility and auto-flipping readable rotation independent of icon presentation. 230/231 tests pass (the one failure is a local UI-automation runner timeout, unrelated to the change).
+- **2026-09-04:** Confirmed the Menu/Inner/Middle/Outer tab ownership proposal in `IMPLEMENTATION_PLAN.md`, unblocking Wave 2.
+- **2026-09-04:** Planned the next HUD increment: four scope-specific customization tabs, clearer Default/Inherit semantics, and backward-compatible per-ring label visibility and readable orientation across preview and runtime.
 - **2026-09-04:** Closed the sustained-use HUD redesign. A clean signed build passed the full live checklist: immediate Quit persisted the changed configuration, relaunch re-armed triggers, and the visible menu-bar status item and its Quit command worked. The full 217-test suite remains green.
 - **2026-09-03:** Final signed testing passed reorder and outside dismissal, then exposed and remediated a macOS 27 Window Snap crash caused by background window mutation; all 207 tests and the signed snap retest pass. Color verification remains incomplete, and clearer color-inheritance wording is logged for the next UI-design pass.
 - **2026-09-03:** Completed remediation Wave 3: tap-toggle HUDs now move from the native center control after a 4 pt threshold while clicks still open Settings, moved panels clamp to the active screen, General Settings exposes a native Quit MousePlus button, and the menu-bar image has explicit template sizing and accessibility metadata. All 11 combined focused tests passed; signed drag/click and quit/relaunch verification remain in Wave 4.
 - **2026-09-03:** Completed remediation Wave 2: transparent panel corners now dismiss against the circular HUD boundary, hidden outer rings leave no backing surface, and preview selection is visually separate from hover without changing configured colors. All 48 combined focused tests passed; signed visual verification remains in the final gate.
-- **2026-09-03:** Completed remediation Wave 1: top-level reordering now wraps circularly while preserving item identity, and runtime/preview share one tested outer-ring eligibility and reveal policy. All 35 focused tests passed; center-drag movement and General-pane Quit placements are confirmed for Wave 3.
 
 ## Progress
 
@@ -31,7 +33,7 @@
 - **Ring UI:** Complete and live-verified.
 - **HUD actions:** Window snapping and keystroke delivery work; menu-bar mirror, app switching, system toggles, and screenshots remain.
 - **Trigger backend:** Keyboard and standard mouse paths work; advanced Logitech HID++ support remains undecided.
-- **Task tracker:** no active sprint; 16/17 tracked items complete overall (94%).
+- **Task tracker:** 2/6 current sprint; 18/22 tracked items complete overall (82%).
 
 ## Risks and Backlog
 
@@ -41,7 +43,6 @@
 - Settings writers may still replace a corrupt configuration with defaults; the full deferred-risk list is in `MENU_EDITOR_REVIEW.md`.
 - Consider screenshots next if onboarding is deferred; it is the smallest unfinished HUD action and establishes dismiss-before-action behavior.
 - Longer-term work includes the menu-bar mirror, recent-app switcher, system toggles, app-aware command rings, and alternative menu layouts.
-- Clarify HUD customization with Menu/Inner/Middle/Outer subtabs, root-level “Default” color wording and an explicit inheritance hierarchy; add per-ring label visibility and optional readable label orientation.
 
 ## Infrastructure
 
@@ -65,4 +66,4 @@
 
 ## Resume
 
-The sustained-use HUD redesign is complete. Select the next product increment from the backlog; onboarding is required before clean-install release testing, while screenshots are the smallest unfinished HUD action.
+The ring-controls reorganization is tracked in `IMPLEMENTATION_PLAN.md`. Tab ownership is confirmed and Wave 1 (label model + presentation policy) is complete; Wave 2 (scope-specific inspector tabs) is next.
