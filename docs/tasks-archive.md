@@ -1,8 +1,10 @@
 # Completed Tasks
 
-**Total archived:** 19
+**Total archived:** 21
 **Last updated:** 2026-09-04
 
+- [x] (2026-09-04) Task 3.2: Preserve label settings across every Settings write and recovery path
+- [x] (2026-09-04) Task 3.1: Integrate label policy across live HUD and preview
 - [x] (2026-09-04) Task 2.1: Replace stacked customization groups with Menu/Inner/Middle/Outer tabs
 - [x] (2026-09-04) Task 1.2: Define label visibility and readable rotation as pure resolved presentation
 - [x] (2026-09-04) Task 1.1: Add tolerant label customization fields and compatibility defaults

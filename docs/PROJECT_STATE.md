@@ -36,7 +36,7 @@
 - **Ring UI:** Complete and live-verified.
 - **HUD actions:** Window snapping and keystroke delivery work; menu-bar mirror, app switching, system toggles, and screenshots remain.
 - **Trigger backend:** Keyboard and standard mouse paths work; advanced Logitech HID++ support remains undecided.
-- **Task tracker:** 2/3 current sprint; 21/22 tracked items complete overall (95%).
+- **Task tracker:** 0/1 current sprint; 21/22 tracked items complete overall (95%).
 
 ## Risks and Backlog
 
