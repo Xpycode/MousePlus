@@ -1,6 +1,6 @@
 # HUD Motion v1 — Implementation Plan
 
-> **Status:** In progress. Waves 1–3 completed 2026-09-04; Wave 4 is next.
+> **Status:** In progress. Waves 1–4 completed 2026-09-04; Wave 5 is next.
 > **Source:** `docs/sessions/2026-09-04.md` §HUD animation feasibility and
 > `docs/decisions.md` §HUD motion is role-based and presentation-only.
 
@@ -171,7 +171,7 @@ animation-free; it previously suffered layout jumps from runtime spring/scale an
 
 ### Wave 4 — Existing-section Settings controls
 
-- [ ] **4.1: Expand Ring Appearance → Animation with role controls**
+- [x] **4.1: Expand Ring Appearance → Animation with role controls**
   → `01_Project/MousePlus/Views/RingAppearanceSettingsPane.swift`,
   existing AppKit control wrappers as needed,
   `01_Project/MousePlusTests/SettingsWorkspaceCoordinatorTests.swift`,
@@ -250,7 +250,7 @@ with prior HUD closure gates, but implementation can proceed through the automat
 | 1 | 2026-09-04 | 2026-09-04 | `2fa266a`, `582513d` |
 | 2 | 2026-09-04 | 2026-09-04 | `6bec144`, `2f1a208` |
 | 3 | 2026-09-04 | 2026-09-04 | `1d4e459` |
-| 4 | | | |
+| 4 | 2026-09-04 | 2026-09-04 | `fcec53e` |
 | 5 | | | |
 
 ---
