@@ -54,6 +54,14 @@ struct RingMenuView: View {
             reduceMotion: accessibilityReduceMotion
         )
     }
+    private var outerExpansionMotion: HUDMotionPresentationDescriptor {
+        guard interactionEnabled else { return .instant }
+        return HUDMotionPolicy.resolve(
+            role: .outerExpansion,
+            configuration: viewModel.appearance.motion,
+            reduceMotion: accessibilityReduceMotion
+        )
+    }
 
     /// Full square side — `2 · r3`. WedgeView fills this square so every slice is
     /// concentric with the menu center (its arc center == rect center).
@@ -102,14 +110,12 @@ struct RingMenuView: View {
             innerBand
             middleBand
 
-            // Outer band — localized arc, only while expanded. Wrapped so it can
-            // scale/opacity in from the parent wedge centroid (T7).
+            // The render-only reveal is driven by one shared phase, so full-circle
+            // Apps wedges begin together and hit testing still sees final geometry.
             if viewModel.isOuterRingVisible {
-                outerBand
-                    .transition(
-                        .scale(scale: 0.1, anchor: parentCentroidUnitPoint)
-                            .combined(with: .opacity)
-                    )
+                HUDOuterBandMotion(descriptor: outerExpansionMotion) { progress in
+                    outerBand(revealProgress: progress)
+                }
             }
         }
         .frame(width: size, height: size)
@@ -241,35 +247,53 @@ struct RingMenuView: View {
     /// stale indices and `outerItems[index]` traps "Index out of range" (crashed
     /// the app on selecting a sub-item, 2026-05-31). Enumerate so `index` (the arc
     /// offset the geometry needs) comes from the *current* snapshot.
-    private var outerBand: some View {
+    private func outerBand(revealProgress: CGFloat) -> some View {
         ZStack {
             ForEach(Array(viewModel.outerItems.enumerated()), id: \.element.id) { index, outerItem in
-                let angles = RadialGeometry.wedgeAngles(
+                let finalAngles = RadialGeometry.wedgeAngles(
                     band: .outer, index: index, geometry: geometry,
                     expandedParentIndex: viewModel.expandedParentIndex,
                     outerCount: viewModel.outerItems.count,
                     outerLayout: viewModel.outerRingLayout
                 )
-                OuterWedgeBacking(
-                    startAngle: angles.start,
-                    endAngle: angles.end,
+                let motionFrame = HUDOuterBandMotionFrame.resolve(
+                    layout: viewModel.outerRingLayout,
+                    descriptor: outerExpansionMotion,
+                    progress: revealProgress,
+                    parentMidpoint: expandedParentMidpoint,
+                    finalStartAngle: finalAngles.start,
+                    finalEndAngle: finalAngles.end,
                     innerRadius: radii.r2,
-                    outerRadius: radii.r3,
+                    outerRadius: radii.r3
+                )
+                OuterWedgeBacking(
+                    startAngle: motionFrame.startAngle,
+                    endAngle: motionFrame.endAngle,
+                    innerRadius: motionFrame.innerRadius,
+                    outerRadius: motionFrame.outerRadius,
                     size: size
                 )
+                .opacity(motionFrame.contentOpacity)
                 .accessibilityHidden(true)
 
                 WedgeView(
                     item: outerItem,
                     iconSource: iconSource(for: outerItem),
-                    startAngle: angles.start,
-                    endAngle: angles.end,
-                    innerRadius: radii.r2,
-                    outerRadius: radii.r3,
+                    startAngle: motionFrame.startAngle,
+                    endAngle: motionFrame.endAngle,
+                    contentStartAngle: finalAngles.start,
+                    contentEndAngle: finalAngles.end,
+                    innerRadius: motionFrame.innerRadius,
+                    outerRadius: motionFrame.outerRadius,
+                    contentInnerRadius: radii.r2,
+                    contentOuterRadius: radii.r3,
                     centroid: centroid(.outer, index),
                     size: size,
                     labelPresentation: labelPresentation(
-                        for: outerItem, band: .outer, startAngle: angles.start, endAngle: angles.end
+                        for: outerItem,
+                        band: .outer,
+                        startAngle: finalAngles.start,
+                        endAngle: finalAngles.end
                     ),
                     isHighlighted: isActive(.outer, index),
                     dimmed: false,
@@ -282,6 +306,7 @@ struct RingMenuView: View {
                     hoverMotion: hoverMotion,
                     showsSelectionMarker: isPersistentSelection(.outer, index)
                 )
+                .opacity(motionFrame.contentOpacity)
                 .hudWedgeAccessibility(
                     presentation: wedgeAccessibility(outerItem, band: .outer, index: index),
                     activate: { accessibilityActivate(.outer, index) }
@@ -357,13 +382,18 @@ struct RingMenuView: View {
         )
     }
 
-    /// Scale anchor for the outer-band transition: the expanded parent (middle)
-    /// wedge centroid, expressed as a `UnitPoint` (`centroid / size`) so the arc
-    /// grows out of the parent wedge (§2.3).
-    private var parentCentroidUnitPoint: UnitPoint {
-        guard let parent = viewModel.expandedParentIndex else { return .center }
-        let c = centroid(.middle, parent)
-        return UnitPoint(x: c.x / size, y: c.y / size)
+    /// The localized reveal collapses every child wedge to this shared parent
+    /// direction. The full-circle reveal ignores it and keeps final angles.
+    private var expandedParentMidpoint: Angle {
+        guard let parent = viewModel.expandedParentIndex else { return .zero }
+        let angles = RadialGeometry.wedgeAngles(
+            band: .middle,
+            index: parent,
+            geometry: geometry,
+            expandedParentIndex: viewModel.expandedParentIndex,
+            outerCount: viewModel.outerItems.count
+        )
+        return .radians((angles.start.radians + angles.end.radians) / 2)
     }
 
     // MARK: - State helpers

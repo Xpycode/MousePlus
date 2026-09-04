@@ -66,10 +66,19 @@ struct WedgeView: View {
     let startAngle: Angle
     /// Wedge angular end (view space, CW from +x). From `RadialGeometry.wedgeAngles`.
     let endAngle: Angle
+    /// Final content angles may differ from the temporarily interpolated slice
+    /// during an outer reveal. Keeping these final prevents icon rotation and
+    /// caption reflow while the presentation-only wedge shape unfolds.
+    let contentStartAngle: Angle
+    let contentEndAngle: Angle
     /// Band inner radial edge.
     let innerRadius: CGFloat
     /// Band outer radial edge.
     let outerRadius: CGFloat
+    /// Final content radii remain fixed while an outer slice's render geometry
+    /// grows from `r2`, avoiding transient caption-width/layout changes.
+    let contentInnerRadius: CGFloat
+    let contentOuterRadius: CGFloat
     /// Glyph anchor in this view's local space (center == `size/2`).
     /// From `RadialGeometry.centroid` mapped to a `center = (size/2, size/2)`.
     let centroid: CGPoint
@@ -100,8 +109,12 @@ struct WedgeView: View {
         iconSource: IconSource,
         startAngle: Angle,
         endAngle: Angle,
+        contentStartAngle: Angle? = nil,
+        contentEndAngle: Angle? = nil,
         innerRadius: CGFloat,
         outerRadius: CGFloat,
+        contentInnerRadius: CGFloat? = nil,
+        contentOuterRadius: CGFloat? = nil,
         centroid: CGPoint,
         size: CGFloat,
         labelPresentation: LabelPresentation? = nil,
@@ -117,8 +130,12 @@ struct WedgeView: View {
         self.iconSource = iconSource
         self.startAngle = startAngle
         self.endAngle = endAngle
+        self.contentStartAngle = contentStartAngle ?? startAngle
+        self.contentEndAngle = contentEndAngle ?? endAngle
         self.innerRadius = innerRadius
         self.outerRadius = outerRadius
+        self.contentInnerRadius = contentInnerRadius ?? innerRadius
+        self.contentOuterRadius = contentOuterRadius ?? outerRadius
         self.centroid = centroid
         self.size = size
         self.labelPresentation = labelPresentation ?? LabelPresentation(
@@ -172,8 +189,8 @@ struct WedgeView: View {
     }
 
     private var normalizedMidpoint: Angle {
-        let start = startAngle.degrees
-        var sweep = endAngle.degrees - start
+        let start = contentStartAngle.degrees
+        var sweep = contentEndAngle.degrees - start
         if sweep < 0 { sweep += 360 }
         let midpoint = (start + sweep / 2).truncatingRemainder(dividingBy: 360)
         return .degrees(midpoint < 0 ? midpoint + 360 : midpoint)
@@ -184,10 +201,10 @@ struct WedgeView: View {
     /// `Text(item.label)`, which otherwise renders at its natural (unclipped)
     /// width since `lineLimit(1)` alone only blocks wrapping.
     private var captionMaxWidth: CGFloat {
-        let start = startAngle.degrees
-        var sweep = endAngle.degrees - start
+        let start = contentStartAngle.degrees
+        var sweep = contentEndAngle.degrees - start
         if sweep < 0 { sweep += 360 }
-        let midRadius = (innerRadius + outerRadius) / 2
+        let midRadius = (contentInnerRadius + contentOuterRadius) / 2
         let chord = 2 * midRadius * sin(Angle.degrees(sweep / 2).radians)
         return max(chord, 20)
     }
