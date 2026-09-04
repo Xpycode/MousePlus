@@ -87,6 +87,9 @@ struct WedgeView: View {
     let dimOpacity: Double
     /// Fully resolved colors, orientation, and interaction state.
     let presentation: WedgePresentation
+    /// Presentation-only hover feedback. Logical selection and geometry have
+    /// already updated by the time this descriptor reaches the wedge.
+    let hoverMotion: HUDMotionPresentationDescriptor
     /// Editor-only persistent selection. This neutral marker is independent of
     /// hover emphasis so it never changes the configured fill or glyph colors.
     let showsSelectionMarker: Bool
@@ -106,6 +109,7 @@ struct WedgeView: View {
         dimmed: Bool = false,
         dimOpacity: Double = 0.30,
         presentation: WedgePresentation? = nil,
+        hoverMotion: HUDMotionPresentationDescriptor = .instant,
         showsSelectionMarker: Bool = false,
         showsExpandAffordance: Bool = true
     ) {
@@ -132,6 +136,7 @@ struct WedgeView: View {
             offBranch: dimmed && !isHighlighted,
             dimOpacity: dimOpacity
         )
+        self.hoverMotion = hoverMotion
         self.showsSelectionMarker = showsSelectionMarker
         self.showsExpandAffordance = showsExpandAffordance
     }
@@ -150,6 +155,20 @@ struct WedgeView: View {
 
     private var fillColor: Color {
         Color(nsColor: presentation.wedgeColor.nsColor)
+    }
+
+    /// A short ease-out keeps fast pointer feedback crisp without the overshoot
+    /// of the previous container spring. The scoped animation APIs below ensure
+    /// this transaction cannot interpolate wedge angles, centroids, or labels.
+    private var hoverAnimation: Animation? {
+        guard hoverMotion.effect != .instant else { return nil }
+        return .easeOut(duration: hoverMotion.duration)
+    }
+
+    /// Reduce Motion resolves emphasis to fade, which deliberately omits this
+    /// spatial component. Off/master-disabled modes also retain a scale of 1.
+    private var iconScale: CGFloat {
+        hoverMotion.effect == .emphasis && isHighlighted ? 1.03 : 1
     }
 
     private var normalizedMidpoint: Angle {
@@ -179,9 +198,19 @@ struct WedgeView: View {
             // shape fills the full `size × size` square.
             slice
                 .fill(fillColor)
-                .overlay(slice.fill(Color.accentColor.opacity(presentation.emphasisOpacity)))
                 .overlay(
-                    slice.stroke(Color.white.opacity(presentation.borderOpacity), lineWidth: 1)
+                    slice
+                        .fill(Color.accentColor)
+                        .animation(hoverAnimation) { content in
+                            content.opacity(presentation.emphasisOpacity)
+                        }
+                )
+                .overlay(
+                    slice
+                        .stroke(Color.white, lineWidth: 1)
+                        .animation(hoverAnimation) { content in
+                            content.opacity(presentation.borderOpacity)
+                        }
                 )
                 .overlay(
                     slice.stroke(
@@ -194,7 +223,12 @@ struct WedgeView: View {
                 .position(centroid)
         }
         .frame(width: size, height: size)
-        .opacity(effectiveOpacity)
+        // Branch dimming is attached only to this wedge's opacity. Changes to
+        // `expandedParentIndex` therefore cannot animate its angles or glyph
+        // position, and pointer sweeps cannot restart geometry animation.
+        .animation(hoverAnimation) { content in
+            content.opacity(effectiveOpacity)
+        }
     }
 
     @ViewBuilder
@@ -206,6 +240,9 @@ struct WedgeView: View {
             VStack(spacing: 4) {
                 HStack(spacing: 3) {
                     iconView(color: iconColor)
+                        .animation(hoverAnimation) { content in
+                            content.scaleEffect(iconScale)
+                        }
                     // Subtle "expandable" hint for items with sub-items.
                     if item.hasSubItems && showsExpandAffordance {
                         Image(systemName: "chevron.right")
@@ -227,6 +264,9 @@ struct WedgeView: View {
             }
         } else {
             iconView(color: iconColor)
+                .animation(hoverAnimation) { content in
+                    content.scaleEffect(iconScale)
+                }
         }
     }
 

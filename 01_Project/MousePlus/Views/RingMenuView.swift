@@ -14,6 +14,7 @@ import SwiftUI
 /// (§2.2). Each `WedgeView` is purely presentational.
 struct RingMenuView: View {
     @Bindable var viewModel: RingViewModel
+    @Environment(\.accessibilityReduceMotion) private var accessibilityReduceMotion
 
     /// Whether this view should drive selection from pointer input. The menu
     /// editor renders the real ring as a preview, but owns selection through its
@@ -39,12 +40,20 @@ struct RingMenuView: View {
 
     // T11: sourced from `AppearanceConfig` via the view model (persisted in Settings):
     //   - `keepSpokeLit`: also keep inner wedge `p` lit on the live branch (§2.3).
-    //   - `animationEnabled`: instant vs animated transitions (§2.3).
     //   - `dimOpacity`: opacity of off-branch wedges when something is expanded (§2.3).
     private var keepSpokeLit: Bool { viewModel.appearance.keepSpokeLit }
-    private var animationEnabled: Bool { viewModel.appearance.animationEnabled }
     private var dimOpacity: Double { viewModel.appearance.dimOpacity }
-    private var animationDuration: Double { viewModel.appearance.animationDuration }
+    private var hoverMotion: HUDMotionPresentationDescriptor {
+        // The menu editor uses the real ring for its preview. Its selection is
+        // persistent editor state, not runtime hover feedback, so it must stay
+        // animation-free even when the saved runtime preference is enabled.
+        guard interactionEnabled else { return .instant }
+        return HUDMotionPolicy.resolve(
+            role: .hover,
+            configuration: viewModel.appearance.motion,
+            reduceMotion: accessibilityReduceMotion
+        )
+    }
 
     /// Full square side — `2 · r3`. WedgeView fills this square so every slice is
     /// concentric with the menu center (its arc center == rect center).
@@ -106,11 +115,6 @@ struct RingMenuView: View {
         .frame(width: size, height: size)
         // Single hit-test surface — the whole square is interactive (§2.2).
         .contentShape(Rectangle())
-        // Animate expansion/collapse + selection changes when enabled; nil = instant.
-        .animation(animationEnabled ? .spring(response: animationDuration, dampingFraction: 0.8) : nil,
-                   value: viewModel.expandedParentIndex)
-        .animation(animationEnabled ? .spring(response: animationDuration, dampingFraction: 0.8) : nil,
-                   value: viewModel.activeSelection)
         // Pointer movement (tap-toggle / hover) drives the active wedge.
         .onContinuousHover { phase in
             if interactionEnabled, case .active(let location) = phase {
@@ -169,6 +173,7 @@ struct RingMenuView: View {
                         hovered: isActive(.inner, index),
                         offBranch: dimmed(band: .inner, index: index)
                     ),
+                    hoverMotion: hoverMotion,
                     showsSelectionMarker: isPersistentSelection(.inner, index)
                 )
                 .hudWedgeAccessibility(
@@ -212,6 +217,7 @@ struct RingMenuView: View {
                         hovered: isActive(.middle, index),
                         offBranch: dimmed(band: .middle, index: index)
                     ),
+                    hoverMotion: hoverMotion,
                     showsSelectionMarker: isPersistentSelection(.middle, index),
                     showsExpandAffordance: !hiddenParent
                 )
@@ -273,6 +279,7 @@ struct RingMenuView: View {
                         hovered: isActive(.outer, index),
                         offBranch: false
                     ),
+                    hoverMotion: hoverMotion,
                     showsSelectionMarker: isPersistentSelection(.outer, index)
                 )
                 .hudWedgeAccessibility(
