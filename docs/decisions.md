@@ -4,6 +4,42 @@ This file tracks the WHY behind technical and design decisions.
 
 ---
 
+### 2026-09-04 - HUD motion is role-based and presentation-only
+
+**Context:** MousePlus already applies one configurable spring to both active selection and expanded
+parent changes, and inserts the outer band with a parent-anchored scale plus opacity transition. That
+proves animation works inside the non-activating AppKit/SwiftUI overlay, but a single broad spring does
+not distinguish fast pointer feedback from submenu expansion, dynamic branch replacement, or initial
+summon. Animating actual target geometry would also let the visible wedge lag behind the hit-testing
+model during rapid movement.
+
+**Options:** Keep the existing global spring; add decorative animation ad hoc at each call site;
+animate the complete panel and interactive geometry; or define semantic motion roles whose visual
+effects remain separate from the immediate interaction state machine.
+
+**Decision:** Use semantic roles for summon, hover feedback, outer-ring expansion, and branch change.
+Logical geometry, hit testing, selection, expansion, commits, actions, and dismissal update
+immediately; only the rendered presentation interpolates. Extend the existing Ring Appearance
+Animation section with a master switch, speed, and per-role controls instead of adding another
+Settings destination. Expose only implemented effects, while keeping the persisted model extensible.
+
+macOS Reduce Motion overrides app-selected transform and geometry motion. Under Reduce Motion,
+MousePlus uses a short opacity transition or an instant update. Direct-action dismissal remains
+instant and never waits for animation completion.
+
+**Rationale:** The ring is a speed- and muscle-memory-driven pointer interface. Short semantic effects
+can clarify hover, parent/child relationships, and dynamic replacement without moving the target the
+user is aiming at. Role-specific policy also allows future styles without returning to a global
+animation that unintentionally affects the whole view tree.
+
+**Consequences:** Replace broad container animation with scoped role-specific presentation. Preserve
+legacy `animationEnabled` and `animationDuration` values through tolerant decoding. Keep the editor's
+embedded ring animation-free unless a dedicated replay control can be added without reintroducing its
+previous spring/scale layout jump. Live verification must cover both trigger modes, twelve running
+apps, rapid Apps↔Snap re-pointing, VoiceOver, and macOS Reduce Motion.
+
+---
+
 ### 2026-09-04 - Running apps use the full outer circumference
 
 **Context:** The first dynamic App Switcher reused the localized submenu arc. With roughly twelve

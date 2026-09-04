@@ -7,13 +7,18 @@
 <!-- Priority: top = highest, bottom = lowest -->
 
 - [ ] Scope the next MousePlus App Switcher increment beyond the live-verified full-circle running-app ring: compare window switching, recent apps, search, grouping/paging, app-specific actions, and keyboard/pointer hybrids.
-- [ ] Investigate HUD animation feasibility and constraints: identify what can animate reliably in the non-activating AppKit/SwiftUI overlay, what harms rapid pointer interaction or accessibility, and which effects should remain static.
 
 ## Current Sprint
 <!-- Active work. Populated by /plan or /execute. Keep focused (3-7 tasks). -->
 <!-- When done: /log moves to tasks-archive.md -->
 
-No active sprint.
+- [x] Task 1.1: Add the role-based HUD motion model and legacy animation-setting decode bridge.
+- [x] Task 1.2: Add a pure Reduce Motion-aware semantic motion policy resolver.
+- [ ] Task 2.1: Replace the blanket spring with scoped hover and branch-dimming feedback.
+- [ ] Task 2.2: Implement localized and full-circle outer-ring reveal presentations.
+- [ ] Task 3.1: Add a short summon fade and intentional outer-branch crossfade.
+- [ ] Task 4.1: Expand Ring Appearance → Animation with role-specific native controls.
+- [ ] Task 5.1: Complete automated, adversarial, performance, accessibility, and signed-live verification.
 
 ---
 
