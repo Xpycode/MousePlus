@@ -62,7 +62,7 @@ Use the existing `AppKitSegmentedControl`, `AppKitSlider`, `AppKitCountControl`,
 
 ### Wave 3 — Runtime, preview, and persistence integration
 
-- [ ] **3.1: Render per-ring label visibility and readable orientation everywhere** → `01_Project/MousePlus/ViewModels/RingViewModel.swift`, `01_Project/MousePlus/Views/RingMenuView.swift`, `01_Project/MousePlus/Views/Components/WedgeView.swift`, `01_Project/MousePlus/Views/MenuEditor/RingPreviewSelector.swift`, related tests
+- [x] **3.1: Render per-ring label visibility and readable orientation everywhere** → `01_Project/MousePlus/ViewModels/RingViewModel.swift`, `01_Project/MousePlus/Views/RingMenuView.swift`, `01_Project/MousePlus/Views/Components/WedgeView.swift`, `01_Project/MousePlus/Views/MenuEditor/RingPreviewSelector.swift`, related tests
   - Feed the same resolved label policy to runtime and preview for Inner, Middle, and Outer wedges.
   - Rotate only the caption around its own center; icons and expand affordances retain their independently resolved presentation.
   - Success: preview/runtime parity holds for all rings, hidden labels leave icons centered sensibly, and visual visibility never erases accessibility names.
@@ -105,7 +105,7 @@ Use the existing `AppKitSegmentedControl`, `AppKitSlider`, `AppKitCountControl`,
 |------|---------|-----------|---------|
 | 1 | 2026-09-04 | 2026-09-04 | `feat(wave-1): add label orientation model and pure presentation policy` |
 | 2 | 2026-09-04 | 2026-09-04 | `feat(wave-2): add Menu/Inner/Middle/Outer HUD customization tabs` |
-| 3 | | | |
+| 3 | 2026-09-04 | | `feat(wave-3): wire per-ring label visibility and orientation into runtime and preview` (3.1 only; 3.2 remains) |
 | 4 | | | |
 
 ---

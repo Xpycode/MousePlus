@@ -71,6 +71,12 @@ final class HUDCustomizationIntegrationTests: XCTestCase {
         model.hudCustomization.inner.appearance.iconOrientation = nil       // menu inheritance
         model.hudCustomization.middle.appearance.iconOrientation = .tangential // ring override
         model.hudCustomization.outerAppearance.iconOrientation = .upright  // outer override
+        model.hudCustomization.labelOrientation = .tangential
+        model.hudCustomization.inner.appearance.labelOrientation = nil      // menu inheritance
+        model.hudCustomization.middle.appearance.labelOrientation = .radial // ring override
+        model.hudCustomization.outerAppearance.labelOrientation = .upright  // outer override
+        model.hudCustomization.inner.appearance.labelVisible = true         // opt in over the compat default
+        model.hudCustomization.outerAppearance.labelVisible = false         // opt out over the compat default
         model.hudCustomization.wedgeColor = black
         model.hudCustomization.iconColor = white
         model.hudCustomization.middle.appearance.wedgeColor = white
@@ -84,6 +90,12 @@ final class HUDCustomizationIntegrationTests: XCTestCase {
         XCTAssertEqual(runtime.iconOrientation(for: .inner), .radial)
         XCTAssertEqual(runtime.iconOrientation(for: .middle), .tangential)
         XCTAssertEqual(runtime.iconOrientation(for: .outer), .upright)
+        XCTAssertEqual(runtime.labelOrientation(for: .inner), .tangential, "nil ring override inherits the menu default")
+        XCTAssertEqual(runtime.labelOrientation(for: .middle), .radial)
+        XCTAssertEqual(runtime.labelOrientation(for: .outer), .upright)
+        XCTAssertTrue(runtime.isLabelVisible(for: .inner), "explicit override wins over the compatibility default")
+        XCTAssertTrue(runtime.isLabelVisible(for: .middle), "untouched compatibility default")
+        XCTAssertFalse(runtime.isLabelVisible(for: .outer), "explicit override wins over the compatibility default")
         let resolution = runtime.colorResolution(
             for: runtime.middleItems[0], band: .middle,
             application: .init(wedge: white, icon: black), backdrop: black

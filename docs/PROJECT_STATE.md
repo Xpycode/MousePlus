@@ -11,13 +11,14 @@
 
 ## Now
 
-- **Phase:** Ring-controls reorganization underway; Wave 2 inspector tabs landed on top of Wave 1's label model. <!-- Phase changed: 2026-09-04 -->
-- **Focus:** Wire the new per-ring label visibility/orientation fields into runtime and preview rendering (Wave 3).
+- **Phase:** Ring-controls reorganization underway; Wave 3 runtime/preview wiring started on top of Wave 1's label model and Wave 2's inspector tabs. <!-- Phase changed: 2026-09-04 -->
+- **Focus:** Task 3.2 — verify the new label fields survive every Settings write path (edit, debounce save, merge, retry, reset/undo, backup restore, live apply, relaunch).
 - **Blocker:** Advanced Logitech-button support is paused until raw MX4/MX3S captures resolve the HID++ strategy decision.
-- **Next:** Implement Task 3.1 — feed the resolved label presentation policy into `RingViewModel`/`RingMenuView`/`WedgeView`/`RingPreviewSelector` for Inner, Middle, and Outer wedges.
+- **Next:** Implement Task 3.2, then Wave 4's adversarial/automated and signed-live closure gates.
 
 ## Recent
 
+- **2026-09-04:** Completed Task 3.1: `RingViewModel` gained `labelOrientation(for:)`/`isLabelVisible(for:)` mirroring the existing icon-orientation inheritance, and `WedgeView` now resolves caption visibility and readable rotation from `LabelPresentation` instead of a per-band `symbolOnly` flag — so any ring's label can be shown or hidden and rotated independently of its icon. `RingMenuView` feeds the same resolved policy to Inner, Middle, and Outer wedges; `RingPreviewSelector` gets it for free by rendering through the same `RingMenuView`. 233/233 tests pass (232 prior + 1 new compatibility-default test), plus 2 new assertions extending an existing integration test; a clean Debug build succeeded and no `symbolOnly` references remain.
 - **2026-09-04:** Completed Wave 2: replaced the stacked Menu/ring/Outer customization groups with a native Menu/Inner/Middle/Outer segmented-tab inspector, owned by local UI state so browsing a ring's settings never retargets the Menu Items band or selection. Outer-ring visibility moved from the Menu group into its own Outer tab; each scope now also exposes label visibility and label direction controls (previously model-only since Wave 1), menu-root colors read "Default" while ring/item overrides keep "Inherit" (`AppKitColorWell` gained an `inheritTitle` parameter), and a hierarchy help line explains item → ring → menu → application-default resolution. 232/232 focused-plus-full unit tests pass; a source audit found no raw SwiftUI interactive controls.
 - **2026-09-04:** Completed Wave 1: `HUDCustomization` gained a tolerant `LabelOrientation` model with per-ring overrides and compatibility defaults (inner hidden, middle/outer shown, upright), and a new pure `LabelPresentationPolicy` resolves per-ring label visibility and auto-flipping readable rotation independent of icon presentation. 230/231 tests pass (the one failure is a local UI-automation runner timeout, unrelated to the change).
 - **2026-09-04:** Confirmed the Menu/Inner/Middle/Outer tab ownership proposal in `IMPLEMENTATION_PLAN.md`, unblocking Wave 2.
@@ -34,7 +35,7 @@
 - **Ring UI:** Complete and live-verified.
 - **HUD actions:** Window snapping and keystroke delivery work; menu-bar mirror, app switching, system toggles, and screenshots remain.
 - **Trigger backend:** Keyboard and standard mouse paths work; advanced Logitech HID++ support remains undecided.
-- **Task tracker:** 0/3 current sprint; 19/22 tracked items complete overall (86%).
+- **Task tracker:** 1/3 current sprint; 20/22 tracked items complete overall (91%).
 
 ## Risks and Backlog
 

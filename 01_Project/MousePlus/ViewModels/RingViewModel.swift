@@ -191,6 +191,19 @@ final class RingViewModel {
         ringAppearance(for: band).iconOrientation ?? hudCustomization.iconOrientation
     }
 
+    /// Mirrors `iconOrientation(for:)`'s menu → ring inheritance, but for
+    /// caption orientation. Independent of `iconOrientation` so reorienting a
+    /// label never perturbs the icon.
+    func labelOrientation(for band: Band) -> LabelOrientation {
+        ringAppearance(for: band).labelOrientation ?? hudCustomization.labelOrientation
+    }
+
+    /// Unlike orientation, visibility has no menu-level default to inherit —
+    /// each ring resolves its own `labelVisible` (see `HUDRingAppearance`).
+    func isLabelVisible(for band: Band) -> Bool {
+        ringAppearance(for: band).labelVisible
+    }
+
     func colorResolution(
         for item: RingMenuItem,
         band: Band,

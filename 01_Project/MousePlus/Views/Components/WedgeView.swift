@@ -73,8 +73,9 @@ struct WedgeView: View {
     /// Full side length of the square this view fills (`2 · r3`). Guarantees the
     /// slice's arc center coincides with the menu center.
     let size: CGFloat
-    /// Inner band → render the icon only, no caption label.
-    let symbolOnly: Bool
+    /// Resolved caption visibility and readable rotation, independent of icon
+    /// presentation. Governs the `Text` only — the icon and chevron never move.
+    let labelPresentation: LabelPresentation
     /// This wedge is the active selection → accent fill, white glyph.
     let isHighlighted: Bool
     /// Off the live branch → drop the whole wedge to `dimOpacity` (§2.3).
@@ -96,7 +97,7 @@ struct WedgeView: View {
         outerRadius: CGFloat,
         centroid: CGPoint,
         size: CGFloat,
-        symbolOnly: Bool = false,
+        labelPresentation: LabelPresentation? = nil,
         isHighlighted: Bool = false,
         dimmed: Bool = false,
         dimOpacity: Double = 0.30,
@@ -111,7 +112,13 @@ struct WedgeView: View {
         self.outerRadius = outerRadius
         self.centroid = centroid
         self.size = size
-        self.symbolOnly = symbolOnly
+        self.labelPresentation = labelPresentation ?? LabelPresentation(
+            accessibilityLabel: item.label,
+            orientation: .upright,
+            isVisible: true,
+            startAngle: startAngle,
+            endAngle: endAngle
+        )
         self.isHighlighted = isHighlighted
         self.dimmed = dimmed
         self.dimOpacity = dimOpacity
@@ -177,14 +184,7 @@ struct WedgeView: View {
         let iconColor = Color(nsColor: presentation.iconColor.nsColor)
         let labelColor = Color(nsColor: presentation.labelColor.nsColor)
 
-        if symbolOnly {
-            OrientedHUDIcon(
-                systemName: SFSymbol.resolved(item.icon),
-                orientation: presentation.orientation,
-                wedgeMidpoint: normalizedMidpoint,
-                color: iconColor
-            )
-        } else {
+        if labelPresentation.isCaptionVisible {
             VStack(spacing: 4) {
                 HStack(spacing: 3) {
                     OrientedHUDIcon(
@@ -204,7 +204,18 @@ struct WedgeView: View {
                     .font(.caption)
                     .lineLimit(1)
                     .foregroundStyle(labelColor)
+                    // Rotate only the caption, around its own center — the
+                    // icon/chevron above keep their independently resolved
+                    // orientation untouched.
+                    .rotationEffect(.degrees(labelPresentation.rotationDegrees))
             }
+        } else {
+            OrientedHUDIcon(
+                systemName: SFSymbol.resolved(item.icon),
+                orientation: presentation.orientation,
+                wedgeMidpoint: normalizedMidpoint,
+                color: iconColor
+            )
         }
     }
 }
@@ -244,7 +255,10 @@ struct WedgeView: View {
             startAngle: angles(.inner, 0).start, endAngle: angles(.inner, 0).end,
             innerRadius: radii.r0, outerRadius: radii.r1,
             centroid: centroid(.inner, 0), size: size,
-            symbolOnly: true
+            labelPresentation: LabelPresentation(
+                accessibilityLabel: inner.label, orientation: .upright, isVisible: false,
+                startAngle: angles(.inner, 0).start, endAngle: angles(.inner, 0).end
+            )
         )
 
         // Labeled middle wedge (index 1).

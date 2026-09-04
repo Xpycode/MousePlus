@@ -156,7 +156,9 @@ struct RingMenuView: View {
                     outerRadius: radii.r1,
                     centroid: centroid(.inner, index),
                     size: size,
-                    symbolOnly: true,
+                    labelPresentation: labelPresentation(
+                        for: item, band: .inner, startAngle: angles.start, endAngle: angles.end
+                    ),
                     isHighlighted: isActive(.inner, index),
                     dimmed: dimmed(band: .inner, index: index),
                     dimOpacity: dimOpacity,
@@ -196,7 +198,9 @@ struct RingMenuView: View {
                     outerRadius: radii.r2,
                     centroid: centroid(.middle, index),
                     size: size,
-                    symbolOnly: false,
+                    labelPresentation: labelPresentation(
+                        for: item, band: .middle, startAngle: angles.start, endAngle: angles.end
+                    ),
                     isHighlighted: isActive(.middle, index),
                     dimmed: dimmed(band: .middle, index: index),
                     dimOpacity: dimOpacity,
@@ -254,7 +258,9 @@ struct RingMenuView: View {
                     outerRadius: radii.r3,
                     centroid: centroid(.outer, index),
                     size: size,
-                    symbolOnly: false,
+                    labelPresentation: labelPresentation(
+                        for: outerItem, band: .outer, startAngle: angles.start, endAngle: angles.end
+                    ),
                     isHighlighted: isActive(.outer, index),
                     dimmed: false,
                     presentation: presentation(
@@ -307,6 +313,20 @@ struct RingMenuView: View {
             state: WedgePresentation.state(
                 hovered: hovered, offBranch: offBranch, dimOpacity: dimOpacity
             )
+        )
+    }
+
+    /// Resolves the same menu → ring label policy used by the editor preview
+    /// (both render through this view), independent of icon orientation.
+    private func labelPresentation(
+        for item: RingMenuItem, band: Band, startAngle: Angle, endAngle: Angle
+    ) -> LabelPresentation {
+        LabelPresentation(
+            accessibilityLabel: item.label,
+            orientation: viewModel.labelOrientation(for: band),
+            isVisible: viewModel.isLabelVisible(for: band),
+            startAngle: startAngle,
+            endAngle: endAngle
         )
     }
 

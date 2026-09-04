@@ -53,6 +53,20 @@ final class RingViewModelHUDTests: XCTestCase {
         }
     }
 
+    /// `HUDCustomization()`'s compatibility defaults must reproduce the
+    /// pre-customization HUD: inner captions hidden, middle/outer shown, all
+    /// upright, independent of icon orientation.
+    func testDefaultHUDCustomizationReproducesCompatibilityLabelPresentation() {
+        let viewModel = RingViewModel()
+
+        XCTAssertFalse(viewModel.isLabelVisible(for: .inner))
+        XCTAssertTrue(viewModel.isLabelVisible(for: .middle))
+        XCTAssertTrue(viewModel.isLabelVisible(for: .outer))
+        for band in [Band.inner, .middle, .outer] {
+            XCTAssertEqual(viewModel.labelOrientation(for: band), .upright)
+        }
+    }
+
     func testEffectiveGeometryResolvesAutoAndFixedBandsIndependently() {
         var customization = HUDCustomization.default
         customization.inner.layout = HUDRingLayout(
