@@ -181,6 +181,7 @@ struct RingPreviewSelector: View {
             RingMenuView(
                 viewModel: preview,
                 interactionEnabled: false,
+                presentationMode: .staticEditor,
                 accessibilityIdentifierPrefix: "menuItems.preview.wedge",
                 exposesCenterSettings: false,
                 onAccessibilitySelection: applyAccessibilitySelection,

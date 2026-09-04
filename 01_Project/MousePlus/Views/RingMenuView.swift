@@ -15,14 +15,22 @@ import SwiftUI
 struct RingMenuView: View {
     @Bindable var viewModel: RingViewModel
     @Environment(\.accessibilityReduceMotion) private var accessibilityReduceMotion
-    @State private var hasAppeared = false
     @State private var outerMotionState = HUDOuterBranchMotionState()
+    @State private var settleOpeningID = 0
 
     /// Whether this view should drive selection from pointer input. The menu
     /// editor renders the real ring as a preview, but owns selection through its
     /// wedge overlay; disabling this prevents hover events from replacing that
     /// persistent editor selection.
     var interactionEnabled = true
+
+    /// Rendering context is independent of interaction. In particular, the
+    /// dedicated noninteractive Settings preview can replay opening motion,
+    /// while the editor's interactive selection preview remains static.
+    var presentationMode: HUDRingPresentationMode = .live
+    /// Explicit replay identity used by the dedicated Settings preview.
+    /// Runtime views are recreated per panel invocation and keep the default.
+    var openingReplayID = 0
 
     /// Hold-release commits through the global trigger-up event. Tap-toggle
     /// commits from the in-panel pointer release. Keeping these paths exclusive
@@ -46,10 +54,8 @@ struct RingMenuView: View {
     private var keepSpokeLit: Bool { viewModel.appearance.keepSpokeLit }
     private var dimOpacity: Double { viewModel.appearance.dimOpacity }
     private func motion(for role: HUDMotionRole) -> HUDMotionPresentationDescriptor {
-        // The embedded editor preview must remain animation-free.
-        guard interactionEnabled else { return .instant }
-        return HUDMotionPolicy.resolve(
-            role: role,
+        presentationMode.motion(
+            for: role,
             configuration: viewModel.appearance.motion,
             reduceMotion: accessibilityReduceMotion
         )
@@ -90,7 +96,15 @@ struct RingMenuView: View {
         // mutable model while SwiftUI retains it for its removal transition.
         let wedges = outerWedgeSnapshots
 
-        ZStack {
+        HUDOpeningMotion(
+            request: HUDOpeningMotionRequest(
+                descriptor: summonMotion,
+                playbackEnabled: presentationMode != .staticEditor,
+                invocationID: openingReplayID
+            ),
+            settleID: settleOpeningID
+        ) { openingFrame in
+            ZStack {
             // Persistent backing stops at the middle band's outer edge. The
             // on-demand outer surface is rendered with the branch below so a
             // hidden submenu never leaves a misleading r2…r3 halo.
@@ -145,18 +159,35 @@ struct RingMenuView: View {
                 )
                 .transition(.identity)
             }
-        }
-        .frame(width: size, height: size)
-        // Only the rendered content fades. AppKit installs the panel at its
-        // final frame/alpha, and all pointer geometry is already authoritative.
-        .opacity(summonMotion.effect == .instant || hasAppeared ? 1 : 0)
-        .onAppear {
-            withAnimation(summonMotion.effect == .instant ? nil : .easeOut(duration: summonMotion.duration)) {
-                hasAppeared = true
             }
+            // Only rendered content changes. AppKit installs the panel and
+            // authoritative pointer geometry at their final values.
+            .opacity(openingFrame.artworkOpacity)
+            .frame(width: size, height: size)
+        }
+        .onChange(of: viewModel.activeSelection) { _, selection in
+            if selection != nil { settleOpening() }
+        }
+        .onChange(of: viewModel.expandedParentIndex) { _, parent in
+            if parent != nil { settleOpening() }
+        }
+        .onChange(of: viewModel.appearance) { _, _ in
+            settleOpening()
+        }
+        .onChange(of: viewModel.hudCustomization) { _, _ in
+            settleOpening()
+        }
+        .onChange(of: viewModel.innerItems) { _, _ in
+            settleOpening()
+        }
+        .onChange(of: viewModel.middleItems) { _, _ in
+            settleOpening()
         }
         .onChange(of: identity, initial: true) { _, newIdentity in
             outerMotionState = outerMotionState.updating(newIdentity)
+            if newIdentity.parentID != nil {
+                settleOpening()
+            }
         }
         // Single hit-test surface — the whole square is interactive (§2.2).
         .contentShape(Rectangle())
@@ -164,6 +195,7 @@ struct RingMenuView: View {
         .onContinuousHover { phase in
             if interactionEnabled, case .active(let location) = phase {
                 viewModel.updateActive(at: location, center: center)
+                if viewModel.activeSelection != nil { settleOpening() }
             }
             // .ended → leave selection as-is; a click commits it.
         }
@@ -175,6 +207,7 @@ struct RingMenuView: View {
                 .onChanged { value in
                     guard interactionEnabled else { return }
                     viewModel.updateActive(at: value.location, center: center)
+                    if viewModel.activeSelection != nil { settleOpening() }
                 }
                 .onEnded { value in
                     guard interactionEnabled else { return }
@@ -426,12 +459,17 @@ struct RingMenuView: View {
     }
 
     private func accessibilityActivate(_ band: Band, _ index: Int) {
+        settleOpening()
         let selection = ActiveSelection(band: band, index: index)
         if let onAccessibilitySelection { onAccessibilitySelection(selection) }
         else {
             viewModel.activeSelection = selection
             viewModel.commitActive()
         }
+    }
+
+    private func settleOpening() {
+        settleOpeningID &+= 1
     }
 
     /// Dimming (§2.3): when something is expanded, everything dims to 0.30 EXCEPT
