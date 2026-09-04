@@ -80,7 +80,7 @@ final class HUDPreviewInteractionTests: XCTestCase {
         XCTAssertTrue(emitted.isEmpty)
     }
 
-    func testConditionalRevealRequiresCrossingAndLatchesForOuterSelection() {
+    func testConditionalRevealShowsOuterSelectionOnDirectArrival() {
         var state = HUDPreviewInteractionState()
         let snapshot = makeSnapshot(visibility: .revealBeyondInnerRing,
                                     parent: 0, outerCount: 2)
@@ -89,17 +89,31 @@ final class HUDPreviewInteractionTests: XCTestCase {
             geometry: snapshot.geometry, expandedParentIndex: 0, outerCount: 2
         )
 
-        XCTAssertNil(state.pointerMoved(to: outer, center: center, snapshot: snapshot))
-        _ = state.pointerMoved(to: point(angle: 0, radius: 20), center: center,
-                               snapshot: snapshot)
-        _ = state.pointerMoved(to: point(angle: 0, radius: 21), center: center,
-                               snapshot: snapshot)
+        XCTAssertEqual(
+            state.pointerMoved(to: outer, center: center, snapshot: snapshot),
+            ActiveSelection(band: .outer, index: 0)
+        )
         XCTAssertTrue(state.outerIsVisible(snapshot: snapshot))
         XCTAssertEqual(state.intent(at: outer, center: center, snapshot: snapshot),
                        .selectOuter(0))
         _ = state.pointerMoved(to: point(angle: 0, radius: 15), center: center,
                                snapshot: snapshot)
         XCTAssertTrue(state.outerIsVisible(snapshot: snapshot))
+    }
+
+    func testFullCirclePreviewOuterRingSelectsAcrossFromParent() {
+        let state = HUDPreviewInteractionState()
+        let snapshot = makeSnapshot(
+            geometry: .shared(spokeCount: 4), innerCount: 4, middleCount: 4,
+            visibility: .alwaysVisible, parent: 0, outerCount: 4,
+            outerLayout: .fullCircle
+        )
+
+        XCTAssertEqual(
+            state.intent(at: point(angle: 5 * .pi / 4, radius: 35),
+                         center: center, snapshot: snapshot),
+            .selectOuter(2)
+        )
     }
 
     func testTraversalBeforeParentExpansionIsRetainedForInvocation() {
@@ -165,19 +179,44 @@ final class HUDPreviewInteractionTests: XCTestCase {
                                                               canvasSide: 400), 1)
     }
 
+    func testRotatedFixedMiddleWedgesMapRenderedCentroidsToTheirOwnItems() {
+        let geometry = TopLevelRingGeometry(
+            inner: RingBandGeometry(slotCount: 5, angularOffset: 99.768 * .pi / 180),
+            middle: RingBandGeometry(slotCount: 8, angularOffset: 185.437 * .pi / 180)
+        )
+        let snapshot = makeSnapshot(
+            geometry: geometry, innerCount: 5, middleCount: 6,
+            visibility: .revealBeyondInnerRing
+        )
+        let state = HUDPreviewInteractionState()
+
+        for index in 0..<6 {
+            let renderedCentroid = RadialGeometry.centroid(
+                band: .middle, index: index, center: center, radii: radii,
+                geometry: geometry, expandedParentIndex: nil, outerCount: 0
+            )
+            XCTAssertEqual(
+                state.intent(at: renderedCentroid, center: center, snapshot: snapshot),
+                .selectTopLevel(.middle, index),
+                "Rendered middle wedge \(index) must select that same item"
+            )
+        }
+    }
+
     private func makeSnapshot(
         geometry: TopLevelRingGeometry = .shared(spokeCount: 2),
         innerCount: Int = 2,
         middleCount: Int = 2,
         visibility: OuterRingVisibility = .alwaysVisible,
         parent: Int? = nil,
-        outerCount: Int = 0
+        outerCount: Int = 0,
+        outerLayout: OuterRingLayout = .localizedArc
     ) -> HUDPreviewInteractionSnapshot {
         HUDPreviewInteractionSnapshot(
             geometry: geometry, radii: radii,
             innerCount: innerCount, middleCount: middleCount,
             expandedParentIndex: parent, outerCount: outerCount,
-            outerVisibility: visibility
+            outerVisibility: visibility, outerLayout: outerLayout
         )
     }
 

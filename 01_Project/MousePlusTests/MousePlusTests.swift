@@ -179,6 +179,43 @@ final class RingRuntimeInteractionTests: XCTestCase {
         })
     }
 
+    func testRuntimeHostForwardsPrimaryMouseUpForTapToggleCommit() throws {
+        let side = HUDPanelGeometry.squareSide(outerRadius: 224)
+        let host = RingHostingView(rootView: EmptyView())
+        host.frame = CGRect(x: 0, y: 0, width: side, height: side)
+        let window = NSWindow(contentRect: host.frame, styleMask: .borderless,
+                              backing: .buffered, defer: false)
+        window.contentView = host
+
+        var forwardedPoint: CGPoint?
+        var forwardedCenter: CGPoint?
+        host.onPrimaryMouseUp = { point, center in
+            forwardedPoint = point
+            forwardedCenter = center
+        }
+
+        let localPoint = CGPoint(x: 82, y: 117)
+        let windowPoint = CGPoint(x: localPoint.x, y: side - localPoint.y)
+        let event = try XCTUnwrap(NSEvent.mouseEvent(
+            with: .leftMouseUp,
+            location: windowPoint,
+            modifierFlags: [],
+            timestamp: 0,
+            windowNumber: window.windowNumber,
+            context: nil,
+            eventNumber: 1,
+            clickCount: 1,
+            pressure: 0
+        ))
+
+        host.mouseUp(with: event)
+
+        let actualPoint = try XCTUnwrap(forwardedPoint)
+        XCTAssertEqual(actualPoint.x, localPoint.x, accuracy: 0.001)
+        XCTAssertEqual(actualPoint.y, localPoint.y, accuracy: 0.001)
+        XCTAssertEqual(forwardedCenter, CGPoint(x: side / 2, y: side / 2))
+    }
+
     func testTapToggleReHitTestsFinalLocationBeforeCommit() {
         let model = makeModel()
         var closes = 0

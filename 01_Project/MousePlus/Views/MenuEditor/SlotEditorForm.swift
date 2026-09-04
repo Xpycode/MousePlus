@@ -6,7 +6,7 @@
 //
 //  Renders an empty state when nothing is selected, otherwise a native-feeling
 //  `Form` that edits the selected slot's icon, label, action, and (for middle
-//  top-level slots only) its inline sub-items, plus reorder / delete controls.
+//  top-level slots only) its inline outer items, plus reorder / delete controls.
 //
 //  Everything is driven through the model's id-keyed bindings, so a stale
 //  selection (slot removed out from under us) degrades gracefully to the empty
@@ -94,22 +94,13 @@ struct SlotEditorForm<ActionAccessory: View>: View {
     @ViewBuilder
     private func editor(for item: Binding<RingMenuItem>) -> some View {
         Form {
-            // 1. Context header.
+            // 1. Context header. Item actions live together in the footer.
             Section {
                 HStack {
                     Text(contextHeader)
                         .font(.headline)
                         .foregroundStyle(.secondary)
                     Spacer()
-                    AppKitButton(
-                        title: "Delete",
-                        systemImageName: "trash",
-                        accessibilityLabel: "Delete this slot",
-                        accessibilityIdentifier: "menuItems.delete"
-                    ) {
-                        model.removeSelectedItem()
-                    }
-                    .help("Delete this slot")
                 }
             }
 
@@ -132,18 +123,28 @@ struct SlotEditorForm<ActionAccessory: View>: View {
                 itemColorControls(item: item)
             }
 
-            // 3. Action type + type-aware data control.
-            Section("Action") {
-                ActionDataEditor(item: item)
-                actionAccessory()
+            // 3. Action type + type-aware data control. A dynamic parent is a
+            // fixed runtime source, not a direct action with editable payload.
+            if item.wrappedValue.dynamicSource == .none {
+                Section("Action") {
+                    ActionDataEditor(item: item)
+                    actionAccessory()
+                }
+            } else {
+                dynamicActionSection(parent: item.wrappedValue)
             }
 
-            // 4. Sub-items — middle top-level only (depth cap 3).
+            // 4. Sub-items — editable only for static middle parents. Dynamic
+            // parents keep any migrated legacy children inactive and hidden.
             if isMiddleTopLevel, let parentID = model.selection?.itemID {
-                subItemsSection(parentID: parentID, parent: item)
+                if item.wrappedValue.dynamicSource == .none {
+                    subItemsSection(parentID: parentID, parent: item)
+                } else {
+                    dynamicSubItemsSection(parent: item.wrappedValue)
+                }
             }
 
-            // 5. Footer controls: reorder + delete.
+            // 5. Footer controls: selected-item operations stay together.
             Section {
                 footerControls
             }
@@ -257,15 +258,38 @@ struct SlotEditorForm<ActionAccessory: View>: View {
         return label
     }
 
-    // MARK: - Sub-items section
+    // MARK: - Dynamic action
+
+    private func dynamicActionSection(parent: RingMenuItem) -> some View {
+        let label = parent.label.isEmpty ? "This item" : parent.label
+        return Section("Action") {
+            LabeledContent("Type") {
+                Text("Running Apps")
+            }
+            Text("Selecting \(label) opens an automatically generated outer ring of currently running apps.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
+    }
+
+    // MARK: - Outer items section
+
+    private func dynamicSubItemsSection(parent: RingMenuItem) -> some View {
+        let label = parent.label.isEmpty ? "This item" : parent.label
+        return Section("Outer items") {
+            Text("\(label) is populated automatically from running apps and cannot have manual outer items.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
+    }
 
     @ViewBuilder
     private func subItemsSection(parentID: UUID, parent: Binding<RingMenuItem>) -> some View {
         let subItems = parent.wrappedValue.subItems ?? []
 
-        Section("Sub-items (outer arc)") {
+        Section("Outer items") {
             if subItems.isEmpty {
-                Text("No sub-items yet.")
+                Text("No outer items yet.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             } else {
@@ -301,17 +325,12 @@ struct SlotEditorForm<ActionAccessory: View>: View {
                 }
             }
 
-            AppKitButton(
-                title: "Add Sub-item",
-                systemImageName: "plus",
-                isEnabled: !model.subItemsAtCap(for: parentID),
-                accessibilityIdentifier: "menuItems.addSubItem"
-            ) {
-                model.addSubItem(toMiddle: parentID)
-            }
-
             if model.subItemsAtCap(for: parentID) {
-                Text("Maximum sub-items reached.")
+                Text("Maximum 12 outer items.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            } else {
+                Text("Add outer items from Menu & Rings → Outer.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -346,6 +365,16 @@ struct SlotEditorForm<ActionAccessory: View>: View {
             }
 
             Spacer()
+
+            AppKitButton(
+                title: isSubItem ? "Delete Outer Item" : "Delete Item",
+                systemImageName: "trash",
+                accessibilityLabel: isSubItem ? "Delete this outer item" : "Delete this item",
+                accessibilityIdentifier: "menuItems.delete"
+            ) {
+                model.removeSelectedItem()
+            }
+            .help(isSubItem ? "Delete this outer item" : "Delete this item")
         }
     }
 }

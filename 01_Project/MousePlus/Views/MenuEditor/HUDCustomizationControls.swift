@@ -6,9 +6,8 @@ import SwiftUI
 /// native keyboard and accessibility behavior.
 ///
 /// The Menu/Inner/Middle/Outer tab is deliberately local UI state, separate
-/// from `model.activeBand`: that band drives item insertion and selection in
-/// the Menu Items list, so browsing a ring's customization here must never
-/// retarget it.
+/// from item selection. Browsing a ring's customization never retargets the
+/// selected item, while each ring owns its own add action.
 @MainActor
 struct HUDCustomizationControls: View {
     @Bindable var model: MenuEditorModel
@@ -95,6 +94,22 @@ struct HUDCustomizationControls: View {
 
         return GroupBox("\(ringName(band)) ring") {
             VStack(alignment: .leading, spacing: 10) {
+                HStack {
+                    Text("\(ringItemCount(band))/8 items")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    Spacer()
+                    AppKitButton(
+                        title: "Add \(ringName(band)) Item",
+                        systemImageName: "plus",
+                        isEnabled: !model.atCap(for: band),
+                        accessibilityIdentifier: "hud.\(ringID(band)).addItem"
+                    ) {
+                        model.addItem(to: band)
+                    }
+                    .help(model.atCap(for: band) ? "Maximum 8 items" : "Add \(ringName(band).lowercased()) item")
+                }
+
                 row("Slots") {
                     AppKitSegmentedControl(
                         labels: ["Auto", "Fixed"],
@@ -169,6 +184,22 @@ struct HUDCustomizationControls: View {
     private var outerTab: some View {
         GroupBox("Outer ring") {
             VStack(alignment: .leading, spacing: 10) {
+                HStack {
+                    Text(outerAddHelp)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    Spacer()
+                    AppKitButton(
+                        title: "Add Outer Item",
+                        systemImageName: "plus",
+                        isEnabled: selectedOuterParentID.map { !model.subItemsAtCap(for: $0) } ?? false,
+                        accessibilityIdentifier: "hud.outer.addItem"
+                    ) {
+                        if let parentID = selectedOuterParentID {
+                            model.addSubItem(toMiddle: parentID)
+                        }
+                    }
+                }
                 row("Visibility") {
                     AppKitSegmentedControl(
                         labels: ["Always", "Reveal", "Hidden"],
@@ -285,6 +316,37 @@ struct HUDCustomizationControls: View {
     private func ringName(_ band: EditorBand) -> String { band == .inner ? "Inner" : "Middle" }
     private func ringID(_ band: EditorBand) -> String { band == .inner ? "inner" : "middle" }
     private func ringItemCount(_ band: EditorBand) -> Int { band == .inner ? model.inner.count : model.middle.count }
+
+    /// Outer items belong to a static middle parent rather than to a standalone
+    /// ring. Keep the add action explicitly tied to that selected parent.
+    private var selectedOuterParentID: UUID? {
+        guard let selection = model.selection,
+              selection.band == .middle,
+              let parentID = selection.itemID,
+              let parent = model.middle.first(where: { $0.id == parentID }),
+              parent.dynamicSource == .none
+        else { return nil }
+        return parentID
+    }
+
+    private var outerAddHelp: String {
+        if let selection = model.selection,
+           selection.band == .middle,
+           let parentID = selection.itemID,
+           let parent = model.middle.first(where: { $0.id == parentID }),
+           parent.dynamicSource == .runningApps {
+            let label = parent.label.isEmpty ? "This item" : parent.label
+            return "\(label) is populated automatically from running apps and cannot have manual outer items."
+        }
+
+        guard let parentID = selectedOuterParentID,
+              let parent = model.middle.first(where: { $0.id == parentID }) else {
+            return "Select a static Middle item to add its outer items."
+        }
+        if model.subItemsAtCap(for: parentID) { return "Maximum 12 outer items." }
+        let label = parent.label.isEmpty ? "selected Middle item" : parent.label
+        return "Adds to \(label)."
+    }
 
     private func mutateRing(_ band: EditorBand, _ mutation: (inout HUDRingCustomization) -> Void) {
         if band == .inner { mutation(&model.hudCustomization.inner) }

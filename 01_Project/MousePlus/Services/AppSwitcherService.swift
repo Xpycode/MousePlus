@@ -5,6 +5,7 @@ struct AppEntry: Identifiable, Sendable {
     let id: String              // bundleIdentifier
     let name: String
     let icon: NSImage
+    let processIdentifier: pid_t
 }
 
 /// Enumerates running regular apps and self-tracks most-recently-activated order.
@@ -35,12 +36,14 @@ actor AppSwitcherService {
         }
     }
 
-    /// Running regular apps (self excluded), MRU-first, alphabetical tie-break.
-    /// Capped at `maxEntries`, no pagination.
-    func runningApps() async -> [AppEntry] {
+    /// Running regular apps (MousePlus and the invocation's current app
+    /// excluded), MRU-first, alphabetical tie-break. Capped at `maxEntries`,
+    /// no pagination.
+    func runningApps(excluding processIdentifier: pid_t? = nil) async -> [AppEntry] {
         let entries = await Self.currentRunningApps()
         return Array(
             entries
+                .filter { $0.processIdentifier != processIdentifier }
                 .sorted { isMRUOrdered($0, before: $1) }
                 .prefix(Self.maxEntries)
         )
@@ -71,7 +74,12 @@ actor AppSwitcherService {
             .compactMap { app -> AppEntry? in
                 guard let bundleIdentifier = app.bundleIdentifier,
                       let name = app.localizedName else { return nil }
-                return AppEntry(id: bundleIdentifier, name: name, icon: app.icon ?? NSImage())
+                return AppEntry(
+                    id: bundleIdentifier,
+                    name: name,
+                    icon: app.icon ?? NSImage(),
+                    processIdentifier: app.processIdentifier
+                )
             }
     }
 

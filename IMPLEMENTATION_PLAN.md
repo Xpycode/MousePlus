@@ -56,10 +56,11 @@ Ship the Dynamic App Switcher (HUD Feature C): a middle wedge whose outer ring i
 
 ### Wave 5 — Closure gate (verification)
 
-- [ ] **Task 5.1**: Focused + full automated suite, forbidden-control audit, `git diff --check` -> complete change set
+- [x] **Task 5.1**: Focused + full automated suite, forbidden-control audit, `git diff --check` -> complete change set
   - Backpressure: focused suites for RingViewModel/WedgeView/AppSwitcherService, full MousePlus test target green, no raw SwiftUI interactive controls introduced.
 - [ ] **Task 5.2**: Signed build + user-driven live verification (no synthetic input, per project rule) — user presses their trigger, expands "Apps" with 4+ regular apps running, confirms real names/icons/MRU order, commits one and confirms activation; rapid re-point mid-fetch confirms no stale assignment
   - Backpressure: signed Debug build; user confirmation recorded in session log and `PROJECT_STATE.md`.
+  - Partial result (2026-09-04): real names/icons are visible; the user confirmed activation from both a static inner Safari item and the dynamic outer Safari item after the native mouse-up fix. A follow-up full-circle prototype and outer-label visibility toggle are also signed-live confirmed. MRU ordering and rapid re-pointing remain.
 
 ## Operational Learnings
 

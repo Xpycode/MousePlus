@@ -26,7 +26,6 @@ struct MenuEditorWorkspace<ActionAccessory: View, MenuAccessory: View>: View {
                 // The default ring is 448pt square. A stable 480pt column leaves
                 // breathing room without coupling its position to the form.
                 VStack(spacing: 8) {
-                    topBar
                     RingPreviewSelector(model: model)
                         .frame(maxHeight: .infinity)
                 }
@@ -87,50 +86,4 @@ struct MenuEditorWorkspace<ActionAccessory: View, MenuAccessory: View>: View {
         }
     }
 
-    // MARK: - Top bar
-
-    private var topBar: some View {
-        HStack(spacing: 10) {
-            // Band selector — also retargets where "Add" inserts.
-            AppKitSegmentedControl(
-                labels: ["Inner", "Middle"],
-                selection: activeBandSelection,
-                accessibilityLabel: "Ring band",
-                accessibilityIdentifier: "menuItems.band"
-            )
-            .frame(maxWidth: 220)
-
-            // Keep capacity beside the control it describes instead of using
-            // a full-width status row above both inspectors.
-            Text("\(model.spokesUsed)/8 used")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-
-            Spacer(minLength: 0)
-
-            AppKitButton(
-                title: addButtonTitle,
-                isEnabled: !model.atCap(for: model.activeBand),
-                accessibilityIdentifier: "menuItems.add.\(model.activeBand == .inner ? "inner" : "middle")"
-            ) {
-                model.addItem(to: model.activeBand)
-            }
-            .help(model.atCap(for: model.activeBand) ? "Maximum 8 spokes" : addButtonTitle)
-        }
-    }
-
-    /// Label for the Add button, reflecting the active band.
-    private var addButtonTitle: String {
-        switch model.activeBand {
-        case .inner: return "Add Inner Item"
-        case .middle: return "Add Middle Item"
-        }
-    }
-
-    private var activeBandSelection: Binding<Int> {
-        Binding(
-            get: { model.activeBand == .inner ? 0 : 1 },
-            set: { model.activeBand = $0 == 0 ? .inner : .middle }
-        )
-    }
 }

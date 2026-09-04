@@ -33,6 +33,53 @@ final class ConfigurationServiceTests: XCTestCase {
         }
     }
 
+    func testLegacySampleAppsGroupMigratesToRunningAppsWithoutDroppingPinnedChildren() throws {
+        let child = RingMenuItem(
+            label: "Pinned App", icon: "app.fill", actionType: .appSwitch,
+            actionData: "com.example.Pinned"
+        )
+        let parentID = UUID()
+        let legacyParent = RingMenuItem(
+            id: parentID,
+            label: "Apps",
+            icon: "square.grid.2x2",
+            actionType: .appSwitch,
+            subItems: [child]
+        )
+        let encoded = try JSONEncoder().encode(Configuration(inner: [], middle: [legacyParent]))
+        var object = try XCTUnwrap(JSONSerialization.jsonObject(with: encoded) as? [String: Any])
+        object.removeValue(forKey: "schemaVersion")
+
+        let decoded = try JSONDecoder().decode(
+            Configuration.self,
+            from: JSONSerialization.data(withJSONObject: object)
+        )
+
+        XCTAssertEqual(decoded.middle[0].id, parentID)
+        XCTAssertEqual(decoded.middle[0].dynamicSource, .runningApps)
+        XCTAssertEqual(decoded.middle[0].subItems, [child])
+    }
+
+    func testCurrentStaticAppsGroupIsNotMistakenForLegacySample() throws {
+        let staticParent = RingMenuItem(
+            label: "Apps",
+            icon: "square.grid.2x2",
+            actionType: .appSwitch,
+            subItems: [RingMenuItem(
+                label: "Pinned App", icon: "app.fill", actionType: .appSwitch,
+                actionData: "com.example.Pinned"
+            )]
+        )
+
+        let decoded = try JSONDecoder().decode(
+            Configuration.self,
+            from: JSONEncoder().encode(Configuration(inner: [], middle: [staticParent]))
+        )
+
+        XCTAssertEqual(decoded.middle[0].dynamicSource, .none)
+        XCTAssertEqual(decoded.middle[0].subItems, staticParent.subItems)
+    }
+
     func testLegacyConfigurationReceivesCompatibleHUDDefaults() throws {
         let current = Configuration()
         let encoded = try JSONEncoder().encode(current)
@@ -392,7 +439,7 @@ final class ConfigurationServiceTests: XCTestCase {
         )
         XCTAssertEqual(
             Set(object.keys),
-            Set(["inner", "middle", "triggers", "appearance", "behavior", "hudCustomization"]),
+            Set(["schemaVersion", "inner", "middle", "triggers", "appearance", "behavior", "hudCustomization"]),
             "\(fixtureName) must encode only the canonical top-level shape",
             file: file,
             line: line

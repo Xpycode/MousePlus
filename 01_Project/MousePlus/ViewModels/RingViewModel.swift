@@ -19,11 +19,12 @@ enum RingCommitResult: Equatable {
 }
 
 /// Pure outer-ring policy state shared by the runtime HUD and editor preview.
-/// Pointer history is scoped to the HUD invocation: expansion controls whether
-/// an outer ring is eligible to render, but it does not start or reset the
-/// center-to-outside traversal that Reveal records.
+/// Pointer history is scoped to the HUD invocation. Every invocation opens
+/// centered on the pointer, so Reveal begins with the inner boundary already
+/// entered; this keeps a direct hover or click on an expandable middle wedge
+/// from depending on whether AppKit delivered an intermediate hover sample.
 struct OuterRingPolicyState: Equatable {
-    private(set) var hasEnteredInnerBoundary = false
+    private(set) var hasEnteredInnerBoundary = true
     private(set) var hasRevealedOuterRing = false
 
     struct Resolution: Equatable {
@@ -118,6 +119,17 @@ final class RingViewModel {
             middle: effectiveGeometry(for: hudCustomization.middle.layout,
                                       itemCount: middleItems.count)
         )
+    }
+
+    /// Running apps get the whole outer circumference. Other expandable items
+    /// retain the compact arc centered on their middle-ring parent.
+    var outerRingLayout: OuterRingLayout {
+        guard let index = expandedParentIndex,
+              middleItems.indices.contains(index),
+              middleItems[index].dynamicSource == .runningApps else {
+            return .localizedArc
+        }
+        return .fullCircle
     }
 
     /// Whether conditional reveal has latched for this invocation.
@@ -262,7 +274,7 @@ final class RingViewModel {
     /// Maps a pointer location to the current `activeSelection` using
     /// `RadialGeometry.hitTest` with the live spoke/expansion state (§2.2).
     func updateActive(at point: CGPoint, center: CGPoint) {
-        updateRevealState(at: point, center: center)
+        updateOuterRingReveal(at: point, center: center)
         if let hit = RadialGeometry.hitTest(point: point,
                                             center: center,
                                             radii: radii,
@@ -270,7 +282,8 @@ final class RingViewModel {
                                             innerItemCount: innerItems.count,
                                             middleItemCount: middleItems.count,
                                             expandedParentIndex: isOuterRingVisible ? expandedParentIndex : nil,
-                                            outerCount: isOuterRingVisible ? outerItems.count : 0) {
+                                            outerCount: isOuterRingVisible ? outerItems.count : 0,
+                                            outerLayout: outerRingLayout) {
             let selection = ActiveSelection(band: hit.band, index: hit.index)
             activeSelection = selection
             autoExpandRevealedParentIfNeeded(selection)
@@ -297,10 +310,15 @@ final class RingViewModel {
         // direct-only (depth cap 3), so never expand from `.outer`.
         if selection.band == .middle, item.hasSubItems {
             // A hidden submenu parent is unavailable. In particular, never
-            // execute its marker action as a fallback.
+            // execute its marker action as a fallback. Dynamic parents are
+            // available before their asynchronous children have been fetched,
+            // so use a synthetic non-zero count for that availability check.
+            let availableItemCount = item.dynamicSource == .none
+                ? item.subItems?.count ?? 0
+                : 1
             guard OuterRingPolicyState.parentIsAvailable(
                 policy: hudCustomization.outerRingVisibility,
-                itemCount: item.subItems?.count ?? 0
+                itemCount: availableItemCount
             ) else {
                 activeSelection = nil
                 return .unavailable
@@ -353,12 +371,12 @@ final class RingViewModel {
 
         case .runningApps:
             expandedParentIndex = parentIndex
-            // Transient empty arc — no "Loading…" placeholder; `NSWorkspace`
+            // Transient empty band — no "Loading…" placeholder; `NSWorkspace`
             // enumeration is effectively instant (APP_SWITCHER_PLAN.md §3).
             outerItems = []
             let epoch = expansionEpoch
             Task {
-                let entries = await appSwitcherService.runningApps()
+                let entries = await appSwitcherService.runningApps(excluding: frontmostPID)
                 let items = entries.map { entry in
                     RingMenuItem(label: entry.name, icon: "app.fill",
                                 actionType: .appSwitch, actionData: entry.id)
@@ -429,7 +447,10 @@ final class RingViewModel {
                                 angularOffset: CGFloat(layout.angularOffset * .pi / 180))
     }
 
-    private func updateRevealState(at point: CGPoint, center: CGPoint) {
+    /// Records the pointer's reveal traversal without changing the active wedge
+    /// or re-pointing the expanded parent. The editor preview uses this when its
+    /// independent pointer surface reports a reveal-state transition.
+    func updateOuterRingReveal(at point: CGPoint, center: CGPoint) {
         let radius = hypot(point.x - center.x, point.y - center.y)
         outerRingPolicyState = outerRingPolicyState.transition(
             policy: hudCustomization.outerRingVisibility,

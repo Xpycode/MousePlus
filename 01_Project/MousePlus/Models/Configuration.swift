@@ -39,12 +39,20 @@ struct Configuration: Codable {
 
     private enum CodingKeys: String, CodingKey {
         case inner, middle, triggers, appearance, behavior, hudCustomization
+        case schemaVersion
         case items    // legacy, pre-split; flat array migrated into `middle`
         case hotkey   // legacy, pre-2026-04-29; migrated into `triggers.keyboard`
     }
 
+    /// Version 1 upgrades the original fixed sample Apps group to the live
+    /// running-app source. The version is encoded even though it need not live
+    /// in the in-memory model: it prevents a deliberately-created static Apps
+    /// group in a current configuration from being migrated later.
+    private static let currentSchemaVersion = 1
+
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
+        let schemaVersion = try c.decodeIfPresent(Int.self, forKey: .schemaVersion) ?? 0
 
         // Item-set migration:
         //   New format → `inner` + `middle` keys read directly.
@@ -73,17 +81,38 @@ struct Configuration: Codable {
         } else {
             triggers = .default
         }
+
+        if schemaVersion < 1 {
+            migrateLegacySampleAppSwitcher()
+        }
     }
 
     func encode(to encoder: Encoder) throws {
         var c = encoder.container(keyedBy: CodingKeys.self)
         // Canonical new keys.
+        try c.encode(Self.currentSchemaVersion, forKey: .schemaVersion)
         try c.encode(inner, forKey: .inner)
         try c.encode(middle, forKey: .middle)
         try c.encode(triggers, forKey: .triggers)
         try c.encode(appearance, forKey: .appearance)
         try c.encode(behavior, forKey: .behavior)
         try c.encode(hudCustomization, forKey: .hudCustomization)
+    }
+
+    /// The app switcher originally shipped as a recognizable sample parent with
+    /// fixed app children. Upgrade only that sample-shaped parent. Keep its old
+    /// children encoded but inactive so migration never destroys a user's
+    /// customized pinned-app payload.
+    private mutating func migrateLegacySampleAppSwitcher() {
+        guard let index = middle.firstIndex(where: { item in
+            item.dynamicSource == .none
+                && item.actionType == .appSwitch
+                && item.actionData.isEmpty
+                && item.label == "Apps"
+                && item.icon == "square.grid.2x2"
+                && item.subItems?.isEmpty == false
+        }) else { return }
+        middle[index].dynamicSource = .runningApps
     }
 }
 

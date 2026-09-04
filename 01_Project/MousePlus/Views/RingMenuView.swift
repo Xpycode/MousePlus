@@ -5,8 +5,8 @@ import SwiftUI
 /// Two independently configured top-level rings:
 ///   - **inner** band: symbol-only quick actions (`r0…r1`)
 ///   - **middle** band: labeled items, each direct or expandable (`r1…r2`)
-/// plus an **on-demand outer** band (`r2…r3`) that grows as a localized arc from
-/// the expanded middle wedge (§2.3).
+/// plus an **on-demand outer** band (`r2…r3`). Static submenus grow as a
+/// localized arc; the running-app switcher uses the full circumference.
 ///
 /// Hit-testing is done on a single square container via angle + radius
 /// (`RingViewModel.updateActive` → `RadialGeometry.hitTest`), NOT per-wedge
@@ -241,7 +241,8 @@ struct RingMenuView: View {
                 let angles = RadialGeometry.wedgeAngles(
                     band: .outer, index: index, geometry: geometry,
                     expandedParentIndex: viewModel.expandedParentIndex,
-                    outerCount: viewModel.outerItems.count
+                    outerCount: viewModel.outerItems.count,
+                    outerLayout: viewModel.outerRingLayout
                 )
                 OuterWedgeBacking(
                     startAngle: angles.start,
@@ -344,7 +345,8 @@ struct RingMenuView: View {
             band: band, index: index, center: center, radii: radii,
             geometry: geometry,
             expandedParentIndex: viewModel.expandedParentIndex,
-            outerCount: viewModel.outerItems.count
+            outerCount: viewModel.outerItems.count,
+            outerLayout: viewModel.outerRingLayout
         )
     }
 

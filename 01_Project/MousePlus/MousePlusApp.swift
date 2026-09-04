@@ -316,9 +316,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // the first half of Reveal's natural center-to-parent traversal.
         ringViewModel.updateActive(at: .zero, center: .zero)
 
+        // Runtime primary-button commits come from RingHostingView's native
+        // mouse-up callback below. SwiftUI's DragGesture release is unreliable
+        // in the tested non-activating panel, so keep it selection-only here.
         let view = RingMenuView(
             viewModel: ringViewModel,
-            commitsOnPointerRelease: commitsOnPointerRelease,
+            commitsOnPointerRelease: false,
             onCenterDrag: commitsOnPointerRelease ? { [weak controller] delta in
                 controller?.movePanel(by: delta)
             } : nil
@@ -327,6 +330,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             at: pointerLocation,
             outerRadius: ringViewModel.radii.r3,
             content: view,
+            onPrimaryMouseUp: commitsOnPointerRelease ? {
+                [weak self, weak controller] point, center in
+                // A transparent-corner mouse-down may have dismissed the HUD
+                // before AppKit delivers this release.
+                guard let self, controller?.isVisible == true else { return }
+                self.ringViewModel.commit(at: point, center: center)
+            } : nil,
             onOtherMouseDragged: commitsOnPointerRelease ? nil : {
                 [weak ringViewModel] point, center in
                 ringViewModel?.updateActive(at: point, center: center)

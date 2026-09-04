@@ -223,7 +223,8 @@ struct RingPreviewSelector: View {
             middleCount: model.middle.count,
             expandedParentIndex: preview.expandedParentIndex,
             outerCount: preview.outerItems.count,
-            outerVisibility: model.hudCustomization.outerRingVisibility
+            outerVisibility: model.hudCustomization.outerRingVisibility,
+            outerLayout: preview.outerRingLayout
         )
     }
 
@@ -295,10 +296,10 @@ struct RingPreviewSelector: View {
 
     private func revealPreviewOuterRing() {
         let center = CGPoint(x: preview.radii.r3, y: preview.radii.r3)
-        preview.updateActive(
+        preview.updateOuterRingReveal(
             at: CGPoint(x: center.x + preview.radii.r1, y: center.y), center: center
         )
-        preview.updateActive(
+        preview.updateOuterRingReveal(
             at: CGPoint(x: center.x + preview.radii.r1 + 1, y: center.y), center: center
         )
     }

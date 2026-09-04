@@ -118,7 +118,8 @@ final class HUDCustomizationIntegrationTests: XCTestCase {
             let snapshot = HUDPreviewInteractionSnapshot(
                 geometry: runtime.geometry, radii: runtime.radii,
                 innerCount: 1, middleCount: 1, expandedParentIndex: 0,
-                outerCount: 2, outerVisibility: mode
+                outerCount: 2, outerVisibility: mode,
+                outerLayout: runtime.outerRingLayout
             )
             let outerPoint = RadialGeometry.centroid(
                 band: .outer, index: 0, center: .zero, radii: runtime.radii,

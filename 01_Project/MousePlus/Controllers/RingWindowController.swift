@@ -9,10 +9,23 @@ import SwiftUI
 /// "NSPanel first-click swallowed"). Returning `true` makes that first click a
 /// real event the ring can act on.
 final class RingHostingView<Content: View>: NSHostingView<Content> {
+    var onPrimaryMouseUp: ((CGPoint, CGPoint) -> Void)?
     var onOtherMouseDragged: ((CGPoint, CGPoint) -> Void)?
     private var pointerTrackingArea: NSTrackingArea?
 
     override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
+
+    /// SwiftUI's `DragGesture.onEnded` is not reliably delivered inside the
+    /// tested non-activating panel. Forward the native primary-button
+    /// release so tap-toggle commits still use RingViewModel's authoritative
+    /// final-position hit test.
+    override func mouseUp(with event: NSEvent) {
+        super.mouseUp(with: event)
+        guard let onPrimaryMouseUp else { return }
+        let point = convert(event.locationInWindow, from: nil)
+        let center = CGPoint(x: bounds.midX, y: bounds.midY)
+        onPrimaryMouseUp(point, center)
+    }
 
     override func updateTrackingAreas() {
         super.updateTrackingAreas()
@@ -76,6 +89,7 @@ final class RingWindowController {
         at point: NSPoint,
         outerRadius: CGFloat,
         content: Content,
+        onPrimaryMouseUp: ((CGPoint, CGPoint) -> Void)? = nil,
         onOtherMouseDragged: ((CGPoint, CGPoint) -> Void)? = nil
     ) {
         let side = HUDPanelGeometry.squareSide(outerRadius: outerRadius)
@@ -84,6 +98,7 @@ final class RingWindowController {
 
         let hostingView = RingHostingView(rootView: AnyView(content))
         hostingView.frame = NSRect(origin: .zero, size: squareSize)
+        hostingView.onPrimaryMouseUp = onPrimaryMouseUp
         hostingView.onOtherMouseDragged = onOtherMouseDragged
 
         panel.contentView = hostingView

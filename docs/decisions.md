@@ -4,6 +4,149 @@ This file tracks the WHY behind technical and design decisions.
 
 ---
 
+### 2026-09-04 - Running apps use the full outer circumference
+
+**Context:** The first dynamic App Switcher reused the localized submenu arc. With roughly twelve
+running apps, that concentrated icons and long tangential labels into one sector even though an app
+switcher is a peer collection rather than a parent-owned command submenu.
+
+**Options:** Keep the localized arc; open a rectangular dock-like pane; add a second detached circle;
+or preserve the concentric HUD and distribute running apps around the complete outer band.
+
+**Decision:** A `.runningApps` parent uses a full-circle outer-ring layout. Its first item is centered
+on the expanded Apps wedge so pointer direction remains meaningful. Static submenus continue using
+their localized parent-centered arc. Outer labels remain independently configurable and may be hidden
+for an icon-only switcher.
+
+**Rationale:** The full circumference gives the existing pointer-centered interface substantially
+more room without introducing another interaction model. Keeping static submenus localized preserves
+their visible parent relationship, while the dynamic-source distinction makes the geometry rule
+explicit and testable.
+
+**Consequences:** Rendering, hit testing, centroids, preview selection, and accessibility share an
+`OuterRingLayout` value. Running-app enumeration excludes the captured frontmost process so the first
+MRU alternative occupies the parent-aligned slot. The user signed-live verified the 360° layout and
+confirmed that disabling Outer “Show label” produces the intended icon-only presentation.
+
+---
+
+### 2026-09-04 - Native AppKit mouse-up owns tap-toggle commits
+
+**Context:** The ring's SwiftUI hover and selection state updated inside its non-activating
+`NSPanel`, and native AppKit controls such as the center Settings button received clicks, but
+`DragGesture.onEnded` did not reliably arrive for wedge clicks. As a result, both static App
+Switcher items and dynamically populated running-app items could highlight without committing.
+Direct `NSRunningApplication.activate()` checks succeeded, ruling out bundle identifiers and the
+activation service.
+
+**Options:** Make the panel activating; replace wedge interaction with AppKit controls; add a
+second action-specific activation path; or keep SwiftUI responsible for selection while forwarding
+the primary-button release from the hosting `NSView` into the existing authoritative hit-test and
+commit path.
+
+**Decision:** Keep the non-activating HUD. `RingHostingView` forwards native primary mouse-up
+coordinates and the live view center to `RingViewModel.commit(at:center:)` for tap-toggle
+invocations. Runtime SwiftUI pointer-release commits are disabled to prevent double execution;
+hold-release retains its existing trigger-event commit path.
+
+**Rationale:** This preserves no-focus-steal behavior and one action-dispatch pipeline. The native
+view is the reliable event boundary, while `RingViewModel` remains the single authority for final
+geometry, expansion, dismissal, and action execution.
+
+**Consequences:** Any future click-to-commit interaction hosted in this non-activating panel must
+be verified through the native event boundary, not assumed from SwiftUI gesture callbacks. A
+regression test synthesizes `mouseUp` at `RingHostingView` and asserts that final coordinates are
+forwarded. Signed live testing confirmed both a static inner Safari item and the dynamic outer
+Safari item activate and dismiss the HUD.
+
+---
+
+### 2026-09-04 - Dynamic parents are read-only in Selected Item
+
+**Context:** The running-apps parent is a runtime-populated container, but the generic Selected Item
+inspector still presented it as a direct App Switcher action with a single-app chooser, Test Action,
+and editable legacy children. Changing the displayed action did not clear `dynamicSource`, so the
+editor could claim one behavior while runtime continued opening running apps. Creation and deletion
+were also split between the bottom and top of the same inspector.
+
+**Options:** Keep the generic editor and add explanatory text; make action changes convert the
+dynamic parent into a static item; or present dynamic parents as fixed, read-only runtime sources
+while keeping their appearance and item lifecycle editable.
+
+**Decision:** Present a dynamic parent as a read-only source in Selected Item. Hide its inactive
+preserved children and direct-action controls, but keep those children encoded so migration remains
+lossless. Ring-specific setup owns creation (`Menu & Rings` → Inner/Middle/Outer); Selected Item owns
+appearance, ordering, and deletion. Use “Outer items” consistently and keep Move/Delete together in
+the inspector footer.
+
+**Consequences:** The editor can no longer advertise a single-app payload or action change that
+runtime ignores. The future Action choice grid applies to static items, not fixed dynamic sources.
+Returning users keep recoverable legacy pinned-app data, and deleting the dynamic parent remains an
+explicit user action.
+
+---
+
+### 2026-09-04 - Migrate only the legacy sample Apps wedge
+
+**Context:** App Switcher Wave 4 changed the default Apps wedge from fixed child apps to the
+`.runningApps` dynamic source, but returning users load their saved configuration instead of the
+new sample defaults. Broadly rewriting every static `.appSwitch` container would also reinterpret
+user-created pinned-app groups and could destroy their intended structure.
+
+**Options:** Leave existing configurations unchanged; migrate every static App Switcher container;
+replace the old sample and discard its children; or version the configuration and migrate only the
+recognizable legacy sample shape while retaining its previous children.
+
+**Decision:** Add a top-level configuration schema version. When decoding a pre-versioned file,
+upgrade only the legacy sample-shaped Apps parent (`Apps` / `square.grid.2x2` / empty parent payload /
+static app children) to `.runningApps`. Retain its static children as inactive preserved data. Never
+apply this migration to a current-schema configuration.
+
+**Consequences:** Returning users receive the dynamic App Switcher without resetting their menu or
+losing customized pinned-app payloads. A deliberately created current static Apps group remains
+static, and future migrations have an explicit version boundary.
+
+### 2026-09-04 - Show available wedge actions as a choice grid
+
+**Context:** The Action section currently uses a pop-up menu, which hides the supported choices and
+lets a preserved unavailable action dominate the editor with repeated unavailable/coming-soon
+messaging. The selector changes the wedge's persisted action and may clear type-specific payload,
+so it should read as a configuration choice rather than lightweight navigation.
+
+**Options:** Keep the pop-up menu; replace it with literal tabs or a segmented tab strip; or show
+the available action types as an icon-and-label choice grid above the selected action's controls.
+
+**Decision:** Replace the pop-up with a compact two-column, single-selection choice grid showing
+all actions available in the current version. Keep the selected action visually explicit and show
+its type-specific configuration directly below. When a wedge contains a preserved unavailable
+action, present that state in a separate compact notice and let the grid offer supported
+replacements; do not represent the action choices as tabs.
+
+**Rationale:** The grid makes the four current choices discoverable at a glance, communicates a
+persisted selection more accurately than tabs, and can wrap as the action catalog grows. Separating
+the unavailable-state notice removes the misleading appearance that an unavailable item is an
+ordinary selectable option while preserving its saved value and payload until replacement.
+
+## 2026-09-04 - Reveal supports direct entry; ring setup owns item creation
+
+**Context:** The editor and live HUD exposed two related interaction problems. Reveal could miss an
+expandable middle wedge when event coalescing delivered its first hover sample outside the inner
+boundary. The Menu Items editor also placed an Inner/Middle selector and Add button above the
+preview; hiding it while editing an item made the preview visibly re-center, while leaving it
+visible confused its purpose.
+
+**Decision:** Treat every HUD invocation as beginning at the pointer-centered inner boundary, so a
+direct hover or click of an expandable middle wedge may reveal its outer arc. Remove the preview
+toolbar. Inner and Middle setup tabs own their respective add actions; the Outer tab adds to the
+currently selected static Middle parent and explains when no eligible parent is selected.
+
+**Consequences:** Reveal no longer depends on delivery of an intermediate hover event. The preview
+has one stable frame across Menu & Rings and Selected Item modes. Item creation is placed with the
+ring it affects; outer items retain their explicit parent relationship and cannot be added to a
+dynamic source such as Apps.
+
+---
+
 ## 2026-09-04 - Reveal and hold-release use pointer intent, not callback timing
 
 **Context:** Signed testing showed that conditional outer items remained click-dependent because

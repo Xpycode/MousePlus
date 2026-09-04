@@ -23,7 +23,7 @@ final class RingViewModelHUDTests: XCTestCase {
             Case(policy: .revealBeyondInnerRing, hasParent: true, itemCount: 2,
                  traversal: [], eligible: true, visible: false),
             Case(policy: .revealBeyondInnerRing, hasParent: true, itemCount: 2,
-                 traversal: [false], eligible: true, visible: false),
+                 traversal: [false], eligible: true, visible: true),
             Case(policy: .revealBeyondInnerRing, hasParent: true, itemCount: 2,
                  traversal: [true], eligible: true, visible: false),
             Case(policy: .revealBeyondInnerRing, hasParent: true, itemCount: 2,
@@ -97,20 +97,12 @@ final class RingViewModelHUDTests: XCTestCase {
         XCTAssertEqual(model.geometry.middle.slotCount, 8)
     }
 
-    func testConditionalRevealRequiresInsideToOutsideTransitionAndLatches() {
+    func testConditionalRevealRevealsOnDirectOutsideHoverAndLatches() {
         let model = conditionalModel()
         model.expand(0)
 
         model.updateActive(at: CGPoint(x: 25, y: 0), center: .zero)
-        XCTAssertFalse(model.hasEnteredInnerBoundary)
-        XCTAssertFalse(model.hasRevealedOuterRing)
-        XCTAssertFalse(model.isOuterRingVisible)
-
-        model.updateActive(at: CGPoint(x: 15, y: 0), center: .zero)
         XCTAssertTrue(model.hasEnteredInnerBoundary)
-        XCTAssertFalse(model.hasRevealedOuterRing)
-
-        model.updateActive(at: CGPoint(x: 21, y: 0), center: .zero)
         XCTAssertTrue(model.hasRevealedOuterRing)
         XCTAssertTrue(model.isOuterRingVisible)
 
@@ -119,18 +111,13 @@ final class RingViewModelHUDTests: XCTestCase {
         XCTAssertTrue(model.isOuterRingVisible)
     }
 
-    func testPointerStartingOutsideMustEnterBeforeLaterOutwardCrossing() {
+    func testConditionalRevealStartsInsideForEveryInvocation() {
         let model = conditionalModel()
         model.expand(0)
 
         model.updateActive(at: CGPoint(x: 35, y: 0), center: .zero)
-        model.updateActive(at: CGPoint(x: 25, y: 0), center: .zero)
-        XCTAssertFalse(model.hasRevealedOuterRing)
-
-        model.updateActive(at: CGPoint(x: 20, y: 0), center: .zero)
-        XCTAssertFalse(model.hasRevealedOuterRing)
-        model.updateActive(at: CGPoint(x: 20.001, y: 0), center: .zero)
         XCTAssertTrue(model.hasRevealedOuterRing)
+        XCTAssertTrue(model.isOuterRingVisible)
     }
 
     func testNaturalCenterToParentHoverAutoExpandsAndReveals() {
@@ -142,6 +129,34 @@ final class RingViewModelHUDTests: XCTestCase {
         XCTAssertTrue(model.hasEnteredInnerBoundary)
         XCTAssertTrue(model.hasRevealedOuterRing)
         XCTAssertTrue(model.isOuterRingVisible)
+    }
+
+    func testRevealOnlyUpdateDoesNotRepointExpandedParent() {
+        var customization = HUDCustomization.default
+        customization.outerRingVisibility = .revealBeyondInnerRing
+        var apps = item("Apps")
+        apps.subItems = [item("Safari"), item("Finder")]
+        var snap = item("Snap")
+        snap.subItems = [item("Left"), item("Right")]
+        let config = Configuration(
+            inner: [],
+            middle: [snap, apps],
+            triggers: .default,
+            appearance: AppearanceConfig(deadZone: 10, innerEdge: 20,
+                                         middleEdge: 30, outerEdge: 40),
+            hudCustomization: customization
+        )
+        let model = RingViewModel()
+        model.load(from: config)
+        model.expand(1)
+
+        model.updateOuterRingReveal(at: CGPoint(x: 20, y: 0), center: .zero)
+        model.updateOuterRingReveal(at: CGPoint(x: 21, y: 0), center: .zero)
+
+        XCTAssertTrue(model.isOuterRingVisible)
+        XCTAssertEqual(model.expandedParentIndex, 1)
+        XCTAssertEqual(model.outerItems.map(\.label), ["Safari", "Finder"])
+        XCTAssertNil(model.activeSelection)
     }
 
     func testRevealStateIsTriggerNeutral() {
@@ -175,7 +190,7 @@ final class RingViewModelHUDTests: XCTestCase {
 
         model.reset()
         XCTAssertFalse(model.hasRevealedOuterRing)
-        XCTAssertFalse(model.hasEnteredInnerBoundary)
+        XCTAssertTrue(model.hasEnteredInnerBoundary)
     }
 
     func testVisibilityPolicyRequiresAnAvailableExpandedBranch() {
@@ -251,6 +266,60 @@ final class RingViewModelHUDTests: XCTestCase {
         XCTAssertFalse(model.isOuterRingVisible)
     }
 
+    func testDynamicSourceRunningAppsCanExpandThroughCommitPathBeforeFetch() {
+        var customization = HUDCustomization.default
+        customization.outerRingVisibility = .alwaysVisible
+        var middle = [item("Apps")]
+        middle[0].dynamicSource = .runningApps
+        let config = Configuration(
+            inner: [],
+            middle: middle,
+            triggers: .default,
+            appearance: AppearanceConfig(deadZone: 10, innerEdge: 20,
+                                         middleEdge: 30, outerEdge: 40),
+            hudCustomization: customization
+        )
+        let model = RingViewModel()
+        model.load(from: config)
+        model.activeSelection = ActiveSelection(band: .middle, index: 0)
+
+        XCTAssertEqual(model.commitActive(), .expanded)
+        XCTAssertEqual(model.expandedParentIndex, 0)
+    }
+
+    func testRunningAppsUseFullCircleHitTestingWhileStaticSubmenusKeepLocalizedArc() {
+        var customization = HUDCustomization.default
+        customization.outerRingVisibility = .alwaysVisible
+        var snap = item("Snap")
+        snap.subItems = [item("Left"), item("Right")]
+        var apps = item("Apps")
+        apps.dynamicSource = .runningApps
+        let config = Configuration(
+            inner: [],
+            middle: [snap, apps],
+            triggers: .default,
+            appearance: AppearanceConfig(deadZone: 10, innerEdge: 20,
+                                         middleEdge: 30, outerEdge: 40),
+            hudCustomization: customization
+        )
+        let model = RingViewModel()
+        model.load(from: config)
+
+        model.expandedParentIndex = 0
+        model.outerItems = [item("Left"), item("Right")]
+        XCTAssertEqual(model.outerRingLayout, .localizedArc)
+
+        model.expandedParentIndex = 1
+        model.outerItems = [item("A"), item("B"), item("C"), item("D")]
+        XCTAssertEqual(model.outerRingLayout, .fullCircle)
+        model.updateActive(
+            at: CGPoint(x: 35 * cos(CGFloat.pi / 2),
+                        y: 35 * sin(CGFloat.pi / 2)),
+            center: .zero
+        )
+        XCTAssertEqual(model.activeSelection, ActiveSelection(band: .outer, index: 2))
+    }
+
     /// `AppSwitcherService` reads live `NSWorkspace.shared.runningApplications`,
     /// so its contents can't be controlled here — this asserts the invariant the
     /// population path guarantees instead: every outer item it produces commits
@@ -309,17 +378,12 @@ final class RingViewModelHUDTests: XCTestCase {
         XCTAssertNil(model.expandedParentIndex)
     }
 
-    func testConditionalOuterHitTargetsExistOnlyAfterReveal() {
+    func testConditionalOuterHitTargetsExistOnDirectArrival() {
         let model = conditionalModel()
         model.expand(0)
         let outerPoint = CGPoint(x: 35 * cos(CGFloat.pi / 4),
                                  y: 35 * sin(CGFloat.pi / 4))
 
-        model.updateActive(at: outerPoint, center: .zero)
-        XCTAssertNil(model.activeSelection)
-
-        model.updateActive(at: CGPoint(x: 20, y: 0), center: .zero)
-        model.updateActive(at: CGPoint(x: 21, y: 0), center: .zero)
         model.updateActive(at: outerPoint, center: .zero)
         XCTAssertEqual(model.activeSelection?.band, .outer)
     }
@@ -385,7 +449,7 @@ final class RingViewModelHUDTests: XCTestCase {
                                        file: StaticString = #filePath,
                                        line: UInt = #line) {
         XCTAssertFalse(model.hasRevealedOuterRing, file: file, line: line)
-        XCTAssertFalse(model.hasEnteredInnerBoundary, file: file, line: line)
+        XCTAssertTrue(model.hasEnteredInnerBoundary, file: file, line: line)
         XCTAssertFalse(model.isOuterRingVisible, file: file, line: line)
         XCTAssertNil(model.expandedParentIndex, file: file, line: line)
         XCTAssertNil(model.activeSelection, file: file, line: line)

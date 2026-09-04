@@ -14,6 +14,7 @@ struct HUDPreviewInteractionSnapshot {
     let expandedParentIndex: Int?
     let outerCount: Int
     let outerVisibility: OuterRingVisibility
+    let outerLayout: OuterRingLayout
 
     static func fitScale(logicalSide: CGFloat, canvasSide: CGFloat) -> CGFloat {
         guard logicalSide > 0, canvasSide > 0 else { return 1 }
@@ -66,7 +67,8 @@ struct HUDPreviewInteractionState {
             innerItemCount: snapshot.innerCount,
             middleItemCount: snapshot.middleCount,
             expandedParentIndex: visible ? snapshot.expandedParentIndex : nil,
-            outerCount: visible ? snapshot.outerCount : 0
+            outerCount: visible ? snapshot.outerCount : 0,
+            outerLayout: snapshot.outerLayout
         )
         return hit.map { ActiveSelection(band: $0.band, index: $0.index) }
     }
