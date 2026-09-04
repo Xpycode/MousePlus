@@ -1,8 +1,9 @@
 # Completed Tasks
 
-**Total archived:** 18
+**Total archived:** 19
 **Last updated:** 2026-09-04
 
+- [x] (2026-09-04) Task 2.1: Replace stacked customization groups with Menu/Inner/Middle/Outer tabs
 - [x] (2026-09-04) Task 1.2: Define label visibility and readable rotation as pure resolved presentation
 - [x] (2026-09-04) Task 1.1: Add tolerant label customization fields and compatibility defaults
 - [x] (2026-09-04) Wave 4: Pass adversarial, automated, signed-live, and documentation closure gates
