@@ -155,6 +155,19 @@ struct WedgeView: View {
         return .degrees(midpoint < 0 ? midpoint + 360 : midpoint)
     }
 
+    /// Chord width of the wedge at its band mid-radius — the widest a caption
+    /// can render without visually overlapping the neighboring wedge. Caps
+    /// `Text(item.label)`, which otherwise renders at its natural (unclipped)
+    /// width since `lineLimit(1)` alone only blocks wrapping.
+    private var captionMaxWidth: CGFloat {
+        let start = startAngle.degrees
+        var sweep = endAngle.degrees - start
+        if sweep < 0 { sweep += 360 }
+        let midRadius = (innerRadius + outerRadius) / 2
+        let chord = 2 * midRadius * sin(Angle.degrees(sweep / 2).radians)
+        return max(chord, 20)
+    }
+
     var body: some View {
         ZStack {
             // Slice background — concentric with the menu center because the
@@ -203,6 +216,9 @@ struct WedgeView: View {
                 Text(item.label)
                     .font(.caption)
                     .lineLimit(1)
+                    .truncationMode(.tail)
+                    .minimumScaleFactor(0.6)
+                    .frame(maxWidth: captionMaxWidth)
                     .foregroundStyle(labelColor)
                     // Rotate only the caption, around its own center — the
                     // icon/chevron above keep their independently resolved

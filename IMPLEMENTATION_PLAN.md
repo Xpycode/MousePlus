@@ -75,10 +75,11 @@ Use the existing `AppKitSegmentedControl`, `AppKitSlider`, `AppKitCountControl`,
 
 ### Wave 4 — Closure gate
 
-- [ ] **4.1: Run focused adversarial and automated verification** → complete change set
+- [x] **4.1: Run focused adversarial and automated verification** → complete change set
   - Review tab-state identity, compact-width label truncation, migration defaults, orientation discontinuities near flip boundaries, empty labels, submenu expansion, hidden labels, VoiceOver naming, and reset/merge races.
   - Success: no unresolved high-severity finding; every affected focused suite and the complete unit target pass.
   - Backpressure: focused suites, full MousePlus test target, forbidden-control audit, and `git diff --check`.
+  - Outcome: adversarial review of the complete Wave 1–3 diff found one SHOULD_FIX — `WedgeView`'s caption `Text` had no width cap, newly reachable at the Inner ring now that labels can be toggled on there, allowing long labels to overlap neighboring wedges. Fixed by capping the caption to its wedge's mid-radius chord width with `.truncationMode(.tail)` and `.minimumScaleFactor(0.6)` as a safety net (`WedgeView.swift`). One SUGGESTION (unread `LabelPresentation.accessibilityLabel` field — VoiceOver naming is correctly handled by the separate `RingWedgeAccessibility` path) was left as non-blocking. All other checklist items (tab-state identity, migration defaults, flip-boundary orientation, empty labels, submenu expansion, hidden-label centering, VoiceOver, reset/merge races) were verified clean by reading the actual code paths, not just trusting test names. `git diff --check` clean, no forbidden raw SwiftUI controls introduced, full MousePlus test target green before and after the fix.
 
 - [ ] **4.2: Run clean signed live verification and close documentation** → complete application, `docs/PROJECT_STATE.md`, `docs/TASKS.md`, session log
   - Verify all four tabs at minimum window width, light/dark preview and runtime parity, each ring’s show/hide behavior, readable radial/tangential labels around a full circle, persistence after immediate Quit, and trigger re-arming.
@@ -106,7 +107,7 @@ Use the existing `AppKitSegmentedControl`, `AppKitSlider`, `AppKitCountControl`,
 | 1 | 2026-09-04 | 2026-09-04 | `feat(wave-1): add label orientation model and pure presentation policy` |
 | 2 | 2026-09-04 | 2026-09-04 | `feat(wave-2): add Menu/Inner/Middle/Outer HUD customization tabs` |
 | 3 | 2026-09-04 | | `feat(wave-3): wire per-ring label visibility and orientation into runtime and preview` (3.1); `test(wave-3): verify label fields survive every Settings write path` (3.2) — Wave 3 complete |
-| 4 | | | |
+| 4 | 2026-09-04 | | `fix(wave-4): cap wedge caption width to its wedge chord` (4.1) |
 
 ---
 *Delete this file when all tasks complete. Archive the outcome in the session log.*
