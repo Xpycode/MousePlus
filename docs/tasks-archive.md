@@ -1,8 +1,9 @@
 # Completed Tasks
 
-**Total archived:** 21
+**Total archived:** 22
 **Last updated:** 2026-09-04
 
+- [x] (2026-09-04) Tasks 4.1–4.2: Pass automated, adversarial, signed-live, and documentation closure gates (ring-controls reorganization)
 - [x] (2026-09-04) Task 3.2: Preserve label settings across every Settings write and recovery path
 - [x] (2026-09-04) Task 3.1: Integrate label policy across live HUD and preview
 - [x] (2026-09-04) Task 2.1: Replace stacked customization groups with Menu/Inner/Middle/Outer tabs

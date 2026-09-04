@@ -12,7 +12,7 @@
 <!-- Active work. Populated by /plan or /execute. Keep focused (3-7 tasks). -->
 <!-- When done: /log moves to tasks-archive.md -->
 
-- [x] Tasks 4.1–4.2: Pass automated, adversarial, signed-live, and documentation closure gates
+No active sprint.
 
 ---
 
