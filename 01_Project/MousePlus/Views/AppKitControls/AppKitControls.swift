@@ -75,6 +75,7 @@ struct AppKitCheckbox: NSViewRepresentable {
         button.state = isOn ? .on : .off
         button.isEnabled = isEnabled
         configureAccessibility(button, label: accessibilityLabel ?? title, identifier: accessibilityIdentifier)
+        button.setAccessibilityValue(NSNumber(value: isOn))
     }
 
     @MainActor final class Coordinator: NSObject {
@@ -112,7 +113,10 @@ struct AppKitPopup: NSViewRepresentable {
             popup.item(at: index)?.isEnabled = !disabledOptions.contains(index)
         }
         popup.isEnabled = isEnabled
-        configureAccessibility(popup, label: accessibilityLabel, identifier: accessibilityIdentifier)
+        configureAccessibility(
+            popup, label: accessibilityLabel, identifier: accessibilityIdentifier,
+            value: popup.titleOfSelectedItem
+        )
     }
 
     @MainActor final class Coordinator: NSObject {
@@ -381,6 +385,7 @@ struct AppKitSlider: NSViewRepresentable {
         slider.doubleValue = value
         slider.isEnabled = isEnabled
         configureAccessibility(slider, label: accessibilityLabel, identifier: accessibilityIdentifier)
+        slider.setAccessibilityValue(NSNumber(value: value))
     }
 
     @MainActor final class Coordinator: NSObject {

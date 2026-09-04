@@ -1,9 +1,74 @@
+import AppKit
 import Foundation
 import XCTest
 @testable import MousePlus
 
 @MainActor
 final class SettingsWorkspaceCoordinatorTests: XCTestCase {
+    func testNativeMotionEditsPersistReloadAndLiveApplyWithFreshUnrelatedFields() async throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let store = ConfigurationStore(directoryURL: directory)
+        let persistence = ConfigurationService(store: store)
+        var initial = Configuration()
+        initial.appearance.motion.baseDuration = 0.27
+        try await persistence.save(initial)
+        let recorder = LiveApplyRecorder()
+        let coordinator = SettingsWorkspaceCoordinator(
+            persistence: persistence, debounceClock: LongWorkspaceDebounceClock(),
+            liveApply: { recorder.events.append($0) }
+        )
+        await coordinator.load()
+        let host = MotionSettingsTestHost(coordinator)
+        let slider: NSSlider = try host.control("appearance.motion.baseDuration")
+        XCTAssertEqual(slider.doubleValue, 0.27, "Opening Settings must preserve the saved duration")
+
+        // Exercise the actual pane's native actions, including every Off/effect pair.
+        for (enabled, duration) in [(false, 0.05), (true, 0.5)] {
+            for role in ["summon", "hover", "outerExpansion", "branchChange"] {
+                let popup: NSPopUpButton = try host.control("appearance.motion.\(role)")
+                popup.selectItem(at: enabled ? 1 : 0)
+                XCTAssertTrue(popup.sendAction(popup.action, to: popup.target))
+            }
+            slider.doubleValue = duration
+            XCTAssertTrue(slider.sendAction(slider.action, to: slider.target))
+            let master: NSButton = try host.control("appearance.animationEnabled")
+            master.state = enabled ? .on : .off
+            XCTAssertTrue(master.sendAction(master.action, to: master.target))
+            XCTAssertEqual(coordinator.dirtyFields, [.appearance])
+
+            var external = try await persistence.load()
+            external.behavior.dismissOnEscape = false
+            external.middle[0].label = "External edit"
+            try await persistence.save(external)
+
+            let flushed = await coordinator.flush()
+            XCTAssertTrue(flushed)
+            let expected = HUDMotionConfiguration(
+                isEnabled: enabled, baseDuration: duration,
+                summon: enabled ? .fade : .off, hover: enabled ? .emphasis : .off,
+                outerExpansion: enabled ? .radialReveal : .off,
+                branchChange: enabled ? .crossfade : .off
+            )
+            let applied = try XCTUnwrap(recorder.events.last)
+            XCTAssertEqual(applied.appearance.motion, expected)
+            XCTAssertFalse(applied.behavior.dismissOnEscape)
+            XCTAssertEqual(applied.middle[0].label, "External edit")
+
+            let reloaded = SettingsWorkspaceCoordinator(persistence: ConfigurationService(store: store))
+            await reloaded.load()
+            XCTAssertEqual(reloaded.configuration.appearance.motion, expected)
+            XCTAssertFalse(reloaded.configuration.behavior.dismissOnEscape)
+            XCTAssertEqual(reloaded.configuration.middle[0].label, "External edit")
+            if !enabled {
+                // Re-enable via the user-facing master before changing disabled controls.
+                master.performClick(nil)
+                await host.waitUntil { slider.isEnabled }
+            }
+        }
+        XCTAssertEqual(recorder.events.count, 2, "A burst of native edits must coalesce at flush")
+    }
+
     func testResetAtomicallyDefaultsItemsLayoutAndAllColorOverridesOnly() async {
         let initial = customizedHUDConfiguration()
         let persistence = RecordingConfigurationPersistence(initial)

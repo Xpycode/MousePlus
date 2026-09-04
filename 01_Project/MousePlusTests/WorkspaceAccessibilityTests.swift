@@ -5,6 +5,61 @@ import XCTest
 
 @MainActor
 final class WorkspaceAccessibilityTests: XCTestCase {
+    func testMotionControlsExposeNativeChoicesAndFollowMasterWithoutLosingValues() async throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let coordinator = SettingsWorkspaceCoordinator(
+            persistence: ConfigurationService(store: ConfigurationStore(directoryURL: directory))
+        )
+        let host = MotionSettingsTestHost(coordinator)
+        let master: NSButton = try host.control("appearance.animationEnabled")
+        XCTAssertFalse(master.isEnabled)
+        await coordinator.load()
+        await host.waitUntil { master.isEnabled }
+        XCTAssertEqual(master.accessibilityValue() as? NSNumber, NSNumber(value: true))
+
+        let roles = [
+            ("summon", "Opening", "Fade"),
+            ("hover", "Hover", "Emphasis"),
+            ("outerExpansion", "Outer ring", "Radial reveal"),
+            ("branchChange", "Branch change", "Crossfade")
+        ]
+        for (role, label, effect) in roles {
+            let popup: NSPopUpButton = try host.control("appearance.motion.\(role)")
+            XCTAssertEqual(popup.accessibilityLabel(), label)
+            XCTAssertEqual(popup.itemTitles, ["Off", effect])
+            XCTAssertEqual(popup.titleOfSelectedItem, effect)
+            XCTAssertEqual(popup.accessibilityValue() as? String, effect)
+            XCTAssertTrue(popup.isEnabled)
+            popup.selectItem(at: 0)
+            XCTAssertTrue(popup.sendAction(popup.action, to: popup.target))
+        }
+        let slider: NSSlider = try host.control("appearance.motion.baseDuration")
+        XCTAssertEqual(slider.accessibilityLabel(), "Motion speed")
+        XCTAssertEqual(slider.minValue, 0.05)
+        XCTAssertEqual(slider.maxValue, 0.5)
+        XCTAssertEqual(slider.doubleValue, 0.15)
+        XCTAssertEqual(slider.accessibilityValue() as? NSNumber, NSNumber(value: 0.15))
+        master.performClick(nil)
+        await host.waitUntil { !slider.isEnabled }
+        XCTAssertEqual(master.accessibilityValue() as? NSNumber, NSNumber(value: false))
+        for (role, _, _) in roles {
+            let popup: NSPopUpButton = try host.control("appearance.motion.\(role)")
+            XCTAssertFalse(popup.isEnabled)
+            XCTAssertEqual(popup.titleOfSelectedItem, "Off")
+            XCTAssertEqual(popup.accessibilityValue() as? String, "Off")
+        }
+        master.performClick(nil)
+        await host.waitUntil { slider.isEnabled }
+        for (role, _, _) in roles {
+            let popup: NSPopUpButton = try host.control("appearance.motion.\(role)")
+            XCTAssertTrue(popup.isEnabled)
+            XCTAssertEqual(popup.titleOfSelectedItem, "Off")
+        }
+        let flushed = await coordinator.teardown()
+        XCTAssertTrue(flushed)
+    }
+
     func testWedgePresentationExposesRequiredVoiceOverContext() {
         let item = RingMenuItem(
             label: "Left Half",
@@ -160,5 +215,39 @@ final class WorkspaceAccessibilityTests: XCTestCase {
                 XCTAssertTrue(presentation.canRetry)
             }
         }
+    }
+}
+
+/// Hosts the actual Settings pane and invokes its native target/action bindings.
+/// This verifies AppKit accessibility metadata, not a spoken VoiceOver session.
+@MainActor
+final class MotionSettingsTestHost {
+    private let host: NSHostingView<RingAppearanceSettingsPane>
+    private let window: NSWindow
+
+    init(_ coordinator: SettingsWorkspaceCoordinator) {
+        host = NSHostingView(rootView: RingAppearanceSettingsPane(coordinator: coordinator))
+        window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 850, height: 1000),
+                          styleMask: .borderless, backing: .buffered, defer: false)
+        window.contentView = host
+        host.layoutSubtreeIfNeeded()
+    }
+
+    func control<T: NSControl>(_ identifier: String) throws -> T {
+        host.layoutSubtreeIfNeeded()
+        func find(_ view: NSView) -> T? {
+            if view.accessibilityIdentifier() == identifier, let control = view as? T { return control }
+            return view.subviews.lazy.compactMap { find($0) }.first
+        }
+        return try XCTUnwrap(find(host), "Missing native control: \(identifier)")
+    }
+
+    func waitUntil(_ predicate: () -> Bool) async {
+        let deadline = ContinuousClock.now + .seconds(2)
+        while !predicate() && ContinuousClock.now < deadline {
+            host.layoutSubtreeIfNeeded()
+            try? await Task.sleep(for: .milliseconds(10))
+        }
+        XCTAssertTrue(predicate(), "Settings did not update its native controls")
     }
 }

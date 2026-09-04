@@ -246,7 +246,7 @@ struct RingPreviewSelector: View {
     }
 
     private func syncPreview() {
-        preview.appearance.animationEnabled = false
+        preview.appearance.motion.isEnabled = false
         preview.innerItems = model.inner
         preview.middleItems = model.middle
         preview.hudCustomization = model.hudCustomization
