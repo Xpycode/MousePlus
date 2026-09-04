@@ -1,5 +1,11 @@
 import Foundation
 
+/// Where a ring-menu item's `subItems` come from.
+enum DynamicSource: Codable, Hashable {
+    case none
+    case runningApps
+}
+
 /// A single item in the ring menu
 struct RingMenuItem: Identifiable, Codable, Hashable {
     enum ColorRole: Sendable {
@@ -16,6 +22,7 @@ struct RingMenuItem: Identifiable, Codable, Hashable {
     var keystrokePayload: KeystrokePayload?
     var wedgeColor: HUDColor?
     var iconColor: HUDColor?
+    var dynamicSource: DynamicSource = .none
 
     init(
         id: UUID = UUID(),
@@ -26,7 +33,8 @@ struct RingMenuItem: Identifiable, Codable, Hashable {
         subItems: [RingMenuItem]? = nil,
         keystrokePayload: KeystrokePayload? = nil,
         wedgeColor: HUDColor? = nil,
-        iconColor: HUDColor? = nil
+        iconColor: HUDColor? = nil,
+        dynamicSource: DynamicSource = .none
     ) {
         self.id = id
         self.label = label
@@ -37,6 +45,7 @@ struct RingMenuItem: Identifiable, Codable, Hashable {
         self.keystrokePayload = keystrokePayload
         self.wedgeColor = wedgeColor
         self.iconColor = iconColor
+        self.dynamicSource = dynamicSource
     }
 
     var hasSubItems: Bool {
@@ -60,6 +69,7 @@ struct RingMenuItem: Identifiable, Codable, Hashable {
 
     private enum CodingKeys: String, CodingKey {
         case id, label, icon, actionType, actionData, subItems, keystrokePayload, wedgeColor, iconColor
+        case dynamicSource
         case keyboardShortcut
     }
 
@@ -73,6 +83,7 @@ struct RingMenuItem: Identifiable, Codable, Hashable {
         subItems = try container.decodeIfPresent([RingMenuItem].self, forKey: .subItems)
         wedgeColor = try? container.decode(HUDColor.self, forKey: .wedgeColor)
         iconColor = try? container.decode(HUDColor.self, forKey: .iconColor)
+        dynamicSource = try container.decodeIfPresent(DynamicSource.self, forKey: .dynamicSource) ?? .none
 
         if let canonical = try container.decodeIfPresent(KeystrokePayload.self, forKey: .keystrokePayload) {
             keystrokePayload = canonical
@@ -95,6 +106,7 @@ struct RingMenuItem: Identifiable, Codable, Hashable {
         try container.encodeIfPresent(keystrokePayload, forKey: .keystrokePayload)
         try container.encodeIfPresent(wedgeColor, forKey: .wedgeColor)
         try container.encodeIfPresent(iconColor, forKey: .iconColor)
+        try container.encode(dynamicSource, forKey: .dynamicSource)
         // `keyboardShortcut` is decode-only and intentionally retired.
     }
 }

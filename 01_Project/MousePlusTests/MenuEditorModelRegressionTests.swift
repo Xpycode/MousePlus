@@ -269,4 +269,23 @@ final class MenuEditorModelRegressionTests: XCTestCase {
         XCTAssertEqual(decoded.icon, "future.invalid.symbol")
         XCTAssertEqual(SFSymbol.resolved(decoded.icon), SFSymbol.placeholder)
     }
+
+    func testMissingDynamicSourceDecodesToNone() throws {
+        let json = #"{"id":"\#(UUID().uuidString)","label":"Apps","icon":"square.grid.2x2","actionType":"appSwitch","actionData":""}"#
+
+        let decoded = try JSONDecoder().decode(RingMenuItem.self, from: Data(json.utf8))
+
+        XCTAssertEqual(decoded.dynamicSource, .none)
+    }
+
+    func testDynamicSourceRoundTrips() throws {
+        let original = RingMenuItem(
+            label: "Apps", icon: "square.grid.2x2", actionType: .appSwitch, dynamicSource: .runningApps
+        )
+        let data = try JSONEncoder().encode(original)
+        let decoded = try JSONDecoder().decode(RingMenuItem.self, from: data)
+
+        XCTAssertEqual(decoded, original)
+        XCTAssertEqual(decoded.dynamicSource, .runningApps)
+    }
 }
