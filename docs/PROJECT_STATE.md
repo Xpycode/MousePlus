@@ -11,18 +11,18 @@
 
 ## Now
 
-- **Phase:** App Switcher v1 implemented and signed-live verified; evaluating focused v2 concepts. <!-- Phase changed: 2026-09-04 -->
-- **Focus:** App Switcher (`APP_SWITCHER_PLAN.md` / `IMPLEMENTATION_PLAN.md`) — running apps now occupy a pointer-aligned full-circle outer ring; names/icons, activation, label visibility, and the new layout are live-confirmed. MRU ordering and rapid re-pointing remain to verify.
+- **Phase:** App Switcher v1 complete and signed-live verified; selecting the next focused increment. <!-- Phase changed: 2026-09-04 -->
+- **Focus:** App Switcher v1 is closed: the pointer-aligned full-circle running-app ring, names/icons, activation, label visibility, MRU ordering, and rapid Apps↔Snap re-pointing are all live-confirmed.
 - **Blocker:** Advanced Logitech-button support is paused until raw MX4/MX3S captures resolve the HID++ strategy decision. `APP_CHROME_SETTINGS_PLAN.md`'s Leave-a-Tip button still needs a tip-jar platform/URL from the user.
-- **Next:** Verify the remaining v1 MRU and rapid re-point checks, then decide whether the next scoped App Switcher increment should add windows, search/filtering, grouping/paging, recent apps, or app-specific actions.
+- **Next:** Scope the next App Switcher increment from windows, search/filtering, grouping/paging, recent apps, app-specific actions, or a keyboard/pointer hybrid; keep the separate HUD-animation feasibility study in the backlog.
 
 ## Recent
 
+- **2026-09-04:** Closed App Switcher v1 after a fresh signed build: the user confirmed recent-usage ordering and clean rapid Apps↔Snap re-pointing with no stale app icons. Captured a later investigation into feasible and unsuitable HUD animations.
 - **2026-09-04:** Prototyped and live-verified a full-circle running-app switcher aligned to the Apps wedge; fixed the test-run handoff by relaunching the exact rebuilt bundle, and confirmed outer labels can be disabled.
 - **2026-09-04:** Fixed tap-toggle commits at the native AppKit mouse-up boundary; the full 249-test suite and signed build pass, and the user confirmed both static and dynamic Safari activation.
 - **2026-09-04:** Clarified dynamic Apps editing: the inspector now shows a read-only running-app source, hides inactive preserved children, centralizes outer-item creation under Menu & Rings, and keeps Move/Delete together at the bottom. Signed builds pass; the live HUD screenshot confirms real app names/icons.
 - **2026-09-04:** Restored App Switcher behavior for returning-user configurations with a narrow, lossless schema migration; fixed dynamic Apps commit availability and a Settings-preview Reveal bug that could replace Apps children with Snap children. The full suite and clean signed build pass, and the user confirmed the Apps/Snap preview sequence. Also logged the Action choice-grid design decision; live-HUD App Switcher verification remains.
-- **2026-09-04:** Verified two Settings complaints were stale-build artifacts, identified the persistent band toolbar and Reveal traversal as intentional UX awaiting user decisions, then received and implemented both decisions.
 
 ## Progress
 
@@ -30,9 +30,9 @@
 - **Send Keystroke:** Complete; automated coverage and signed live verification passed.
 - **Ring UI:** Complete and live-verified.
 - **Ring-controls reorganization (Menu/Inner/Middle/Outer tabs + per-ring labels):** 4/4 waves complete; automated, adversarial, signed-build, and user-driven checks passed.
-- **HUD actions:** Window snapping and keystroke delivery work; App Switcher names/icons, activation, full-circle layout, and label visibility are live-confirmed, with MRU/re-point checks outstanding; menu-bar mirror, system toggles, and screenshots remain.
+- **HUD actions:** Window snapping and keystroke delivery work; App Switcher v1 is complete and signed-live verified, including MRU order and rapid re-point safety; menu-bar mirror, system toggles, and screenshots remain.
 - **Trigger backend:** Keyboard and standard mouse paths work; advanced Logitech HID++ support remains undecided.
-- **Task tracker:** no active sprint; 22/23 tracked items complete overall (96%).
+- **Task tracker:** no active sprint; 22/24 tracked items complete overall (92%).
 
 ## Risks and Backlog
 
@@ -42,6 +42,7 @@
 - Settings writers may still replace a corrupt configuration with defaults; the full deferred-risk list is in `MENU_EDITOR_REVIEW.md`.
 - Consider screenshots next if onboarding is deferred; it is the smallest unfinished HUD action and establishes dismiss-before-action behavior.
 - Longer-term work includes the menu-bar mirror, recent-app switcher, system toggles, app-aware command rings, and alternative menu layouts.
+- Investigate what HUD animations are viable in the non-activating AppKit/SwiftUI overlay, including interaction, performance, and accessibility constraints, before choosing an animation direction.
 
 ## Infrastructure
 
@@ -57,7 +58,6 @@
 - Current tracker and backlog: `TASKS.md`
 - Unified Settings specification: `../specs/unified-settings-workspace.md`
 - Sustained-use HUD redesign specification: `../specs/sustained-use-hud-redesign.md`
-- Active App Switcher execution plan: `../IMPLEMENTATION_PLAN.md`
 - HUD action roadmap: `HUD_ACTIONS_PLAN.md`
 - App menu-bar mirror (Feature A) implementation plan: `APP_COMMANDS_PLAN.md`
 - Dynamic app switcher (Feature C) implementation plan: `APP_SWITCHER_PLAN.md`

@@ -7,6 +7,7 @@
 <!-- Priority: top = highest, bottom = lowest -->
 
 - [ ] Scope the next MousePlus App Switcher increment beyond the live-verified full-circle running-app ring: compare window switching, recent apps, search, grouping/paging, app-specific actions, and keyboard/pointer hybrids.
+- [ ] Investigate HUD animation feasibility and constraints: identify what can animate reliably in the non-activating AppKit/SwiftUI overlay, what harms rapid pointer interaction or accessibility, and which effects should remain static.
 
 ## Current Sprint
 <!-- Active work. Populated by /plan or /execute. Keep focused (3-7 tasks). -->

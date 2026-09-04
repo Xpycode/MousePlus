@@ -10,6 +10,7 @@
 
 | Date | Focus | Outcome | Log |
 |------|-------|---------|-----|
+| 2026-09-04 | Close the remaining App Switcher v1 live checks | A fresh signed build passed; the user confirmed recent-usage ordering and clean rapid Apps↔Snap re-pointing with no stale icons. App Switcher v1 is complete; HUD-animation feasibility was captured for later. | [→](2026-09-04.md) |
 | 2026-09-04 | Live-verify App Switcher activation and prototype a richer circular layout | Routed tap-toggle commits through native AppKit mouse-up, then added and live-verified a pointer-aligned full-circle running-app ring with optional labels. Build and 249 tests pass. Next: MRU/re-point checks, then scope the next switcher increment. | [→](2026-09-04.md) |
 | 2026-09-04 | Clarify dynamic Apps and clean up Selected Item controls | Confirmed live running-app names/icons; made Apps read-only in the inspector, hid preserved inactive children, centralized outer-item creation, and moved Delete to the footer. Signed builds pass. Next: verify activation, MRU, rapid re-pointing; review label crowding. | [→](2026-09-04.md) |
 | 2026-09-04 | Decide Action selector UX and fix App Switcher Settings preview | Logged the Action choice-grid decision; migrated legacy Apps configs losslessly; fixed dynamic-parent commit and preview Reveal overwriting the clicked branch. Full suite and signed build pass; user confirmed the Apps/Snap sequence. Next: live-HUD Apps verification. | [→](2026-09-04.md) |
