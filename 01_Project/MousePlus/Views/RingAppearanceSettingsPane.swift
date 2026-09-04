@@ -2,6 +2,9 @@ import SwiftUI
 
 struct RingAppearanceSettingsPane: View {
     let coordinator: SettingsWorkspaceCoordinator
+    @Environment(\.accessibilityReduceMotion) private var accessibilityReduceMotion
+    @State private var openingPreviewReplayID = 0
+    @State private var openingPreviewPlaybackEnabled = false
 
     var body: some View {
         Form {
@@ -39,9 +42,11 @@ struct RingAppearanceSettingsPane: View {
                 )
                 motionStyleRow(
                     "Opening", keyPath: \.motion.summon,
-                    options: [(.off, "Off"), (.fade, "Fade")],
-                    accessibilityIdentifier: "appearance.motion.summon"
+                    options: HUDSummonMotionStyle.allCases.map { ($0, $0.displayName) },
+                    accessibilityIdentifier: "appearance.motion.summon",
+                    onSelection: replayOpening
                 )
+                openingPreview
                 motionStyleRow(
                     "Hover", keyPath: \.motion.hover,
                     options: [(.off, "Off"), (.emphasis, "Emphasis")],
@@ -65,11 +70,56 @@ struct RingAppearanceSettingsPane: View {
         }
         .formStyle(.grouped)
         .padding()
+        .onDisappear { openingPreviewPlaybackEnabled = false }
     }
 
     private var appearance: AppearanceConfig { coordinator.configuration.appearance }
 
     private var motionControlsEnabled: Bool { coordinator.isLoaded && appearance.motion.isEnabled }
+
+    private var openingPreviewPresentation: HUDOpeningPreviewPresentation {
+        HUDOpeningPreviewPresentation(
+            style: appearance.motion.summon,
+            motionEnabled: appearance.motion.isEnabled,
+            isLoaded: coordinator.isLoaded,
+            reduceMotion: accessibilityReduceMotion
+        )
+    }
+
+    private var openingPreview: some View {
+        VStack(spacing: 8) {
+            HUDOpeningPreview(
+                configuration: coordinator.configuration,
+                replayID: openingPreviewReplayID,
+                playbackEnabled: openingPreviewPlaybackEnabled && openingPreviewPresentation.canReplay,
+                presentation: openingPreviewPresentation
+            )
+            HStack {
+                Text(openingPreviewPresentation.caption)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                Spacer()
+                AppKitButton(
+                    title: "Replay opening",
+                    systemImageName: "play.fill",
+                    isEnabled: openingPreviewPresentation.canReplay,
+                    accessibilityLabel: "Replay opening animation",
+                    accessibilityIdentifier: "appearance.motion.replayOpening",
+                    accessibilityValue: openingPreviewPresentation.effectiveStyleTitle,
+                    action: replayOpening
+                )
+                .frame(width: 150)
+            }
+            .frame(width: 240)
+        }
+        .frame(maxWidth: .infinity)
+    }
+
+    private func replayOpening() {
+        openingPreviewPlaybackEnabled = openingPreviewPresentation.canReplay
+        guard openingPreviewPlaybackEnabled else { return }
+        openingPreviewReplayID &+= 1
+    }
 
     private func appearanceBinding<Value>(_ keyPath: WritableKeyPath<AppearanceConfig, Value>) -> Binding<Value> {
         Binding(
@@ -84,7 +134,8 @@ struct RingAppearanceSettingsPane: View {
         _ title: String,
         keyPath: WritableKeyPath<AppearanceConfig, Style>,
         options: [(style: Style, title: String)],
-        accessibilityIdentifier: String
+        accessibilityIdentifier: String,
+        onSelection: (() -> Void)? = nil
     ) -> some View {
         HStack {
             Text(title)
@@ -96,6 +147,7 @@ struct RingAppearanceSettingsPane: View {
                     set: { index in
                         guard options.indices.contains(index) else { return }
                         appearanceBinding(keyPath).wrappedValue = options[index].style
+                        onSelection?()
                     }
                 ),
                 isEnabled: motionControlsEnabled,

@@ -69,6 +69,41 @@ final class SettingsWorkspaceCoordinatorTests: XCTestCase {
         XCTAssertEqual(recorder.events.count, 2, "A burst of native edits must coalesce at flush")
     }
 
+    func testEveryNativeOpeningChoicePersistsAndReplayDoesNotDirtyConfiguration() async throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let store = ConfigurationStore(directoryURL: directory)
+        let coordinator = SettingsWorkspaceCoordinator(
+            persistence: ConfigurationService(store: store),
+            debounceClock: LongWorkspaceDebounceClock()
+        )
+        await coordinator.load()
+        let host = MotionSettingsTestHost(coordinator)
+        let popup: NSPopUpButton = try host.control("appearance.motion.summon")
+        let replay: NSButton = try host.control("appearance.motion.replayOpening")
+
+        for (index, style) in HUDSummonMotionStyle.allCases.enumerated() {
+            popup.selectItem(at: index)
+            XCTAssertTrue(popup.sendAction(popup.action, to: popup.target))
+            XCTAssertEqual(coordinator.configuration.appearance.motion.summon, style)
+            let flushed = await coordinator.flush()
+            XCTAssertTrue(flushed)
+
+            let reloaded = SettingsWorkspaceCoordinator(
+                persistence: ConfigurationService(store: store)
+            )
+            await reloaded.load()
+            XCTAssertEqual(reloaded.configuration.appearance.motion.summon, style)
+
+            await host.waitUntil { replay.isEnabled == (style != .off) }
+            let dirtyBeforeReplay = coordinator.dirtyFields
+            if replay.isEnabled {
+                replay.performClick(nil)
+            }
+            XCTAssertEqual(coordinator.dirtyFields, dirtyBeforeReplay)
+        }
+    }
+
     func testResetAtomicallyDefaultsItemsLayoutAndAllColorOverridesOnly() async {
         let initial = customizedHUDConfiguration()
         let persistence = RecordingConfigurationPersistence(initial)

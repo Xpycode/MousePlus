@@ -19,17 +19,17 @@ final class WorkspaceAccessibilityTests: XCTestCase {
         XCTAssertEqual(master.accessibilityValue() as? NSNumber, NSNumber(value: true))
 
         let roles = [
-            ("summon", "Opening", "Fade"),
-            ("hover", "Hover", "Emphasis"),
-            ("outerExpansion", "Outer ring", "Radial reveal"),
-            ("branchChange", "Branch change", "Crossfade")
+            ("summon", "Opening", ["Off", "Fade", "Circular Sweep", "Iris Reveal", "Bloom", "Staggered Segments"]),
+            ("hover", "Hover", ["Off", "Emphasis"]),
+            ("outerExpansion", "Outer ring", ["Off", "Radial reveal"]),
+            ("branchChange", "Branch change", ["Off", "Crossfade"])
         ]
-        for (role, label, effect) in roles {
+        for (role, label, choices) in roles {
             let popup: NSPopUpButton = try host.control("appearance.motion.\(role)")
             XCTAssertEqual(popup.accessibilityLabel(), label)
-            XCTAssertEqual(popup.itemTitles, ["Off", effect])
-            XCTAssertEqual(popup.titleOfSelectedItem, effect)
-            XCTAssertEqual(popup.accessibilityValue() as? String, effect)
+            XCTAssertEqual(popup.itemTitles, choices)
+            XCTAssertEqual(popup.titleOfSelectedItem, choices[1])
+            XCTAssertEqual(popup.accessibilityValue() as? String, choices[1])
             XCTAssertTrue(popup.isEnabled)
             popup.selectItem(at: 0)
             XCTAssertTrue(popup.sendAction(popup.action, to: popup.target))
@@ -56,6 +56,12 @@ final class WorkspaceAccessibilityTests: XCTestCase {
             XCTAssertTrue(popup.isEnabled)
             XCTAssertEqual(popup.titleOfSelectedItem, "Off")
         }
+
+        let replay: NSButton = try host.control("appearance.motion.replayOpening")
+        XCTAssertFalse(replay.isEnabled, "Off must disable replay")
+        XCTAssertEqual(replay.accessibilityLabel(), "Replay opening animation")
+        let preview = try host.view("appearance.motion.openingPreview")
+        XCTAssertEqual(preview.accessibilityLabel(), "Opening animation preview")
         let flushed = await coordinator.teardown()
         XCTAssertTrue(flushed)
     }
@@ -240,6 +246,15 @@ final class MotionSettingsTestHost {
             return view.subviews.lazy.compactMap { find($0) }.first
         }
         return try XCTUnwrap(find(host), "Missing native control: \(identifier)")
+    }
+
+    func view(_ identifier: String) throws -> NSView {
+        host.layoutSubtreeIfNeeded()
+        func find(_ candidate: NSView) -> NSView? {
+            if candidate.accessibilityIdentifier() == identifier { return candidate }
+            return candidate.subviews.lazy.compactMap { find($0) }.first
+        }
+        return try XCTUnwrap(find(host), "Missing native view: \(identifier)")
     }
 
     func waitUntil(_ predicate: () -> Bool) async {

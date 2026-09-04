@@ -28,6 +28,12 @@ struct RingMenuView: View {
     /// dedicated noninteractive Settings preview can replay opening motion,
     /// while the editor's interactive selection preview remains static.
     var presentationMode: HUDRingPresentationMode = .live
+    /// Allows a dedicated preview to render its initial frame statically and
+    /// opt into playback only after an explicit replay request.
+    var openingPlaybackEnabled = true
+    /// Preview-only source of motion settings. Runtime and editor rendering
+    /// continue to use the configuration loaded into the view model.
+    var openingMotionConfiguration: HUDMotionConfiguration?
     /// Explicit replay identity used by the dedicated Settings preview.
     /// Runtime views are recreated per panel invocation and keep the default.
     var openingReplayID = 0
@@ -57,7 +63,7 @@ struct RingMenuView: View {
     private func motion(for role: HUDMotionRole) -> HUDMotionPresentationDescriptor {
         presentationMode.motion(
             for: role,
-            configuration: viewModel.appearance.motion,
+            configuration: openingMotionConfiguration ?? viewModel.appearance.motion,
             reduceMotion: accessibilityReduceMotion
         )
     }
@@ -100,7 +106,7 @@ struct RingMenuView: View {
         HUDOpeningMotion(
             request: HUDOpeningMotionRequest(
                 descriptor: summonMotion,
-                playbackEnabled: presentationMode != .staticEditor,
+                playbackEnabled: openingPlaybackEnabled && presentationMode != .staticEditor,
                 invocationID: openingReplayID
             ),
             settleID: settleOpeningID,
