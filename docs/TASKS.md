@@ -6,7 +6,6 @@
 <!-- Ideas and future work. Added by /interview, user input, or discovered during development. -->
 <!-- Priority: top = highest, bottom = lowest -->
 
-- Add a "Restart MousePlus" item to the menu-bar menu (alongside Quit), matching what apps like BetterMouse offer, so a relaunch doesn't require Quit + manually reopening.
 
 ## Current Sprint
 <!-- Active work. Populated by /plan or /execute. Keep focused (3-7 tasks). -->

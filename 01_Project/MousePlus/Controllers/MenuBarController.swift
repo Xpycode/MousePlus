@@ -6,6 +6,7 @@ import SwiftUI
 final class MenuBarController {
     static let statusButtonAccessibilityIdentifier = "menuBar.statusItem"
     static let quitMenuItemAccessibilityIdentifier = "menuBar.quitMousePlus"
+    static let restartMenuItemAccessibilityIdentifier = "menuBar.restartMousePlus"
     static let statusImageSize = NSSize(width: 18, height: 18)
 
     private var statusItem: NSStatusItem?
@@ -13,6 +14,7 @@ final class MenuBarController {
     var onPreferencesClicked: (() -> Void)?
     var onIdentifyInputClicked: (() -> Void)?
     var onQuitClicked: (() -> Void)?
+    var onRestartClicked: (() -> Void)?
 
     func setup() {
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
@@ -35,6 +37,9 @@ final class MenuBarController {
         menu.addItem(NSMenuItem(title: "Preferences...", action: #selector(showPreferences), keyEquivalent: ","))
         menu.addItem(NSMenuItem(title: "Identify Input...", action: #selector(identifyInput), keyEquivalent: ""))
         menu.addItem(NSMenuItem.separator())
+        let restartItem = NSMenuItem(title: "Restart MousePlus", action: #selector(restart), keyEquivalent: "")
+        restartItem.identifier = NSUserInterfaceItemIdentifier(Self.restartMenuItemAccessibilityIdentifier)
+        menu.addItem(restartItem)
         let quitItem = NSMenuItem(title: "Quit MousePlus", action: #selector(quit), keyEquivalent: "q")
         quitItem.identifier = NSUserInterfaceItemIdentifier(Self.quitMenuItemAccessibilityIdentifier)
         menu.addItem(quitItem)
@@ -64,6 +69,10 @@ final class MenuBarController {
         performQuit()
     }
 
+    @objc private func restart() {
+        onRestartClicked?()
+    }
+
     static func makeStatusImage() -> NSImage? {
         guard let symbol = NSImage(
             systemSymbolName: "circle.hexagongrid",
@@ -80,6 +89,11 @@ final class MenuBarController {
     /// Testable action entry point used by the menu item's Objective-C action.
     func performQuit() {
         onQuitClicked?()
+    }
+
+    /// Testable action entry point used by the menu item's Objective-C action.
+    func performRestart() {
+        onRestartClicked?()
     }
 
     func remove() {

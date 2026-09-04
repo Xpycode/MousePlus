@@ -1,3 +1,4 @@
+import AppKit
 import SwiftUI
 
 @main
@@ -59,6 +60,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// termination request here ensures General Settings remains useful when the
     /// status item cannot be seen.
     @MainActor static var quitApplication: (() -> Void)?
+
+    /// Shared lifecycle bridge for the menu-bar restart affordance.
+    @MainActor static var restartApplication: (() -> Void)?
 
     /// Installed by the Settings workspace while it exists so termination can
     /// cross the same durability barrier as closing the Settings window.
@@ -161,6 +165,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         menuBarController?.onQuitClicked = {
             Self.quitApplication?()
         }
+
+        menuBarController?.onRestartClicked = {
+            Self.restartApplication?()
+        }
+
+        Self.restartApplication = {
+            Task { @MainActor in
+                _ = await Self.performApplicationRestart(
+                    flush: Self.flushPendingSettingsChanges,
+                    relaunch: { await Self.launchNewApplicationInstance() },
+                    terminate: { NSApp.terminate(nil) }
+                )
+            }
+        }
     }
 
     /// Returns false and leaves the process running when pending configuration
@@ -173,6 +191,29 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         guard await (flush?() ?? true) else { return false }
         terminate()
         return true
+    }
+
+    /// Flushes pending settings, starts a new app instance, then terminates this one.
+    /// If either the flush or launch fails, the current process remains running.
+    @discardableResult
+    static func performApplicationRestart(
+        flush: (() async -> Bool)?,
+        relaunch: () async -> Bool,
+        terminate: () -> Void
+    ) async -> Bool {
+        guard await (flush?() ?? true), await relaunch() else { return false }
+        terminate()
+        return true
+    }
+
+    private static func launchNewApplicationInstance() async -> Bool {
+        let configuration = NSWorkspace.OpenConfiguration()
+        configuration.createsNewApplicationInstance = true
+        return await withCheckedContinuation { continuation in
+            NSWorkspace.shared.openApplication(at: Bundle.main.bundleURL, configuration: configuration) { _, error in
+                continuation.resume(returning: error == nil)
+            }
+        }
     }
 
     /// Trigger-up keeps the HUD alive whenever the hovered selection resolves
