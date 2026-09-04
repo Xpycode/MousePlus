@@ -15,25 +15,36 @@ final class MouseButtonTriggerMonitor {
     private var globalMonitor: Any?
     private var localMonitor: Any?
     private var buttonNumber: Int = 0
-    private var onDown: (() -> Void)?
-    private var onUp: (() -> Void)?
+    private var onDown: ((CGPoint) -> Void)?
+    private var onDragged: ((CGPoint) -> Void)?
+    private var onUp: ((CGPoint) -> Void)?
 
     func start(
         buttonNumber: Int,
-        onDown: @escaping () -> Void,
-        onUp: @escaping () -> Void
+        onDown: @escaping (CGPoint) -> Void,
+        onDragged: @escaping (CGPoint) -> Void,
+        onUp: @escaping (CGPoint) -> Void
     ) {
         stop()
         self.buttonNumber = buttonNumber
         self.onDown = onDown
+        self.onDragged = onDragged
         self.onUp = onUp
 
-        let mask: NSEvent.EventTypeMask = [.otherMouseDown, .otherMouseUp]
+        // A held auxiliary button changes pointer motion from `mouseMoved` to
+        // `otherMouseDragged`. The down happened before the HUD existed, so the
+        // original app can retain that drag stream; observe it globally.
+        let globalMask: NSEvent.EventTypeMask = [
+            .otherMouseDown, .otherMouseDragged, .otherMouseUp
+        ]
+        // If MousePlus owns the event, RingHostingView forwards the drag in HUD
+        // coordinates. Excluding it here prevents duplicate selection updates.
+        let localMask: NSEvent.EventTypeMask = [.otherMouseDown, .otherMouseUp]
 
-        globalMonitor = NSEvent.addGlobalMonitorForEvents(matching: mask) { [weak self] event in
+        globalMonitor = NSEvent.addGlobalMonitorForEvents(matching: globalMask) { [weak self] event in
             Task { @MainActor in self?.handle(event) }
         }
-        localMonitor = NSEvent.addLocalMonitorForEvents(matching: mask) { [weak self] event in
+        localMonitor = NSEvent.addLocalMonitorForEvents(matching: localMask) { [weak self] event in
             Task { @MainActor in self?.handle(event) }
             return event
         }
@@ -43,17 +54,27 @@ final class MouseButtonTriggerMonitor {
         if let m = globalMonitor { NSEvent.removeMonitor(m); globalMonitor = nil }
         if let m = localMonitor { NSEvent.removeMonitor(m); localMonitor = nil }
         onDown = nil
+        onDragged = nil
         onUp = nil
     }
 
     private func handle(_ event: NSEvent) {
         guard event.buttonNumber == buttonNumber else { return }
 
+        // Preserve the triggering event's pointer position. Reading
+        // `NSEvent.mouseLocation` later in the AsyncStream consumer races the
+        // SwiftUI release/hover callbacks and can commit a stale selection.
+        let screenLocation = event.window.map {
+            $0.convertPoint(toScreen: event.locationInWindow)
+        } ?? event.locationInWindow
+
         switch event.type {
         case .otherMouseDown:
-            onDown?()
+            onDown?(screenLocation)
+        case .otherMouseDragged:
+            onDragged?(screenLocation)
         case .otherMouseUp:
-            onUp?()
+            onUp?(screenLocation)
         default:
             break
         }

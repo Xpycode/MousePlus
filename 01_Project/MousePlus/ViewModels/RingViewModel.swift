@@ -18,8 +18,9 @@ enum RingCommitResult: Equatable {
 }
 
 /// Pure outer-ring policy state shared by the runtime HUD and editor preview.
-/// Pointer history is scoped to one expanded branch and must be reset whenever
-/// that branch changes.
+/// Pointer history is scoped to the HUD invocation: expansion controls whether
+/// an outer ring is eligible to render, but it does not start or reset the
+/// center-to-outside traversal that Reveal records.
 struct OuterRingPolicyState: Equatable {
     private(set) var hasEnteredInnerBoundary = false
     private(set) var hasRevealedOuterRing = false
@@ -40,13 +41,6 @@ struct OuterRingPolicyState: Equatable {
         itemCount: Int,
         pointerIsAtOrInsideInnerBoundary: Bool? = nil
     ) -> Resolution {
-        let eligible = hasExpandedParent && Self.parentIsAvailable(
-            policy: policy, itemCount: itemCount
-        )
-        guard eligible else {
-            return Resolution(state: OuterRingPolicyState(), isEligible: false, isVisible: false)
-        }
-
         var next = self
         if policy == .revealBeyondInnerRing,
            let pointerIsAtOrInsideInnerBoundary {
@@ -55,6 +49,13 @@ struct OuterRingPolicyState: Equatable {
             } else if next.hasEnteredInnerBoundary {
                 next.hasRevealedOuterRing = true
             }
+        }
+
+        let eligible = hasExpandedParent && Self.parentIsAvailable(
+            policy: policy, itemCount: itemCount
+        )
+        guard eligible else {
+            return Resolution(state: next, isEligible: false, isVisible: false)
         }
 
         let visible = policy == .alwaysVisible
@@ -244,7 +245,9 @@ final class RingViewModel {
                                             middleItemCount: middleItems.count,
                                             expandedParentIndex: isOuterRingVisible ? expandedParentIndex : nil,
                                             outerCount: isOuterRingVisible ? outerItems.count : 0) {
-            activeSelection = ActiveSelection(band: hit.band, index: hit.index)
+            let selection = ActiveSelection(band: hit.band, index: hit.index)
+            activeSelection = selection
+            autoExpandRevealedParentIfNeeded(selection)
         } else {
             activeSelection = nil
         }
@@ -313,7 +316,6 @@ final class RingViewModel {
         guard OuterRingPolicyState.parentIsAvailable(
             policy: hudCustomization.outerRingVisibility, itemCount: items.count
         ) else { return }
-        outerRingPolicyState = OuterRingPolicyState()
         expandedParentIndex = parentIndex
         outerItems = items
     }
@@ -322,7 +324,6 @@ final class RingViewModel {
     func collapse() {
         expandedParentIndex = nil
         outerItems = []
-        outerRingPolicyState = OuterRingPolicyState()
     }
 
     /// Returns `true` when Escape should close the invocation. An expanded
@@ -376,5 +377,19 @@ final class RingViewModel {
             itemCount: outerItems.count,
             pointerIsAtOrInsideInnerBoundary: radius <= radii.r1
         ).state
+    }
+
+    /// Reveal mode is a hover-driven submenu interaction: once the invocation's
+    /// center-to-outside traversal latches, entering an expandable middle wedge
+    /// immediately points the outer arc at that parent. Always keeps its
+    /// click/release-to-expand behavior, and Hidden remains unavailable.
+    private func autoExpandRevealedParentIfNeeded(_ selection: ActiveSelection) {
+        guard hudCustomization.outerRingVisibility == .revealBeyondInnerRing,
+              hasRevealedOuterRing,
+              selection.band == .middle,
+              middleItems.indices.contains(selection.index),
+              middleItems[selection.index].hasSubItems,
+              expandedParentIndex != selection.index else { return }
+        expand(selection.index)
     }
 }

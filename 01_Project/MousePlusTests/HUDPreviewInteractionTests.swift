@@ -102,6 +102,36 @@ final class HUDPreviewInteractionTests: XCTestCase {
         XCTAssertTrue(state.outerIsVisible(snapshot: snapshot))
     }
 
+    func testTraversalBeforeParentExpansionIsRetainedForInvocation() {
+        var state = HUDPreviewInteractionState()
+        let root = makeSnapshot(visibility: .revealBeyondInnerRing)
+        _ = state.pointerMoved(to: .zero, center: center, snapshot: root)
+        _ = state.pointerMoved(to: point(angle: 0, radius: 25),
+                               center: center, snapshot: root)
+        XCTAssertFalse(state.outerIsVisible(snapshot: root))
+
+        let expanded = makeSnapshot(
+            visibility: .revealBeyondInnerRing, parent: 0, outerCount: 2
+        )
+        XCTAssertTrue(state.outerIsVisible(snapshot: expanded))
+    }
+
+    @MainActor
+    func testCoordinatorPublishesRetainedRevealWhenParentExpands() {
+        let root = makeSnapshot(visibility: .revealBeyondInnerRing)
+        let coordinator = HUDPreviewInteractionView.Coordinator(snapshot: root)
+        var visibilityChanges: [Bool] = []
+        coordinator.onRevealChange = { visibilityChanges.append($0) }
+
+        coordinator.moved(.zero, center: center)
+        coordinator.moved(point(angle: 0, radius: 25), center: center)
+        coordinator.update(snapshot: makeSnapshot(
+            visibility: .revealBeyondInnerRing, parent: 0, outerCount: 2
+        ))
+
+        XCTAssertEqual(visibilityChanges, [true])
+    }
+
     func testAlwaysHiddenOuterHasNoIntent() {
         let state = HUDPreviewInteractionState()
         let snapshot = makeSnapshot(visibility: .alwaysHidden, parent: 0, outerCount: 2)

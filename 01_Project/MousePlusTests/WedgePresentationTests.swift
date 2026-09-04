@@ -20,6 +20,52 @@ final class WedgePresentationTests: XCTestCase {
         XCTAssertEqual(presentation.localizedOuterOuterRadius, 40)
     }
 
+    func testEditorGuideSubtlyDescribesEmptyOuterBand() {
+        let radii = BandRadii(r0: 10, r1: 20, r2: 30, r3: 40)
+
+        for visibility in [
+            OuterRingVisibility.alwaysVisible,
+            OuterRingVisibility.revealBeyondInnerRing
+        ] {
+            let guide = EditorOuterRingGuidePresentation(
+                radii: radii,
+                visibility: visibility,
+                hasLocalizedOuterSurface: false
+            )
+
+            XCTAssertTrue(guide.isVisible)
+            XCTAssertEqual(guide.innerRadius, radii.r2)
+            XCTAssertEqual(guide.outerRadius, radii.r3)
+            XCTAssertGreaterThan(guide.fillOpacity, 0)
+            XCTAssertLessThan(guide.fillOpacity, 0.1)
+            XCTAssertGreaterThan(guide.boundaryOpacity, guide.fillOpacity)
+            XCTAssertLessThan(guide.boundaryOpacity, 0.25)
+        }
+    }
+
+    func testEditorGuideNeverCompetesWithPolicyHiddenOrLocalizedOuterSurface() {
+        let radii = BandRadii(r0: 10, r1: 20, r2: 30, r3: 40)
+        let hidden = EditorOuterRingGuidePresentation(
+            radii: radii,
+            visibility: .alwaysHidden,
+            hasLocalizedOuterSurface: false
+        )
+        let populated = EditorOuterRingGuidePresentation(
+            radii: radii,
+            visibility: .alwaysVisible,
+            hasLocalizedOuterSurface: true
+        )
+        let revealed = EditorOuterRingGuidePresentation(
+            radii: radii,
+            visibility: .revealBeyondInnerRing,
+            hasLocalizedOuterSurface: true
+        )
+
+        XCTAssertFalse(hidden.isVisible)
+        XCTAssertFalse(populated.isVisible)
+        XCTAssertFalse(revealed.isVisible)
+    }
+
     func testUprightOrientationNeverRotates() {
         for midpoint in [-450.0, 0, 90, 180, 270, 720] {
             XCTAssertEqual(

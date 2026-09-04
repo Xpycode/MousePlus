@@ -1,8 +1,8 @@
 # Sustained-Use HUD Redesign Specification
 
-**Status:** Approved
+**Status:** Complete
 **Created:** 2026-09-02
-**Last Updated:** 2026-09-02
+**Last Updated:** 2026-09-04
 
 ---
 
@@ -92,64 +92,64 @@ Turn the HUD editor into a safe, live experimentation surface with center access
 
 ### Center Settings Access
 
-- [ ] Given the runtime HUD is open, when the user activates its center Settings control, then the HUD dismisses and Settings opens at the menu editor.
-- [ ] Given either hold-release or tap-toggle activation, when the center Settings control is activated, then no configured menu action executes.
-- [ ] Given the center Settings control is visible, when VoiceOver inspects it, then it has a stable identifier, a descriptive label, and an actionable Settings role.
+- [x] Given the runtime HUD is open, when the user activates its center Settings control, then the HUD dismisses and Settings opens at the menu editor.
+- [x] Given either hold-release or tap-toggle activation, when the center Settings control is activated, then no configured menu action executes.
+- [x] Given the center Settings control is visible, when VoiceOver inspects it, then it has a stable identifier, a descriptive label, and an actionable Settings role.
 
 ### Outer-Ring Visibility
 
-- [ ] Given outer-ring mode is `Always visible` and a middle item has sub-items, when that parent is expanded, then its outer ring is visible using the configured outer-ring appearance.
-- [ ] Given outer-ring mode is `Reveal beyond inner ring`, when a HUD invocation begins, then the outer ring starts hidden.
-- [ ] Given conditional mode and a hidden outer ring, when the pointer crosses beyond the inner ring, then the outer ring appears and remains visible until that invocation closes.
-- [ ] Given conditional mode has revealed the outer ring, when the pointer moves back inward, then the outer ring remains visible and its hit testing stays stable.
-- [ ] Given outer-ring mode is `Always hidden`, when a parent with sub-items is encountered, then no outer wedges or outer hit targets render, while the stored sub-items remain unchanged.
+- [x] Given outer-ring mode is `Always visible` and a middle item has sub-items, when that parent is expanded, then its outer ring is visible using the configured outer-ring appearance.
+- [x] Given outer-ring mode is `Reveal beyond inner ring`, when a HUD invocation begins, then the outer ring starts hidden.
+- [x] Given conditional mode and a hidden outer ring, when the pointer crosses beyond the inner ring, then the outer ring appears and remains visible until that invocation closes.
+- [x] Given conditional mode has revealed the outer ring, when the pointer moves back inward, then the outer ring remains visible and its hit testing stays stable.
+- [x] Given outer-ring mode is `Always hidden`, when a parent with sub-items is encountered, then no outer wedges or outer hit targets render, while the stored sub-items remain unchanged.
 
 ### Independent Slot Counts and Hidden Wedges
 
-- [ ] Given inner and middle rings have different item counts and both use `Auto`, when the HUD renders, then each ring derives its own slot count rather than sharing a spoke count.
-- [ ] Given a ring uses a valid fixed slot count larger than its item count, when it renders, then configured items retain fixed angular positions and unused slots render invisibly.
-- [ ] Given an unused fixed slot, when the user hovers, clicks, releases, or uses VoiceOver over its angular region, then it cannot become active or execute an action and exposes no phantom accessibility element.
-- [ ] Given a fixed count equals the configured item count, when another item is added, then the editor prevents the invalid state or offers an explicit non-destructive count increase; it never drops or overlaps items.
-- [ ] Given the other ring changes between auto and fixed, when the preview updates, then the untouched ring's slot count and item positions remain unchanged.
+- [x] Given inner and middle rings have different item counts and both use `Auto`, when the HUD renders, then each ring derives its own slot count rather than sharing a spoke count.
+- [x] Given a ring uses a valid fixed slot count larger than its item count, when it renders, then configured items retain fixed angular positions and unused slots render invisibly.
+- [x] Given an unused fixed slot, when the user hovers, clicks, releases, or uses VoiceOver over its angular region, then it cannot become active or execute an action and exposes no phantom accessibility element.
+- [x] Given a fixed count equals the configured item count, when another item is added, then the editor prevents the invalid state or offers an explicit non-destructive count increase; it never drops or overlaps items.
+- [x] Given the other ring changes between auto and fixed, when the preview updates, then the untouched ring's slot count and item positions remain unchanged.
 
 ### Independent Rotation
 
-- [ ] Given different offsets for the inner and middle rings, when the HUD and preview render, then each ring begins at its own configured angle and visual wedges, icons, hover regions, and selection hit testing remain aligned.
-- [ ] Given an offset is adjusted across the end of a full turn, when it is saved and reloaded, then the angle is normalized without a visible jump or loss of precision.
+- [x] Given different offsets for the inner and middle rings, when the HUD and preview render, then each ring begins at its own configured angle and visual wedges, icons, hover regions, and selection hit testing remain aligned.
+- [x] Given an offset is adjusted across the end of a full turn, when it is saved and reloaded, then the angle is normalized without a visible jump or loss of precision.
 
 ### Icon Orientation
 
-- [ ] Given a ring inherits the menu orientation, when the menu default changes among upright, radial, and tangential, then that ring's icons update immediately in the preview.
-- [ ] Given a ring overrides the menu orientation, when the menu default changes, then the overridden ring remains unchanged.
-- [ ] Given radial or tangential orientation and a rotated ring, when any icon renders, then its transform is derived from its final wedge angle and remains centered within its wedge.
+- [x] Given a ring inherits the menu orientation, when the menu default changes among upright, radial, and tangential, then that ring's icons update immediately in the preview.
+- [x] Given a ring overrides the menu orientation, when the menu default changes, then the overridden ring remains unchanged.
+- [x] Given radial or tangential orientation and a rotated ring, when any icon renders, then its transform is derived from its final wedge angle and remains centered within its wedge.
 
 ### Wedge and Icon Colors
 
-- [ ] Given no color overrides, when an existing configuration loads, then wedges and icons match the pre-redesign application colors.
-- [ ] Given menu-level wedge or icon colors, when rings and items inherit, then the resolved colors appear consistently in the preview and runtime HUD.
-- [ ] Given a ring-level override and an item-level override, when the HUD renders, then item overrides ring, ring overrides menu, and clearing either override restores inheritance immediately.
-- [ ] Given a requested icon/wedge combination does not meet the project's chosen contrast threshold, when it renders, then MousePlus applies the documented accessible icon fallback in both preview and runtime.
-- [ ] Given custom colors, when a wedge becomes selected, hovered, dimmed, disabled, or part of an off-branch path, then each applicable state remains visually distinguishable.
+- [x] Given no color overrides, when an existing configuration loads, then wedges and icons match the pre-redesign application colors.
+- [x] Given menu-level wedge or icon colors, when rings and items inherit, then the resolved colors appear consistently in the preview and runtime HUD.
+- [x] Given a ring-level override and an item-level override, when the HUD renders, then item overrides ring, ring overrides menu, and clearing either override restores inheritance immediately.
+- [x] Given a requested icon/wedge combination does not meet the project's chosen contrast threshold, when it renders, then MousePlus applies the documented accessible icon fallback in both preview and runtime.
+- [x] Given custom colors, when a wedge becomes selected, hovered, dimmed, disabled, or part of an off-branch path, then each applicable state remains visually distinguishable.
 
 ### Live HUD Preview
 
-- [ ] Given an editor control changes layout, visibility, orientation, or color, when its value changes, then the preview updates immediately without requiring a save-and-resummon cycle.
-- [ ] Given conditional outer-ring mode in the preview, when the pointer crosses beyond the inner ring, then the preview reproduces the runtime reveal-and-latch behavior.
-- [ ] Given the user hovers or selects a configured preview wedge, when the interaction completes, then the editor may select or inspect that item but never invokes its configured action.
-- [ ] Given custom radii or geometry larger than the preview area, when the preview renders, then it scales to fit without changing the runtime geometry values or overlapping editor controls.
+- [x] Given an editor control changes layout, visibility, orientation, or color, when its value changes, then the preview updates immediately without requiring a save-and-resummon cycle.
+- [x] Given conditional outer-ring mode in the preview, when the pointer crosses beyond the inner ring, then the preview reproduces the runtime reveal-and-latch behavior.
+- [x] Given the user hovers or selects a configured preview wedge, when the interaction completes, then the editor may select or inspect that item but never invokes its configured action.
+- [x] Given custom radii or geometry larger than the preview area, when the preview renders, then it scales to fit without changing the runtime geometry values or overlapping editor controls.
 
 ### Editor Choice Visibility
 
-- [ ] Given a setting has two to four short, fixed choices that fit the editor, when it is presented, then all choices appear simultaneously in a compact segmented control and the current selection is visible without opening a menu.
-- [ ] Given a choice set is long, dynamic, or would truncate materially, when it is presented, then the editor uses an appropriate dropdown or purpose-built control instead of an unreadable segmented control.
-- [ ] Given keyboard or VoiceOver navigation reaches a segmented choice, when focus moves among its options, then each option and the selected state are announced and can be changed without a pointer.
+- [x] Given a setting has two to four short, fixed choices that fit the editor, when it is presented, then all choices appear simultaneously in a compact segmented control and the current selection is visible without opening a menu.
+- [x] Given a choice set is long, dynamic, or would truncate materially, when it is presented, then the editor uses an appropriate dropdown or purpose-built control instead of an unreadable segmented control.
+- [x] Given keyboard or VoiceOver navigation reaches a segmented choice, when focus moves among its options, then each option and the selected state are announced and can be changed without a pointer.
 
 ### Persistence and Migration
 
-- [ ] Given a configuration written before this redesign, when it decodes, then all new fields receive compatibility defaults and the runtime HUD remains visually and behaviorally unchanged.
-- [ ] Given a migrated configuration is saved, when it is loaded again, then all menu, ring, and item values round-trip without losing unknown action data or configured sub-items.
-- [ ] Given a partial configuration omits any new nested field, when it decodes, then only that field receives its compatibility default and the rest of the configuration remains intact.
-- [ ] Given invalid persisted slot counts, angles, modes, or colors, when the configuration loads, then values are clamped or replaced by documented safe defaults without replacing unrelated user configuration.
+- [x] Given a configuration written before this redesign, when it decodes, then all new fields receive compatibility defaults and the runtime HUD remains visually and behaviorally unchanged.
+- [x] Given a migrated configuration is saved, when it is loaded again, then all menu, ring, and item values round-trip without losing unknown action data or configured sub-items.
+- [x] Given a partial configuration omits any new nested field, when it decodes, then only that field receives its compatibility default and the rest of the configuration remains intact.
+- [x] Given invalid persisted slot counts, angles, modes, or colors, when the configuration loads, then values are clamped or replaced by documented safe defaults without replacing unrelated user configuration.
 
 ---
 

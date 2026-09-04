@@ -1,5 +1,7 @@
 import XCTest
 import CoreGraphics
+import AppKit
+import SwiftUI
 @testable import MousePlus
 
 final class MousePlusTests: XCTestCase {
@@ -92,12 +94,89 @@ final class MousePlusTests: XCTestCase {
 
 @MainActor
 final class RingRuntimeInteractionTests: XCTestCase {
-    func testHoldReleaseUsesTrackedSelectionWithoutSecondPointerCommit() {
+    func testHoldReleaseFallsBackToTrackedSelectionWhenPanelCoordinatesAreUnavailable() {
         let model = makeModel()
         model.updateActive(at: point(model, .middle, 0), center: .zero)
 
-        XCTAssertEqual(model.commitActive(), .expanded)
+        XCTAssertEqual(AppDelegate.commitHoldRelease(
+            viewModel: model,
+            pointerLocation: nil,
+            resolveCoordinates: { _ in XCTFail("Unexpected coordinate conversion"); return nil }
+        ), .expanded)
         XCTAssertEqual(model.expandedParentIndex, 0)
+    }
+
+    func testHoldReleaseTriggerCallbackReHitTestsReleaseAfterStaleRevealHover() {
+        let model = makeModel(outerVisibility: .revealBeyondInnerRing)
+        model.updateActive(at: .zero, center: .zero)
+        model.updateActive(at: point(model, .middle, 0), center: .zero)
+        XCTAssertEqual(model.activeSelection, ActiveSelection(band: .middle, index: 0))
+        XCTAssertEqual(model.expandedParentIndex, 0)
+
+        // Reproduce runtime ordering: Reveal's hover callback left the parent
+        // active, then the independent trigger-up callback arrived with its own
+        // final pointer snapshot over a direct wedge. No intervening SwiftUI
+        // hover callback is assumed.
+        let releasePoint = point(model, .middle, 1)
+        let result = AppDelegate.commitHoldRelease(
+            viewModel: model,
+            pointerLocation: releasePoint,
+            resolveCoordinates: { ($0, .zero) }
+        )
+
+        XCTAssertEqual(result, .executed)
+        XCTAssertNil(model.expandedParentIndex)
+        XCTAssertNil(model.activeSelection)
+    }
+
+    func testRuntimeHostForwardsOtherMouseDraggedToRevealBeforeTriggerRelease() throws {
+        let model = makeModel(outerVisibility: .revealBeyondInnerRing)
+        model.updateActive(at: .zero, center: .zero)
+
+        let side = HUDPanelGeometry.squareSide(outerRadius: model.radii.r3)
+        let host = RingHostingView(rootView: EmptyView())
+        host.frame = CGRect(x: 0, y: 0, width: side, height: side)
+        let window = NSWindow(contentRect: host.frame, styleMask: .borderless,
+                              backing: .buffered, defer: false)
+        window.contentView = host
+        host.updateTrackingAreas()
+
+        var forwardedPoint: CGPoint?
+        var forwardedCenter: CGPoint?
+        host.onOtherMouseDragged = { point, center in
+            forwardedPoint = point
+            forwardedCenter = center
+            model.updateActive(at: point, center: center)
+        }
+
+        let center = CGPoint(x: side / 2, y: side / 2)
+        let offset = point(model, .middle, 0)
+        let localPoint = CGPoint(x: center.x + offset.x, y: center.y + offset.y)
+        let windowPoint = CGPoint(x: localPoint.x, y: side - localPoint.y)
+        let event = try XCTUnwrap(NSEvent.mouseEvent(
+            with: .otherMouseDragged,
+            location: windowPoint,
+            modifierFlags: [],
+            timestamp: 0,
+            windowNumber: window.windowNumber,
+            context: nil,
+            eventNumber: 1,
+            clickCount: 0,
+            pressure: 0
+        ))
+
+        host.otherMouseDragged(with: event)
+
+        let actualPoint = try XCTUnwrap(forwardedPoint)
+        XCTAssertEqual(actualPoint.x, localPoint.x, accuracy: 0.001)
+        XCTAssertEqual(actualPoint.y, localPoint.y, accuracy: 0.001)
+        XCTAssertEqual(forwardedCenter, center)
+        XCTAssertEqual(model.activeSelection, ActiveSelection(band: .middle, index: 0))
+        XCTAssertEqual(model.expandedParentIndex, 0)
+        XCTAssertTrue(model.isOuterRingVisible)
+        XCTAssertTrue(host.trackingAreas.contains {
+            $0.options.contains([.activeAlways, .enabledDuringMouseDrag])
+        })
     }
 
     func testTapToggleReHitTestsFinalLocationBeforeCommit() {
@@ -111,6 +190,64 @@ final class RingRuntimeInteractionTests: XCTestCase {
 
         XCTAssertEqual(model.commit(at: point(model, .inner, 1), center: .zero), .executed)
         XCTAssertEqual(closes, 1)
+    }
+
+    func testTapToggleRevealAutoExpandsOnNaturalParentHoverBeforeClick() {
+        let model = makeModel(outerVisibility: .revealBeyondInnerRing)
+        model.updateActive(at: .zero, center: .zero)
+        model.updateActive(at: point(model, .middle, 0), center: .zero)
+
+        XCTAssertEqual(model.expandedParentIndex, 0)
+        XCTAssertTrue(model.isOuterRingVisible)
+        XCTAssertEqual(model.commit(at: point(model, .middle, 0), center: .zero), .expanded)
+        XCTAssertTrue(model.hasRevealedOuterRing)
+        XCTAssertTrue(model.isOuterRingVisible)
+    }
+
+    func testHoldReleaseRevealAutoExpandsBeforeTriggerReleaseAndCommitKeepsHUDOpen() {
+        let model = makeModel(outerVisibility: .revealBeyondInnerRing)
+        model.updateActive(at: .zero, center: .zero)
+        model.updateActive(at: point(model, .middle, 0), center: .zero)
+
+        XCTAssertEqual(model.expandedParentIndex, 0)
+        XCTAssertTrue(model.isOuterRingVisible)
+        XCTAssertEqual(model.commitActive(), .expanded)
+        XCTAssertTrue(model.hasRevealedOuterRing)
+        XCTAssertTrue(model.isOuterRingVisible)
+        XCTAssertTrue(AppDelegate.keepsRingOpen(after: .expanded))
+        XCTAssertFalse(AppDelegate.keepsRingOpen(after: .executed))
+        XCTAssertFalse(AppDelegate.keepsRingOpen(after: .noSelection))
+        XCTAssertFalse(AppDelegate.keepsRingOpen(after: .unavailable))
+    }
+
+    func testRevealHoverSwitchesExpandableBranchesWithoutExecuting() {
+        let model = makeModel(outerVisibility: .revealBeyondInnerRing)
+        model.middleItems[1].subItems = [item("Other outer")]
+        var closes = 0
+        model.requestClose = { closes += 1 }
+        model.updateActive(at: .zero, center: .zero)
+
+        model.updateActive(at: point(model, .middle, 0), center: .zero)
+        XCTAssertEqual(model.expandedParentIndex, 0)
+        model.updateActive(at: point(model, .middle, 1), center: .zero)
+
+        XCTAssertEqual(model.expandedParentIndex, 1)
+        XCTAssertEqual(model.outerItems.map(\.label), ["Other outer"])
+        XCTAssertEqual(closes, 0)
+    }
+
+    func testAlwaysStillRequiresCommitAndHiddenStillSuppressesHoverExpansion() {
+        let always = makeModel(outerVisibility: .alwaysVisible)
+        always.updateActive(at: .zero, center: .zero)
+        always.updateActive(at: point(always, .middle, 0), center: .zero)
+        XCTAssertNil(always.expandedParentIndex)
+        XCTAssertEqual(always.commitActive(), .expanded)
+
+        let hidden = makeModel(outerVisibility: .alwaysHidden)
+        hidden.updateActive(at: .zero, center: .zero)
+        hidden.updateActive(at: point(hidden, .middle, 0), center: .zero)
+        XCTAssertNil(hidden.expandedParentIndex)
+        XCTAssertFalse(hidden.isOuterRingVisible)
     }
 
     func testInvisibleFixedPositionIsInertInBothCommitPaths() {
@@ -180,10 +317,13 @@ final class RingRuntimeInteractionTests: XCTestCase {
         XCTAssertFalse(model.hasRevealedOuterRing)
     }
 
-    private func makeModel(innerSlots: Int = 2,
-                           middleSlots: Int = 2,
-                           middleOffsetDegrees: Double = 0,
-                           hiddenOuter: Bool = false) -> RingViewModel {
+    private func makeModel(
+        innerSlots: Int = 2,
+        middleSlots: Int = 2,
+        middleOffsetDegrees: Double = 0,
+        hiddenOuter: Bool = false,
+        outerVisibility: OuterRingVisibility? = nil
+    ) -> RingViewModel {
         var customization = HUDCustomization.default
         customization.inner.layout = HUDRingLayout(
             slotCountMode: .fixed, fixedSlotCount: innerSlots, angularOffset: 17
@@ -192,7 +332,8 @@ final class RingRuntimeInteractionTests: XCTestCase {
             slotCountMode: .fixed, fixedSlotCount: middleSlots,
             angularOffset: middleOffsetDegrees
         )
-        customization.outerRingVisibility = hiddenOuter ? .alwaysHidden : .alwaysVisible
+        customization.outerRingVisibility = outerVisibility
+            ?? (hiddenOuter ? .alwaysHidden : .alwaysVisible)
         var parent = item("Parent")
         parent.subItems = [item("Outer 0"), item("Outer 1")]
         let configuration = Configuration(

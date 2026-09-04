@@ -118,7 +118,9 @@ struct RingMenuView: View {
             }
             // .ended → leave selection as-is; a click commits it.
         }
-        // Hold-release: drag updates the active wedge, release commits it.
+        // Primary-pointer gesture: drag updates selection and tap-toggle commits
+        // on release. Hold-release commits from its global trigger-up callback,
+        // which independently re-hit-tests that event's final pointer position.
         .gesture(
             DragGesture(minimumDistance: 0)
                 .onChanged { value in

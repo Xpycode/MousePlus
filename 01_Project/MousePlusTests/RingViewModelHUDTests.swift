@@ -119,24 +119,49 @@ final class RingViewModelHUDTests: XCTestCase {
         XCTAssertTrue(model.hasRevealedOuterRing)
     }
 
-    func testTraversalBeforeExpansionDoesNotRevealNewBranch() {
+    func testNaturalCenterToParentHoverAutoExpandsAndReveals() {
         let model = conditionalModel()
-        model.updateActive(at: CGPoint(x: 20, y: 0), center: .zero)
-        model.expand(0)
-        model.updateActive(at: CGPoint(x: 21, y: 0), center: .zero)
+        model.updateActive(at: .zero, center: .zero)
+        model.updateActive(at: CGPoint(x: 25, y: 0), center: .zero)
 
-        XCTAssertFalse(model.hasRevealedOuterRing)
-        XCTAssertFalse(model.isOuterRingVisible)
+        XCTAssertEqual(model.expandedParentIndex, 0)
+        XCTAssertTrue(model.hasEnteredInnerBoundary)
+        XCTAssertTrue(model.hasRevealedOuterRing)
+        XCTAssertTrue(model.isOuterRingVisible)
     }
 
     func testRevealStateIsTriggerNeutral() {
         for mode in [TriggerMode.holdRelease, .tapToggle] {
             let model = conditionalModel(triggerMode: mode)
-            model.expand(0)
-            model.updateActive(at: CGPoint(x: 20, y: 0), center: .zero)
-            model.updateActive(at: CGPoint(x: 21, y: 0), center: .zero)
+            // Runtime opens centered on the pointer, tracks the parent while
+            // moving outward, and expands before either release or click.
+            model.updateActive(at: .zero, center: .zero)
+            model.updateActive(at: CGPoint(x: 25, y: 0), center: .zero)
+            XCTAssertEqual(model.expandedParentIndex, 0, "mode: \(mode)")
+            XCTAssertTrue(model.isOuterRingVisible, "mode: \(mode)")
+            XCTAssertEqual(model.commitActive(), .expanded, "mode: \(mode)")
             XCTAssertTrue(model.hasRevealedOuterRing, "mode: \(mode)")
+            XCTAssertTrue(model.isOuterRingVisible, "mode: \(mode)")
         }
+    }
+
+    func testRevealLatchSurvivesCollapseAndBranchExpansionUntilInvocationReset() {
+        let model = conditionalModel()
+        model.updateActive(at: .zero, center: .zero)
+        model.updateActive(at: CGPoint(x: 25, y: 0), center: .zero)
+        model.expand(0)
+        XCTAssertTrue(model.isOuterRingVisible)
+
+        model.collapse()
+        XCTAssertFalse(model.isOuterRingVisible)
+        XCTAssertTrue(model.hasRevealedOuterRing)
+
+        model.expand(0)
+        XCTAssertTrue(model.isOuterRingVisible)
+
+        model.reset()
+        XCTAssertFalse(model.hasRevealedOuterRing)
+        XCTAssertFalse(model.hasEnteredInnerBoundary)
     }
 
     func testVisibilityPolicyRequiresAnAvailableExpandedBranch() {

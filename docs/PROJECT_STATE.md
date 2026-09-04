@@ -1,6 +1,6 @@
 # Project State
 
-**Last updated:** 2026-09-03
+**Last updated:** 2026-09-04
 
 ## Identity
 
@@ -11,18 +11,18 @@
 
 ## Now
 
-- **Phase:** HUD redesign closure verification in progress. <!-- Phase changed: 2026-09-03 -->
-- **Focus:** Complete the launched signed-build user checklist, then synchronize closure documentation.
+- **Phase:** HUD redesign complete; selecting the next product increment. <!-- Phase changed: 2026-09-04 -->
+- **Focus:** Choose between onboarding and the next HUD action; screenshots are the smallest unfinished action.
 - **Blocker:** Advanced Logitech-button support is paused until raw MX4/MX3S captures resolve the HID++ strategy decision.
-- **Next:** Record the signed user-driven results in `RESUME.md`, then finish Wave 4 tasks 4.2–4.3.
+- **Next:** Decide whether to implement onboarding or the screenshot action next.
 
 ## Recent
 
-- **2026-09-03:** Wave 4 automated review gate passed: two adversarial passes found and fixed dynamic-radius panel clipping, quit-before-autosave data loss, and translucent preview/runtime rendering divergence. All 70 affected focused tests and 207/207 clean full tests passed; the signed Debug build is launched for the final user-driven checklist.
+- **2026-09-04:** Closed the sustained-use HUD redesign. A clean signed build passed the full live checklist: immediate Quit persisted the changed configuration, relaunch re-armed triggers, and the visible menu-bar status item and its Quit command worked. The full 217-test suite remains green.
+- **2026-09-03:** Final signed testing passed reorder and outside dismissal, then exposed and remediated a macOS 27 Window Snap crash caused by background window mutation; all 207 tests and the signed snap retest pass. Color verification remains incomplete, and clearer color-inheritance wording is logged for the next UI-design pass.
 - **2026-09-03:** Completed remediation Wave 3: tap-toggle HUDs now move from the native center control after a 4 pt threshold while clicks still open Settings, moved panels clamp to the active screen, General Settings exposes a native Quit MousePlus button, and the menu-bar image has explicit template sizing and accessibility metadata. All 11 combined focused tests passed; signed drag/click and quit/relaunch verification remain in Wave 4.
 - **2026-09-03:** Completed remediation Wave 2: transparent panel corners now dismiss against the circular HUD boundary, hidden outer rings leave no backing surface, and preview selection is visually separate from hover without changing configured colors. All 48 combined focused tests passed; signed visual verification remains in the final gate.
 - **2026-09-03:** Completed remediation Wave 1: top-level reordering now wraps circularly while preserving item identity, and runtime/preview share one tested outer-ring eligibility and reveal policy. All 35 focused tests passed; center-drag movement and General-pane Quit placements are confirmed for Wave 3.
-- **2026-09-03:** Signed user testing confirmed direct MousePlus mouse binding works without the BetterMouse shortcut beep, and exposed six closure issues: reorder does not wrap, transparent-corner clicks do not dismiss, preview selection distorts color comparison, outer visibility leaves misleading geometry, HUD movement lacks a safe interaction, and quitting is inaccessible when the status item is invisible. A focused four-wave remediation plan now replaces the completed implementation plan.
 
 ## Progress
 
@@ -31,17 +31,17 @@
 - **Ring UI:** Complete and live-verified.
 - **HUD actions:** Window snapping and keystroke delivery work; menu-bar mirror, app switching, system toggles, and screenshots remain.
 - **Trigger backend:** Keyboard and standard mouse paths work; advanced Logitech HID++ support remains undecided.
-- **Task tracker:** 0/1 current sprint; 15/17 tracked items complete overall (88%).
+- **Task tracker:** no active sprint; 16/17 tracked items complete overall (94%).
 
 ## Risks and Backlog
 
 - Fresh installs ship without a default trigger; onboarding is required before clean-install or public-release testing.
 - Capture the alternate MX4 vendor interface and re-capture the MX3S with the current inspector before choosing accept-limitation, HID++ implementation, or Options+ coexistence.
-- The menu-bar status icon needs signed re-verification on the M1 Max after explicit template sizing; General Settings now provides a visible Quit fallback.
+- The menu-bar status icon and General Settings Quit fallback are signed-live verified on the M1 Max.
 - Settings writers may still replace a corrupt configuration with defaults; the full deferred-risk list is in `MENU_EDITOR_REVIEW.md`.
 - Consider screenshots next if onboarding is deferred; it is the smallest unfinished HUD action and establishes dismiss-before-action behavior.
 - Longer-term work includes the menu-bar mirror, recent-app switcher, system toggles, app-aware command rings, and alternative menu layouts.
-- Clarify HUD customization scope with Menu/Inner/Middle/Outer subtabs; add per-ring label visibility and optional readable label orientation.
+- Clarify HUD customization with Menu/Inner/Middle/Outer subtabs, root-level “Default” color wording and an explicit inheritance hierarchy; add per-ring label visibility and optional readable label orientation.
 
 ## Infrastructure
 
@@ -65,4 +65,4 @@
 
 ## Resume
 
-The signed app at `/tmp/mouseplus-wave4-final.I9bFyc/Build/Products/Debug/MousePlus.app` is launched. Complete the checklist in `RESUME.md`, then close Wave 4 documentation without overstating unobserved UI behavior.
+The sustained-use HUD redesign is complete. Select the next product increment from the backlog; onboarding is required before clean-install release testing, while screenshots are the smallest unfinished HUD action.

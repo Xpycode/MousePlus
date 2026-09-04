@@ -119,12 +119,13 @@ struct HUDPreviewInteractionView: NSViewRepresentable {
         init(snapshot: HUDPreviewInteractionSnapshot) { self.snapshot = snapshot }
 
         func update(snapshot newSnapshot: HUDPreviewInteractionSnapshot) {
-            if snapshot.expandedParentIndex != newSnapshot.expandedParentIndex
-                || snapshot.outerVisibility != newSnapshot.outerVisibility {
+            let wasVisible = state.outerIsVisible(snapshot: snapshot)
+            if snapshot.outerVisibility != newSnapshot.outerVisibility {
                 state.resetReveal()
-                onRevealChange(false)
             }
             snapshot = newSnapshot
+            let isVisible = state.outerIsVisible(snapshot: snapshot)
+            if wasVisible != isVisible { onRevealChange(isVisible) }
         }
 
         func moved(_ point: CGPoint, center: CGPoint) {

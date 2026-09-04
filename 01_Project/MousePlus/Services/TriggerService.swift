@@ -10,8 +10,9 @@ enum TriggerSource: Sendable {
 /// `mode` tells the consumer how to interpret the press/release:
 /// hold-release acts on both `.down` and `.up`; tap-toggle acts only on `.down`.
 enum TriggerEvent: Sendable {
-    case down(source: TriggerSource, mode: TriggerMode)
-    case up(source: TriggerSource, mode: TriggerMode)
+    case down(source: TriggerSource, mode: TriggerMode, pointerLocation: CGPoint)
+    case moved(source: TriggerSource, mode: TriggerMode, pointerLocation: CGPoint)
+    case up(source: TriggerSource, mode: TriggerMode, pointerLocation: CGPoint)
 }
 
 /// Owns the active trigger bindings and emits a unified event stream.
@@ -57,16 +58,37 @@ final class TriggerService {
             keyboardMonitor.start(
                 keyCode: keyCode,
                 modifiers: modifiers,
-                onDown: { [weak self] in self?.continuation.yield(.down(source: .keyboard, mode: mode)) },
-                onUp:   { [weak self] in self?.continuation.yield(.up(source: .keyboard, mode: mode)) }
+                onDown: { [weak self] in
+                    self?.continuation.yield(.down(
+                        source: .keyboard, mode: mode, pointerLocation: NSEvent.mouseLocation
+                    ))
+                },
+                onUp: { [weak self] in
+                    self?.continuation.yield(.up(
+                        source: .keyboard, mode: mode, pointerLocation: NSEvent.mouseLocation
+                    ))
+                }
             )
         }
 
         if case let .mouseButton(buttonNumber, mode) = currentConfig.mouseButton {
             mouseButtonMonitor.start(
                 buttonNumber: buttonNumber,
-                onDown: { [weak self] in self?.continuation.yield(.down(source: .mouseButton, mode: mode)) },
-                onUp:   { [weak self] in self?.continuation.yield(.up(source: .mouseButton, mode: mode)) }
+                onDown: { [weak self] pointerLocation in
+                    self?.continuation.yield(.down(
+                        source: .mouseButton, mode: mode, pointerLocation: pointerLocation
+                    ))
+                },
+                onDragged: { [weak self] pointerLocation in
+                    self?.continuation.yield(.moved(
+                        source: .mouseButton, mode: mode, pointerLocation: pointerLocation
+                    ))
+                },
+                onUp: { [weak self] pointerLocation in
+                    self?.continuation.yield(.up(
+                        source: .mouseButton, mode: mode, pointerLocation: pointerLocation
+                    ))
+                }
             )
         }
     }

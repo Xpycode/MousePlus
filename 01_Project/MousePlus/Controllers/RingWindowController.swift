@@ -8,18 +8,54 @@ import SwiftUI
 /// be swallowed before SwiftUI ever sees it (see `IMPLEMENTATION_PLAN.md` §6
 /// "NSPanel first-click swallowed"). Returning `true` makes that first click a
 /// real event the ring can act on.
-private final class FirstMouseHostingView<Content: View>: NSHostingView<Content> {
+final class RingHostingView<Content: View>: NSHostingView<Content> {
+    var onOtherMouseDragged: ((CGPoint, CGPoint) -> Void)?
+    private var pointerTrackingArea: NSTrackingArea?
+
     override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
+
+    override func updateTrackingAreas() {
+        super.updateTrackingAreas()
+        if let pointerTrackingArea { removeTrackingArea(pointerTrackingArea) }
+        let next = NSTrackingArea(
+            rect: bounds,
+            options: [.activeAlways, .mouseEnteredAndExited, .enabledDuringMouseDrag, .inVisibleRect],
+            owner: self,
+            userInfo: nil
+        )
+        addTrackingArea(next)
+        pointerTrackingArea = next
+    }
+
+    override func otherMouseDragged(with event: NSEvent) {
+        guard let onOtherMouseDragged else {
+            super.otherMouseDragged(with: event)
+            return
+        }
+        let point = convert(event.locationInWindow, from: nil)
+        let center = CGPoint(x: bounds.midX, y: bounds.midY)
+        onOtherMouseDragged(point, center)
+    }
 }
 
 /// Manages the ring menu overlay panel.
 @MainActor
 final class RingWindowController {
     private var panel: NSPanel?
-    private var hostingView: FirstMouseHostingView<AnyView>?
+    private var hostingView: RingHostingView<AnyView>?
 
     var isVisible: Bool {
         panel?.isVisible ?? false
+    }
+
+    /// Converts an authoritative global trigger-event position into the same
+    /// local point/center pair used by `RingMenuView` hit testing.
+    func hitTestCoordinates(forScreenPoint screenPoint: CGPoint) -> (point: CGPoint, center: CGPoint)? {
+        guard let panel, let hostingView else { return nil }
+        let windowPoint = panel.convertPoint(fromScreen: screenPoint)
+        let point = hostingView.convert(windowPoint, from: nil)
+        let center = CGPoint(x: hostingView.bounds.midX, y: hostingView.bounds.midY)
+        return (point, center)
     }
 
     /// Returns whether a local mouse-down targets this panel outside the HUD's
@@ -36,13 +72,19 @@ final class RingWindowController {
         )
     }
 
-    func show<Content: View>(at point: NSPoint, outerRadius: CGFloat, content: Content) {
+    func show<Content: View>(
+        at point: NSPoint,
+        outerRadius: CGFloat,
+        content: Content,
+        onOtherMouseDragged: ((CGPoint, CGPoint) -> Void)? = nil
+    ) {
         let side = HUDPanelGeometry.squareSide(outerRadius: outerRadius)
         let panel = createPanel(side: side)
         let squareSize = NSSize(width: side, height: side)
 
-        let hostingView = FirstMouseHostingView(rootView: AnyView(content))
+        let hostingView = RingHostingView(rootView: AnyView(content))
         hostingView.frame = NSRect(origin: .zero, size: squareSize)
+        hostingView.onOtherMouseDragged = onOtherMouseDragged
 
         panel.contentView = hostingView
         self.hostingView = hostingView

@@ -1,5 +1,82 @@
 import SwiftUI
 
+/// Preview-only styling for the empty outer band. A faint, unsegmented annulus
+/// makes submenu capacity discoverable without presenting phantom wedges. The
+/// live HUD never constructs this presentation, and Always Hidden remains a
+/// literal absence even in the editor preview.
+struct EditorOuterRingGuidePresentation: Equatable {
+    let innerRadius: CGFloat
+    let outerRadius: CGFloat
+    let fillOpacity: Double
+    let boundaryOpacity: Double
+    let isVisible: Bool
+
+    init(
+        radii: BandRadii,
+        visibility: OuterRingVisibility,
+        hasLocalizedOuterSurface: Bool
+    ) {
+        innerRadius = radii.r2
+        outerRadius = radii.r3
+        fillOpacity = 0.04
+        boundaryOpacity = 0.14
+        isVisible = visibility != .alwaysHidden && !hasLocalizedOuterSurface
+    }
+}
+
+/// A neutral editor scaffold rather than a material backing: it has no wedge
+/// divisions, glyphs, accessibility element, or hit-testing behavior.
+struct EditorOuterRingGuide: View {
+    let presentation: EditorOuterRingGuidePresentation
+
+    private var bandWidth: CGFloat {
+        presentation.outerRadius - presentation.innerRadius
+    }
+
+    private var midlineDiameter: CGFloat {
+        presentation.outerRadius + presentation.innerRadius
+    }
+
+    var body: some View {
+        if presentation.isVisible {
+            ZStack {
+                Circle()
+                    .stroke(
+                        Color.primary.opacity(presentation.fillOpacity),
+                        lineWidth: bandWidth
+                    )
+                    .frame(width: midlineDiameter, height: midlineDiameter)
+
+                Circle()
+                    .strokeBorder(
+                        Color.primary.opacity(presentation.boundaryOpacity),
+                        lineWidth: 1
+                    )
+                    .frame(
+                        width: presentation.outerRadius * 2,
+                        height: presentation.outerRadius * 2
+                    )
+
+                Circle()
+                    .stroke(
+                        Color.primary.opacity(presentation.boundaryOpacity),
+                        lineWidth: 1
+                    )
+                    .frame(
+                        width: presentation.innerRadius * 2,
+                        height: presentation.innerRadius * 2
+                    )
+            }
+            .frame(
+                width: presentation.outerRadius * 2,
+                height: presentation.outerRadius * 2
+            )
+            .allowsHitTesting(false)
+            .accessibilityHidden(true)
+        }
+    }
+}
+
 struct RingWedgeAccessibility: Equatable {
     let label: String
     let value: String
@@ -91,6 +168,7 @@ struct RingPreviewSelector: View {
         )
 
         ZStack {
+            EditorOuterRingGuide(presentation: outerRingGuidePresentation)
             RingMenuView(
                 viewModel: preview,
                 interactionEnabled: false,
@@ -118,6 +196,14 @@ struct RingPreviewSelector: View {
         .onChange(of: model.hudCustomization) { _, _ in syncPreview() }
         .onChange(of: model.selection) { _, _ in syncPreview() }
         .transaction { $0.animation = nil }
+    }
+
+    private var outerRingGuidePresentation: EditorOuterRingGuidePresentation {
+        EditorOuterRingGuidePresentation(
+            radii: preview.radii,
+            visibility: model.hudCustomization.outerRingVisibility,
+            hasLocalizedOuterSurface: preview.isOuterRingVisible
+        )
     }
 
     private var snapshot: HUDPreviewInteractionSnapshot {

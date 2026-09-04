@@ -4,6 +4,27 @@ This file tracks the WHY behind technical and design decisions.
 
 ---
 
+## 2026-09-04 - Reveal and hold-release use pointer intent, not callback timing
+
+**Context:** Signed testing showed that conditional outer items remained click-dependent because
+the natural center-to-parent crossing occurred before parent expansion. Under a held auxiliary
+mouse trigger, macOS delivered drag events instead of ordinary hover events, and trigger-up could
+arrive before SwiftUI published its final hover selection.
+
+**Decision:** Treat Reveal traversal and its latch as invocation-wide. In Reveal mode, hovering an
+expandable middle parent after the outward crossing opens its outer arc without committing an
+action; the arc stays visible until dismissal and may switch to another hovered expandable parent.
+Always retains click/release expansion and Hidden remains unavailable. Track auxiliary-button drag
+events explicitly, and commit hold-release from the trigger event's captured pointer position after
+converting it into live HUD coordinates.
+
+**Consequences:** Reveal now matches its label in both trigger modes without destabilizing travel
+toward outer children. Hold-release no longer depends on SwiftUI callback ordering or requires a
+second click. The trigger event stream carries pointer positions, and runtime hit testing remains
+the single authority for the action under the release point.
+
+---
+
 ## 2026-09-03 - Runtime geometry and lifecycle closure invariants
 
 **Context:** Adversarial review of the sustained-use HUD remediation found that the overlay panel

@@ -1,8 +1,9 @@
 # Completed Tasks
 
-**Total archived:** 15
-**Last updated:** 2026-09-03
+**Total archived:** 16
+**Last updated:** 2026-09-04
 
+- [x] (2026-09-04) Wave 4: Pass adversarial, automated, signed-live, and documentation closure gates
 - [x] (2026-09-03) Wave 3: Add confirmed HUD movement and visible lifecycle controls
 - [x] (2026-09-03) Wave 2: Fix circular dismissal, outer geometry, and preview/runtime color fidelity
 - [x] (2026-09-03) Wave 1: Fix circular reordering and unify outer-ring policy state

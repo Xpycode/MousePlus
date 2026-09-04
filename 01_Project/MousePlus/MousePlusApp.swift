@@ -175,6 +175,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         return true
     }
 
+    /// Trigger-up keeps the HUD alive whenever the hovered selection resolves
+    /// to a submenu expansion, including a Reveal branch that hover already
+    /// expanded before the release event arrived.
+    static func keepsRingOpen(after result: RingCommitResult) -> Bool {
+        result == .expanded
+    }
+
     private func showInputRecorder() {
         if inputRecorderWindowController == nil {
             inputRecorderWindowController = InputRecorderWindowController()
@@ -196,14 +203,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             for await event in service.events {
                 guard let self else { return }
                 switch event {
-                case .down(_, .holdRelease):
-                    self.showRing(commitsOnPointerRelease: false)
-                case .up(_, .holdRelease):
-                    self.hideRing(commitHovered: true)
-                case .down(_, .tapToggle):
-                    self.toggleRing()
-                case .up(_, .tapToggle):
-                    break  // tap-toggle ignores releases; commit is via slice click
+                case .down(_, .holdRelease, let pointerLocation):
+                    self.showRing(at: pointerLocation, commitsOnPointerRelease: false)
+                case .moved(_, .holdRelease, let pointerLocation):
+                    self.updateRingSelection(at: pointerLocation)
+                case .up(_, .holdRelease, let pointerLocation):
+                    self.hideRing(commitHovered: true, pointerLocation: pointerLocation)
+                case .down(_, .tapToggle, let pointerLocation):
+                    self.toggleRing(at: pointerLocation)
+                case .moved(_, .tapToggle, _), .up(_, .tapToggle, _):
+                    break  // tap-toggle selection/commit stays in the SwiftUI gesture path
                 }
             }
         }
@@ -212,9 +221,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private func loadConfiguration() {
         configService = ConfigurationService()
 
-        // In-view commits (tap-toggle click, hold-release drag end) call
-        // `commitActive()` directly; the view can't tear down the panel, so route
-        // closing commits back here. Only fires on a *closing* commit, never on expand.
+        // In-view tap-toggle commits call the model directly; the view can't tear
+        // down the panel, so route closing commits back here. Hold-release commits
+        // through the trigger-up path below. This only fires on a *closing* commit,
+        // never on expansion.
         ringViewModel.requestClose = { [weak self] in
             self?.closeRing()
         }
@@ -245,7 +255,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
-    private func showRing(commitsOnPointerRelease: Bool) {
+    private func showRing(at pointerLocation: CGPoint, commitsOnPointerRelease: Bool) {
         // keyDown repeats while held — without this guard each tick creates a new NSPanel.
         guard let controller = ringWindowController, !controller.isVisible else { return }
 
@@ -256,8 +266,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // Each open starts at the root: no stale expansion/selection.
         ringViewModel.reset()
         ringViewModel.isVisible = true
+        // Every invocation is centered on the current pointer. Record that
+        // initial inside-r1 position explicitly so event coalescing cannot lose
+        // the first half of Reveal's natural center-to-parent traversal.
+        ringViewModel.updateActive(at: .zero, center: .zero)
 
-        let mouseLocation = NSEvent.mouseLocation
         let view = RingMenuView(
             viewModel: ringViewModel,
             commitsOnPointerRelease: commitsOnPointerRelease,
@@ -266,38 +279,71 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             } : nil
         )
         controller.show(
-            at: mouseLocation,
+            at: pointerLocation,
             outerRadius: ringViewModel.radii.r3,
-            content: view
+            content: view,
+            onOtherMouseDragged: commitsOnPointerRelease ? nil : {
+                [weak ringViewModel] point, center in
+                ringViewModel?.updateActive(at: point, center: center)
+            }
         )
 
         startDismissMonitor()
     }
 
+    /// Global auxiliary-button drags can remain owned by the app that received
+    /// trigger-down, even after the HUD appears. Convert them through the live
+    /// hosting view so RingViewModel sees the same flipped coordinates as SwiftUI.
+    private func updateRingSelection(at screenPoint: CGPoint) {
+        guard let coordinates = ringWindowController?.hitTestCoordinates(
+            forScreenPoint: screenPoint
+        ) else { return }
+        ringViewModel.updateActive(at: coordinates.point, center: coordinates.center)
+    }
+
     /// Trigger-release / explicit commit path.
     ///
     /// `commitActive()` either EXPANDS an expandable middle wedge (ring stays open)
-    /// or fires a direct/outer action and resets (ring should close). We detect
-    /// which happened by comparing expansion state across the call: a transition
-    /// into an expanded state means "expanded — keep open"; anything else closes.
-    private func hideRing(commitHovered: Bool) {
+    /// or fires a direct/outer action and resets (ring should close). Reveal can
+    /// auto-expand the hovered parent before trigger-up, so the commit result —
+    /// not an expansion-state delta — decides whether the HUD stays open.
+    private func hideRing(commitHovered: Bool, pointerLocation: CGPoint? = nil) {
         guard commitHovered else {
             closeRing()
             return
         }
 
-        let wasExpanded = ringViewModel.expandedParentIndex != nil
-        ringViewModel.commitActive()
-        let isExpanded = ringViewModel.expandedParentIndex != nil
+        let result = Self.commitHoldRelease(
+            viewModel: ringViewModel,
+            pointerLocation: pointerLocation,
+            resolveCoordinates: { [weak ringWindowController] screenPoint in
+                ringWindowController?.hitTestCoordinates(forScreenPoint: screenPoint)
+            }
+        )
 
-        // Just expanded (or re-pointed an expansion) → keep the ring open.
+        // Expanded (or re-pointed an expansion) → keep the ring open.
         // Direct/outer commit (or dead-zone cancel that left no expansion) → close.
         // Note: a direct commit also invokes `requestClose` via the view model, which
         // routes to `closeRing()`; closing again here is harmless (hide()/reset are idempotent).
-        if isExpanded && !wasExpanded {
-            return
-        }
+        if Self.keepsRingOpen(after: result) { return }
         closeRing()
+    }
+
+    /// Commits from the trigger callback's pointer snapshot, not whatever hover
+    /// update happened to run most recently. Mouse-up and SwiftUI hover/release
+    /// delivery are separate callbacks, so their ordering is not a safe source
+    /// of the final selection.
+    @discardableResult
+    static func commitHoldRelease(
+        viewModel: RingViewModel,
+        pointerLocation: CGPoint?,
+        resolveCoordinates: (CGPoint) -> (point: CGPoint, center: CGPoint)?
+    ) -> RingCommitResult {
+        guard let pointerLocation,
+              let coordinates = resolveCoordinates(pointerLocation) else {
+            return viewModel.commitActive()
+        }
+        return viewModel.commit(at: coordinates.point, center: coordinates.center)
     }
 
     /// Tear down the ring panel and return the view model to root state.
@@ -311,11 +357,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     /// Tap-toggle entry point: open the ring if hidden, close it (no commit) if visible.
-    private func toggleRing() {
+    private func toggleRing(at pointerLocation: CGPoint) {
         if ringWindowController?.isVisible == true {
             hideRing(commitHovered: false)
         } else {
-            showRing(commitsOnPointerRelease: true)
+            showRing(at: pointerLocation, commitsOnPointerRelease: true)
         }
     }
 

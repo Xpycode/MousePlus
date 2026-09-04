@@ -6,13 +6,13 @@
 <!-- Ideas and future work. Added by /interview, user input, or discovered during development. -->
 <!-- Priority: top = highest, bottom = lowest -->
 
-- [ ] Clarify Menu & Rings scope with Menu/Inner/Middle/Outer subtabs; add per-ring label visibility and optional upright/radial/tangential label orientation with readable auto-flipping
+- [ ] Clarify Menu & Rings scope with Menu/Inner/Middle/Outer subtabs; rename root-level color “Inherit” to “Default” and explain the item → ring → menu → app-default hierarchy; add per-ring label visibility and optional upright/radial/tangential label orientation with readable auto-flipping
 
 ## Current Sprint
 <!-- Active work. Populated by /plan or /execute. Keep focused (3-7 tasks). -->
 <!-- When done: /log moves to tasks-archive.md -->
 
-- [ ] Wave 4: Run adversarial, automated, signed-live, and documentation closure gates
+No active tasks.
 
 ---
 
