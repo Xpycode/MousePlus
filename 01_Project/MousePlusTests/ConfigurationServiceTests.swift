@@ -98,6 +98,71 @@ final class ConfigurationServiceTests: XCTestCase {
         XCTAssertEqual(decoded.behavior, current.behavior)
     }
 
+    func testLegacyMotionSettingsSeedRoleBasedConfiguration() throws {
+        let decoded = try JSONDecoder().decode(
+            Configuration.self,
+            from: fixtureData(named: "legacy-motion-settings")
+        )
+
+        XCTAssertEqual(decoded.appearance.motion.isEnabled, false)
+        XCTAssertEqual(decoded.appearance.motion.baseDuration, 0.42)
+        XCTAssertEqual(decoded.appearance.motion.summon, .fade)
+        XCTAssertEqual(decoded.appearance.motion.hover, .emphasis)
+        XCTAssertEqual(decoded.appearance.motion.outerExpansion, .radialReveal)
+        XCTAssertEqual(decoded.appearance.motion.branchChange, .crossfade)
+        XCTAssertEqual(decoded.appearance.animationEnabled, false)
+        XCTAssertEqual(decoded.appearance.animationDuration, 0.42)
+    }
+
+    func testRoleBasedMotionConfigurationRoundTripsEveryChoice() throws {
+        let expected = HUDMotionConfiguration(
+            isEnabled: true,
+            baseDuration: 0.31,
+            summon: .off,
+            hover: .off,
+            outerExpansion: .off,
+            branchChange: .off
+        )
+        let configuration = Configuration(appearance: AppearanceConfig(motion: expected))
+
+        let data = try JSONEncoder().encode(configuration)
+        let object = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
+        let appearance = try XCTUnwrap(object["appearance"] as? [String: Any])
+        XCTAssertNotNil(appearance["motion"])
+        XCTAssertNil(appearance["animationEnabled"])
+        XCTAssertNil(appearance["animationDuration"])
+
+        let decoded = try JSONDecoder().decode(Configuration.self, from: data)
+        XCTAssertEqual(decoded.appearance.motion, expected)
+    }
+
+    func testMalformedMotionFieldsFallBackIndependently() throws {
+        let json = """
+        {
+          "inner": [],
+          "middle": [],
+          "appearance": {
+            "motion": {
+              "isEnabled": false,
+              "baseDuration": 0.27,
+              "summon": "futureSummon",
+              "hover": "off",
+              "outerExpansion": 17,
+              "branchChange": "crossfade"
+            }
+          }
+        }
+        """
+
+        let decoded = try JSONDecoder().decode(Configuration.self, from: Data(json.utf8))
+        XCTAssertEqual(decoded.appearance.motion.isEnabled, false)
+        XCTAssertEqual(decoded.appearance.motion.baseDuration, 0.27)
+        XCTAssertEqual(decoded.appearance.motion.summon, .fade)
+        XCTAssertEqual(decoded.appearance.motion.hover, .off)
+        XCTAssertEqual(decoded.appearance.motion.outerExpansion, .radialReveal)
+        XCTAssertEqual(decoded.appearance.motion.branchChange, .crossfade)
+    }
+
     func testMalformedHUDFieldsPreserveKnownConfigurationAndUnknownAction() throws {
         let id = UUID()
         let json = """

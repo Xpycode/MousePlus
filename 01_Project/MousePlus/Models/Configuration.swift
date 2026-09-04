@@ -210,8 +210,8 @@ private struct LegacyHotkeyConfig: Codable {
 ///
 /// `init(from:)` is custom and `decodeIfPresent`s every field with its default, so
 /// older config JSON (which lacks the new keys, or even all of them) decodes without
-/// throwing. `ringRadius`/`itemSize` are legacy/no-longer-referenced fields kept only
-/// so existing snapshots round-trip and to avoid churn; they have no effect on the ring.
+/// throwing. `ringRadius`/`itemSize` are legacy/no-longer-referenced fields retained
+/// in the canonical encoding; they have no effect on the ring.
 struct AppearanceConfig: Codable, Equatable {
     // Legacy fields (unused by the concentric ring; retained for decode round-trip).
     var ringRadius: Double
@@ -228,8 +228,20 @@ struct AppearanceConfig: Codable, Equatable {
     /// Also keep the inner wedge aligned with the expanded middle wedge lit (§2.3).
     var keepSpokeLit: Bool
 
-    var animationEnabled: Bool
-    var animationDuration: Double
+    /// Canonical role-based motion preferences. The computed legacy properties
+    /// below keep existing runtime and Settings call sites source-compatible while
+    /// later waves migrate them to semantic roles.
+    var motion: HUDMotionConfiguration
+
+    var animationEnabled: Bool {
+        get { motion.isEnabled }
+        set { motion.isEnabled = newValue }
+    }
+
+    var animationDuration: Double {
+        get { motion.baseDuration }
+        set { motion.baseDuration = newValue }
+    }
 
     init(
         ringRadius: Double = 120,
@@ -241,7 +253,8 @@ struct AppearanceConfig: Codable, Equatable {
         dimOpacity: Double = 0.30,
         keepSpokeLit: Bool = false,
         animationEnabled: Bool = true,
-        animationDuration: Double = 0.15
+        animationDuration: Double = 0.15,
+        motion: HUDMotionConfiguration? = nil
     ) {
         self.ringRadius = ringRadius
         self.itemSize = itemSize
@@ -251,8 +264,10 @@ struct AppearanceConfig: Codable, Equatable {
         self.outerEdge = outerEdge
         self.dimOpacity = dimOpacity
         self.keepSpokeLit = keepSpokeLit
-        self.animationEnabled = animationEnabled
-        self.animationDuration = animationDuration
+        self.motion = motion ?? HUDMotionConfiguration(
+            isEnabled: animationEnabled,
+            baseDuration: animationDuration
+        )
     }
 
     private enum CodingKeys: String, CodingKey {
@@ -260,6 +275,7 @@ struct AppearanceConfig: Codable, Equatable {
         case deadZone, innerEdge, middleEdge, outerEdge
         case dimOpacity, keepSpokeLit
         case animationEnabled, animationDuration
+        case motion
     }
 
     /// Tolerant decode: every field falls back to its default if absent, so old
@@ -275,8 +291,31 @@ struct AppearanceConfig: Codable, Equatable {
         outerEdge         = try c.decodeIfPresent(Double.self, forKey: .outerEdge) ?? d.outerEdge
         dimOpacity        = try c.decodeIfPresent(Double.self, forKey: .dimOpacity) ?? d.dimOpacity
         keepSpokeLit      = try c.decodeIfPresent(Bool.self, forKey: .keepSpokeLit) ?? d.keepSpokeLit
-        animationEnabled  = try c.decodeIfPresent(Bool.self, forKey: .animationEnabled) ?? d.animationEnabled
-        animationDuration = try c.decodeIfPresent(Double.self, forKey: .animationDuration) ?? d.animationDuration
+        if let decodedMotion = try? c.decode(HUDMotionConfiguration.self, forKey: .motion) {
+            motion = decodedMotion
+        } else {
+            // Legacy configuration: preserve the user's master switch and response
+            // value while adopting the v1 defaults for each newly introduced role.
+            motion = HUDMotionConfiguration(
+                isEnabled: (try? c.decode(Bool.self, forKey: .animationEnabled))
+                    ?? d.motion.isEnabled,
+                baseDuration: (try? c.decode(Double.self, forKey: .animationDuration))
+                    ?? d.motion.baseDuration
+            )
+        }
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(ringRadius, forKey: .ringRadius)
+        try container.encode(itemSize, forKey: .itemSize)
+        try container.encode(deadZone, forKey: .deadZone)
+        try container.encode(innerEdge, forKey: .innerEdge)
+        try container.encode(middleEdge, forKey: .middleEdge)
+        try container.encode(outerEdge, forKey: .outerEdge)
+        try container.encode(dimOpacity, forKey: .dimOpacity)
+        try container.encode(keepSpokeLit, forKey: .keepSpokeLit)
+        try container.encode(motion, forKey: .motion)
     }
 
     /// Bridge the four band-edge fields into `RadialGeometry`'s `BandRadii`
