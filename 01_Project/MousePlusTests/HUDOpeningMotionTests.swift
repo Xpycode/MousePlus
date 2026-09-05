@@ -1,7 +1,28 @@
+import SwiftUI
 import XCTest
 @testable import MousePlus
 
 final class HUDOpeningMotionTests: XCTestCase {
+    func testSharedContentInterpolatesNormalizedProgressInsteadOfOnlyEndpoints() {
+        var content = HUDOpeningMotionContent(
+            descriptor: .init(effect: .circularSweep, duration: 0.5),
+            progress: 0,
+            deadZoneRadius: 24,
+            revealRadius: 150
+        ) { _ in
+            EmptyView()
+        }
+
+        content.animatableData = 0.5
+
+        XCTAssertEqual(content.progress, 0.5)
+        guard case .circularSweep(let progress) = content.resolvedFrame.mask else {
+            return XCTFail("Expected an intermediate sweep mask")
+        }
+        XCTAssertGreaterThan(progress, 0.5)
+        XCTAssertLessThan(progress, 1)
+    }
+
     func testFirstAnimatedRequestStartsPlayback() {
         let request = HUDOpeningMotionRequest(
             descriptor: .init(effect: .fade, duration: 0.15),

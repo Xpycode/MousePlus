@@ -1,8 +1,8 @@
 import SwiftUI
 
 /// Owns the single normalized clock for one menu entrance or Settings replay.
-/// Removing this view cancels SwiftUI's presentation transaction; there are no
-/// delayed callbacks or per-wedge tasks that can survive HUD teardown.
+/// Removing this view cancels the one view-scoped playback task; there are no
+/// per-wedge tasks that can survive HUD teardown.
 struct HUDOpeningMotion<Content: View>: View {
     let request: HUDOpeningMotionRequest
     let settleID: Int
@@ -11,6 +11,8 @@ struct HUDOpeningMotion<Content: View>: View {
     @ViewBuilder let content: (HUDOpeningMotionFrame) -> Content
 
     @State private var progress: CGFloat
+    @State private var playbackGeneration = 0
+    @State private var playbackPending = false
 
     init(
         request: HUDOpeningMotionRequest,
@@ -28,12 +30,13 @@ struct HUDOpeningMotion<Content: View>: View {
     }
 
     var body: some View {
-        content(HUDOpeningMotionFrame.resolve(
+        HUDOpeningMotionContent(
             descriptor: request.descriptor,
             progress: progress,
             deadZoneRadius: deadZoneRadius,
-            revealRadius: revealRadius
-        ))
+            revealRadius: revealRadius,
+            content: content
+        )
         .onAppear {
             apply(HUDOpeningMotionTransition.resolve(previous: nil, current: request))
         }
@@ -41,6 +44,22 @@ struct HUDOpeningMotion<Content: View>: View {
             apply(HUDOpeningMotionTransition.resolve(previous: previous, current: current))
         }
         .onChange(of: settleID) { _, _ in settle() }
+        .task(id: playbackGeneration) {
+            guard playbackPending else { return }
+
+            // Let SwiftUI commit the reset frame before starting the animation.
+            // Without this boundary, the 0 -> 1 writes can be coalesced and every
+            // opening style appears to be the same already-settled ring.
+            do {
+                try await Task.sleep(for: .milliseconds(16))
+            } catch {
+                return
+            }
+            guard !Task.isCancelled, playbackPending else { return }
+
+            playbackPending = false
+            withAnimation(playbackAnimation) { progress = 1 }
+        }
     }
 
     private var playbackAnimation: Animation? {
@@ -62,17 +81,51 @@ struct HUDOpeningMotion<Content: View>: View {
         case .settle:
             settle()
         case .replay:
+            playbackPending = true
+            playbackGeneration &+= 1
             var reset = Transaction()
             reset.disablesAnimations = true
             withTransaction(reset) { progress = 0 }
-            withAnimation(playbackAnimation) { progress = 1 }
         }
     }
 
     private func settle() {
+        playbackPending = false
+        playbackGeneration &+= 1
         var transaction = Transaction()
         transaction.disablesAnimations = true
         withTransaction(transaction) { progress = 1 }
+    }
+}
+
+/// Makes normalized opening progress itself animatable. Resolving the frame in
+/// the parent body only evaluates the two endpoint frames; SwiftUI then blends
+/// their modifiers, which causes masks to disappear immediately and makes all
+/// segment opacities animate in lockstep. This view resolves every interpolated
+/// progress value so each opening style retains its own cadence and silhouette.
+struct HUDOpeningMotionContent<Content: View>: View, Animatable {
+    let descriptor: HUDMotionPresentationDescriptor
+    var progress: CGFloat
+    let deadZoneRadius: CGFloat
+    let revealRadius: CGFloat
+    let content: (HUDOpeningMotionFrame) -> Content
+
+    var animatableData: CGFloat {
+        get { progress }
+        set { progress = newValue }
+    }
+
+    var resolvedFrame: HUDOpeningMotionFrame {
+        HUDOpeningMotionFrame.resolve(
+            descriptor: descriptor,
+            progress: progress,
+            deadZoneRadius: deadZoneRadius,
+            revealRadius: revealRadius
+        )
+    }
+
+    var body: some View {
+        content(resolvedFrame)
     }
 }
 
