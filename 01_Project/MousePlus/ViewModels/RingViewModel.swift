@@ -155,6 +155,12 @@ final class RingViewModel {
         }
     }
 
+    /// Identity observed by the live renderer for opening playback. The panel
+    /// owner advances it once before mounting and once after the first mounted
+    /// frame, matching the explicit replay boundary used by Settings preview.
+    private(set) var openingInvocationID = 0
+    private(set) var openingIsAwaitingMount = false
+
     /// Frontmost application's PID, captured by the owner (AppDelegate) at
     /// ring-open — *before* our non-activating panel shows — so window/menu
     /// actions target the user's app and not MousePlus. `nil` if none.
@@ -425,6 +431,23 @@ final class RingViewModel {
         dynamicIcons = [:]
         expansionEpoch += 1
         outerRingPolicyState = OuterRingPolicyState()
+    }
+
+    /// Establishes the identity captured by a newly mounted runtime HUD.
+    @discardableResult
+    func prepareOpeningPlayback() -> Int {
+        openingInvocationID &+= 1
+        openingIsAwaitingMount = true
+        return openingInvocationID
+    }
+
+    /// Requests playback only if the panel that prepared `mountedID` is still
+    /// the visible invocation. This prevents a delayed callback from replaying
+    /// a HUD that was closed and reopened in the meantime.
+    func replayOpening(afterMounting mountedID: Int) {
+        guard isVisible, openingInvocationID == mountedID else { return }
+        openingIsAwaitingMount = false
+        openingInvocationID &+= 1
     }
 
     // MARK: - Effective geometry and invocation reveal

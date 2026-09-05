@@ -1,257 +1,323 @@
-# HUD Motion v1 — Implementation Plan
+# Implementation Plan — HUD Opening Styles
 
-> **Status:** In progress. Waves 1–4 completed 2026-09-04; Wave 5 is next.
-> **Source:** `docs/sessions/2026-09-04.md` §HUD animation feasibility and
-> `docs/decisions.md` §HUD motion is role-based and presentation-only.
+**Created:** 2026-09-05 · **Status:** Wave 5 open: keyboard and BetterMouse-to-keyboard opening work; direct native mouse-trigger failure and remaining acceptance are open.
 
 ## Goal
 
-Add fast, configurable, Reduce Motion-aware animation to ring summon, wedge hover, outer-ring
-expansion, and branch replacement without delaying or moving MousePlus's logical pointer targets.
+Add Circular Sweep, Iris Reveal, Bloom, and Staggered Segments to Opening, with a safe
+replayable Settings preview, preserving immediate interaction and existing motion behavior.
 
-## Product Contract
+## Acceptance criteria
 
-**Logic snaps; pixels glide.** `RadialGeometry`, `RingViewModel` selection/expansion state, native
-mouse-up handling, action dispatch, and dismissal remain immediate and authoritative. Animation is
-presentation-only and is never awaited before accepting input or executing an action.
+The detailed contracts and AC1–AC9 live in the specification linked below.
 
-### Settings placement
+- [x] Six persisted Opening choices, compatible decoding, unchanged Fade default (AC1–AC2).
+- [ ] All four effects meet their visual and duration contracts (AC3).
+- [x] Fixed targets, immediate actions/dismissal, safe branch composition and cancellation (AC4–AC6).
+- [x] Native Settings controls and shared, isolated, replayable preview (AC7).
+- [ ] Automated, signed live, accessibility, and performance evidence recorded (AC8–AC9).
 
-Extend the existing **Settings → Ring Appearance → Animation** section. Do not add a new sidebar
-destination. Reuse `AppKitCheckbox`, `AppKitPopup`, and `AppKitSlider` through the existing
-`SettingsWorkspaceCoordinator.edit([.appearance])` persistence/live-apply path.
+## Specs and code evidence
 
-The v1 surface contains:
+- [HUD opening styles specification](specs/hud-opening-styles.md) — authoritative behavior,
+  proposed placement, defaults, interruption, preview, and acceptance criteria.
+- `01_Project/MousePlus/Models/HUDMotionConfiguration.swift`: summon currently `off`/`fade`;
+  decoding falls back per field, and default duration is 0.15 seconds.
+- `01_Project/MousePlus/Utilities/HUDMotionPolicy.swift`: role resolver, duration clamp,
+  and spatial-to-fade Reduce Motion policy already exist.
+- `01_Project/MousePlus/Views/RingMenuView.swift`: `hasAppeared` currently drives whole-content
+  opacity; `motion(for:)` uses `interactionEnabled` to suppress editor motion. Input uses
+  fixed geometry; native release handling additionally lives in `RingWindowController`.
+- `Views/Components/HUDOuterBandMotion.swift` and `HUDOuterBranchMotion.swift` already own
+  independent outer progress and frozen branch snapshots. Preserve those responsibilities.
+- `Views/MenuEditor/RingPreviewSelector.swift`: real renderer with editor-only input and
+  disabled animation. It is not the new playback surface.
+- `Views/RingAppearanceSettingsPane.swift`: the existing native Opening popup uses
+  `appearanceBinding` → `SettingsWorkspaceCoordinator.edit([.appearance])` → persisted/live
+  application. `MotionSettingsTestHost` already exercises this real control path.
 
-- Master **Animate ring** checkbox.
-- **Motion speed** slider, preserving the current 0.05–0.5 second range and saved value.
-- **Opening:** Off / Fade.
-- **Hover:** Off / Emphasis.
-- **Outer ring:** Off / Radial reveal.
-- **Branch change:** Off / Crossfade.
-- A short note that macOS Reduce Motion replaces spatial motion with a fade or instant update.
+Paths in the tasks are relative to `01_Project/MousePlus/`, unless prefixed otherwise.
+New filenames are proposed. Check actual target membership when adding files.
 
-Only implemented choices appear. The role-specific enums are intentionally extensible so later
-styles can be added without another persistence redesign. The embedded Menu Items preview remains
-animation-free; it previously suffered layout jumps from runtime spring/scale animation.
+## Resume / execution boundary
 
-## Acceptance Criteria
+1. Read this plan, its spec, current `docs/PROJECT_STATE.md`, and applicable Directions
+   `/execute` procedure when the user asks to implement. Start at Task 1.1.
+2. Scope is supplied by the conversation: implement all four styles and the preview,
+   not only the first two suggested effects. Detailed defaults are in the spec.
+3. Review the proposed placement in the existing Animation section as part of accepting
+   execution scope. Current authorization is planning only; do not launch implementation
+   merely because this file exists.
+4. Preserve the pre-existing dirty documentation: Motion v1 closure changed project state,
+   task/archive/index files and session logs, and deleted its completed plan. This new
+   root plan deliberately replaces that completed plan, rather than restoring its tasks.
+   No application source changes existed at planning time. No fetch/merge/commit/push was
+   performed here; do not infer cross-Mac synchronization from this plan.
+5. Planning validation is documentation/source inspection only. The prior 91 focused / 272
+   full-suite results belong to Motion v1, not these proposed effects.
+6. Model fit for lifecycle, rendering/AX separation, and integration review: deep capability
+   with high reasoning. Current host setting is not reliably visible. Routine enum/control
+   changes can use balanced capability; use the deeper setting for Tasks 2.1 and 5.1.
 
-- [ ] Existing configurations retain their saved master animation setting and duration after the
-      new role-based motion configuration is introduced.
-- [ ] Fresh configurations default to Fade opening, Emphasis hover, Radial reveal outer expansion,
-      Crossfade branch changes, animation enabled, and the existing 0.15-second base response.
-- [ ] Summoning the HUD uses at most a short opacity presentation; the panel frame and final pointer
-      geometry are present immediately.
-- [ ] Hover changes animate only emphasis (wedge/accent/border and a subtle icon scale), complete
-      quickly, and do not move wedge boundaries or labels.
-- [ ] Localized outer items visually unfold from their parent direction; full-circle running apps
-      reveal simultaneously from the outer band's inner radius, without a 12-item cascade.
-- [ ] Apps↔Snap and other branch changes crossfade briefly while the existing expansion epoch still
-      prevents late dynamic results from becoming visible.
-- [ ] Direct actions and cancellation dismiss immediately; no animation completion participates in
-      commit, action, or close logic.
-- [ ] The master switch, role controls, and speed persist and apply to the next live invocation.
-- [ ] With macOS Reduce Motion enabled, radial/scale motion is replaced with a short fade or an
-      instant update; VoiceOver labels, values, order, and activation remain unchanged.
-- [ ] Rapid pointer sweeps, both trigger modes, and a 12-app full circle show no missed commits,
-      stale icons, continuous idle animation, or visible/logical target disagreement.
-- [ ] Focused tests, the complete test target, `git diff --check`, and the authoritative Debug build
-      pass before signed live verification.
+## Validation commands
 
-## Non-Goals
+Run from repository root. Use the project's configured signing identity and normal Xcode
+environment. If sandbox access blocks Xcode services, follow the established permission
+workflow; do not disable signing or edit identity settings to make a check pass.
 
-- No rotating rings, orbiting icons, particles, animated blur, continuous glow, 3D/depth motion,
-  hue cycling, or bounce on every hover.
-- No long per-wedge staggering, action-success celebration, delayed dismissal, or input gating.
-- No panel movement/resize animation and no change to the native AppKit mouse-up commit boundary.
-- No Liquid Glass dependency, `phaseAnimator`, keyframe sequence, `Canvas`, or `drawingGroup` unless
-  later profiling proves a concrete need.
-- No new Settings destination and no per-item/per-wedge animation overrides in v1.
+**B — authoritative build**
 
-## Existing Foundation and Delta
+```bash
+xcodebuild -workspace 01_Project/MousePlus.xcworkspace -scheme MousePlus -configuration Debug build
+```
 
-### Already present
+**F — focused suite** (add the proposed new classes when created; before then omit them)
 
-- `RingMenuView` inserts the outer band with parent-anchored scale plus opacity and applies one
-  configurable spring to `expandedParentIndex` and `activeSelection`.
-- `AnnularWedge.animatableData` interpolates both angles and radii.
-- `AppearanceConfig` persists `animationEnabled` and `animationDuration`; Ring Appearance edits them
-  through native AppKit controls and the safe Settings coordinator.
-- Dynamic Apps expansion uses an incrementing epoch plus expanded-parent guard; do not replace it.
-- `RingWindowController` creates a fresh non-activating panel at the final size and position, then
-  tears it down immediately on close.
-- `RingPreviewSelector` explicitly disables runtime animation to prevent preview movement.
+```bash
+xcodebuild -workspace 01_Project/MousePlus.xcworkspace -scheme MousePlus -configuration Debug -destination 'platform=macOS' test \
+  -only-testing:MousePlusTests/ConfigurationServiceTests \
+  -only-testing:MousePlusTests/HUDMotionPolicyTests \
+  -only-testing:MousePlusTests/HUDOpeningMotionTests \
+  -only-testing:MousePlusTests/HUDOpeningPreviewTests \
+  -only-testing:MousePlusTests/HUDOuterBandMotionTests \
+  -only-testing:MousePlusTests/HUDOuterBranchMotionTests \
+  -only-testing:MousePlusTests/RingRuntimeInteractionTests \
+  -only-testing:MousePlusTests/RingViewModelHUDTests \
+  -only-testing:MousePlusTests/SettingsWorkspaceCoordinatorTests \
+  -only-testing:MousePlusTests/WorkspaceAccessibilityTests
+```
 
-### Needed
+For a task, narrow F to the classes named in its Backpressure line. Check result-bundle
+counts and test discovery; a successful command selecting no tests is not evidence.
+Tests must use temporary stores / injected services, never the user's live configuration.
 
-- A tolerant role-based motion model that absorbs the two legacy appearance fields.
-- A pure resolver from role + saved style + duration + Reduce Motion to a render descriptor.
-- Scoped animations instead of one container-wide spring.
-- Distinct localized/full-circle outer reveal behavior and intentional branch replacement.
-- A view-local summon presentation that does not animate the AppKit window or logical geometry.
-- Existing-section Settings controls and accessibility/live verification.
+**T — complete scheme test plan**
 
----
+```bash
+xcodebuild -workspace 01_Project/MousePlus.xcworkspace -scheme MousePlus -configuration Debug -destination 'platform=macOS' test
+```
+
+**D — documentation and whitespace**
+
+```bash
+git diff --check
+```
 
 ## Tasks
 
-### Wave 1 — Persistence and policy foundations
+### Wave 1 — Persisted styles and policy
 
-- [x] **1.1: Add the role-based motion model and legacy decode bridge**
-  → `01_Project/MousePlus/Models/HUDMotionConfiguration.swift` (new),
-  `01_Project/MousePlus/Models/Configuration.swift`, configuration fixtures/tests
-  - Define typed styles for summon (`off`/`fade`), hover (`off`/`emphasis`), outer expansion
-    (`off`/`radialReveal`), and branch change (`off`/`crossfade`), plus master enable and base duration.
-  - Add `AppearanceConfig.motion`; when absent, seed master enable and duration from the legacy
-    `animationEnabled`/`animationDuration` keys and use the v1 style defaults.
-  - Decode every new field tolerantly so missing or unknown values fall back independently rather
-    than taking down the complete configuration.
-  - Success: current-production and partial/legacy JSON preserve prior behavior; new JSON round-trips
-    all roles; malformed role values fall back only for that role.
-  - Backpressure:
-    `xcodebuild -workspace 01_Project/MousePlus.xcworkspace -scheme MousePlus -configuration Debug test -only-testing:MousePlusTests/ConfigurationServiceTests`
+- [x] **1.1: Extend opening choices and policy without changing defaults.**
+  - Targets: `Models/HUDMotionConfiguration.swift`, `Utilities/HUDMotionPolicy.swift`,
+    `Views/Components/HUDOuterBandMotion.swift` (exhaustive effect handling if needed),
+    `../MousePlusTests/ConfigurationServiceTests.swift`, `HUDMotionPolicyTests.swift`.
+  - Work: add the four stable raw values in the spec; resolve all style × master × Reduce
+    Motion combinations. Retain the per-field migration and existing role behavior. Audit
+    effect switches; new summon effects must not accidentally become outer reveal effects.
+  - Success: round-trip every opening choice; legacy/missing/unknown/malformed values retain
+    their specified fallbacks; duration clamp/NaN handling and Off/Reduce Motion work.
+  - Backpressure: F narrowed to configuration, policy and existing outer-band tests; B.
 
-- [x] **1.2: Add a pure HUD motion policy resolver**
-  → `01_Project/MousePlus/Utilities/HUDMotionPolicy.swift` (new),
-  `01_Project/MousePlusTests/HUDMotionPolicyTests.swift` (new)
-  - Resolve semantic role, selected style, master switch, clamped duration, and Reduce Motion into a
-    small presentation descriptor (`instant`, `fade`, or spatial effect plus duration).
-  - Make Reduce Motion substitution explicit and testable: never emit scale/radial geometry motion
-    when it is enabled; color/opacity feedback may remain short.
-  - Keep policy free of `RingViewModel` mutations and action timing.
-  - Success: a table-driven test covers every role × master switch × Reduce Motion combination and
-    duration bounds.
-  - Backpressure:
-    `xcodebuild -workspace 01_Project/MousePlus.xcworkspace -scheme MousePlus -configuration Debug test -only-testing:MousePlusTests/HUDMotionPolicyTests`
+### Wave 2 — Shared opening lifecycle and stable interaction
 
-### Wave 2 — Scoped wedge and outer-band presentation
+- [x] **2.1: Extract the opening presentation owner, retaining Fade/Off behavior.**
+  - Depends on: 1.1.
+  - Targets: `Views/RingMenuView.swift`, new `Views/Components/HUDOpeningMotion.swift`, new
+    `Utilities/HUDOpeningMotionFrame.swift`, `Views/Components/WedgeView.swift` as needed;
+    `../MousePlusTests/HUDOpeningMotionTests.swift` (new), `MousePlusTests.swift`.
+    Inspect `Controllers/RingWindowController.swift` and `ViewModels/RingViewModel.swift`;
+    change them only if a minimal presentation invalidation bridge is necessary.
+  - Work: replace `hasAppeared` with one invocation-scoped normalized progress owner;
+    separate live/static-editor/opening-preview motion policy from interaction permission.
+    Establish pure frame helpers and explicit replay/reset identity. Keep native input,
+    center control and AX target geometry outside future masks/transforms.
+  - Work: finish on valid aiming/branch opening, settle on relevant preference/layout changes,
+    and discard on hide. No per-wedge tasks, global implicit animation, or completion-gated
+    action. Unimplemented choices may use Fade internally until Wave 3, but are not exposed
+    in Settings before their real renderer exists.
+  - Success: Fade/Off regressions pass; selection, native early mouse-up, rapid hide/reopen,
+    and live overrides cannot wait for or restart opening. Static editor stays static.
+  - Backpressure: F narrowed to opening, runtime interaction and HUD view-model tests; B.
+    Add hosted checks for stable native/AX geometry where pure tests cannot establish it.
 
-- [x] **2.1: Replace the blanket spring with scoped hover and branch-dimming feedback**
-  → `01_Project/MousePlus/Views/RingMenuView.swift`,
-  `01_Project/MousePlus/Views/Components/WedgeView.swift`
-  - Remove the container-wide `animation(... value: activeSelection/expandedParentIndex)` modifiers.
-  - Apply the resolved hover descriptor only to emphasis color, border, opacity, and a restrained
-    icon scale (target approximately 1.03; no bounce, translation, or label motion).
-  - Scope expansion-related dimming separately so a pointer sweep cannot restart unrelated geometry
-    animation throughout the complete view tree.
-  - Success: selection remains immediately correct under rapid sweeps; only the old/new visual
-    emphasis interpolates; Off and master-disabled modes snap.
-  - Backpressure: focused `RingViewModelHUDTests`, then authoritative Debug build.
+### Wave 3 — Four renderers (share Wave 2 infrastructure)
 
-- [x] **2.2: Implement localized and full-circle outer-ring reveal presentations**
-  → `01_Project/MousePlus/Views/Components/HUDOuterBandMotion.swift` (new),
-  `01_Project/MousePlus/Views/RingMenuView.swift`,
-  `01_Project/MousePlus/Views/Components/WedgeView.swift`
-  - Localized arc: visually interpolate each outer wedge from the parent midpoint and `r2` to its
-    final angles/`r3`; fade glyphs in without moving their final hit targets.
-  - Full-circle Apps: reveal all wedges simultaneously outward from `r2`; do not sweep clockwise or
-    stagger up to twelve entries.
-  - Under Reduce Motion use fade-only; Off snaps. Keep the localized material backing and wedge
-    content synchronized so no detached halo appears.
-  - Success: static submenus communicate parentage, Apps stays fast and balanced, and hit testing uses
-    final `RadialGeometry` from the first frame.
-  - Backpressure: focused radial/HUD integration tests, `git diff --check`, authoritative Debug build.
+- [x] **3.1: Implement Circular Sweep and Iris Reveal masks.**
+  - Depends on: 2.1.
+  - Targets: `Utilities/HUDOpeningMotionFrame.swift`, `Views/Components/HUDOpeningMotion.swift`,
+    `Views/RingMenuView.swift`, `../MousePlusTests/HUDOpeningMotionTests.swift`.
+  - Work: sweep clockwise from top in the existing +y-down convention; iris from r0 to r2.
+    Apply masks to artwork and backing, leaving semantic targets intact. Handle zero and
+    full progress explicitly so a full circle cannot collapse to an empty path at 360°.
+    At completion remove transient clipping, including at strokes/label edges.
+  - Success: endpoint and intermediate frames match the spec; independent rotations,
+    small/large radii and crossing the angular wrap do not rotate/reflow content or leak
+    hidden material. Branch expansion settles the opening rather than being double-masked.
+  - Backpressure: F narrowed to opening and outer-band/branch tests; B; record visual
+    inspection at progress 0, a middle frame, and 1 during development.
 
-### Wave 3 — Summon and branch lifecycle
+- [x] **3.2: Implement bounded Bloom on artwork only.**
+  - Depends on: 2.1; work sequentially with 3.1 because shared files overlap.
+  - Targets: opening frame/renderer files, `Views/RingMenuView.swift`,
+    `../MousePlusTests/HUDOpeningMotionTests.swift`, `MousePlusTests.swift`.
+  - Work: implement 0.92 → restrained overshoot ≤1.015 → exactly 1.00 and opacity 0 → 1
+    over one normalized duration. Use the final HUD center as the anchor, with no panel
+    resizing. Keep native center and accessibility action targets untransformed.
+  - Success: scale bounds and exact endpoint are tested; selection ends visual displacement;
+    native early release and AX activation still target the same final wedge exactly once.
+  - Backpressure: F narrowed to opening and runtime interaction tests; B; inspect actual
+    AX frames and screen-edge clipping in a hosted/live view, not only resolver output.
 
-- [x] **3.1: Add a short summon fade and intentional outer-branch crossfade**
-  → `01_Project/MousePlus/Views/RingMenuView.swift`,
-  `01_Project/MousePlus/Controllers/RingWindowController.swift` only if a minimal lifecycle hook is
-  required, `01_Project/MousePlusTests/RingViewModelHUDTests.swift`
-  - Drive summon from view-local presentation state after the hosting view is installed; keep the
-    `NSPanel` at its final frame/alpha for event routing and do not use AppKit window zoom/movement.
-  - Key outer presentation replacement to the expanded parent/content generation so static-to-static
-    and Apps↔Snap changes receive the configured short crossfade.
-  - Preserve `expansionEpoch`, `expandedParentIndex`, dynamic icon clearing, native mouse-up, and
-    immediate `orderOut` behavior exactly.
-  - Success: a very fast trigger-up can still commit/cancel correctly during presentation; rapid
-    re-pointing never reintroduces old app names/icons; dismissal remains instant.
-  - Backpressure: runtime-interaction and HUD tests, then authoritative Debug build.
+- [x] **3.3: Implement staggered segment presentation with one shared clock.**
+  - Depends on: 2.1; integrate after 3.1–3.2 to avoid overlapping renderer edits.
+  - Targets: opening frame/renderer files, `Views/RingMenuView.swift`,
+    `Views/Components/WedgeView.swift` if needed, `../MousePlusTests/HUDOpeningMotionTests.swift`.
+  - Work: derive ranks per band from final slot geometry and implement the spec's total-
+    duration cadence. Animate artwork and matching backing coverage together. Preserve
+    empty slots, independent inner/middle counts and rotations; do not reorder model items.
+    One progress value drives all segments. Preserve final material rendering at progress 1.
+  - Success: deterministic ordering across angle wrap; zero/one/many-item cases and fixed
+    empty slots behave; last segment finishes by baseDuration; no layout/label reflow,
+    extra AX nodes, persistent seams, or per-segment scheduled callbacks.
+  - Backpressure: F narrowed to opening tests (cadence, endpoints, counts/rotations, backing
+    coverage); B; inspect the material/label result at intermediate and final frames.
 
-### Wave 4 — Existing-section Settings controls
+### Wave 4 — Native Settings and dedicated preview
 
-- [x] **4.1: Expand Ring Appearance → Animation with role controls**
-  → `01_Project/MousePlus/Views/RingAppearanceSettingsPane.swift`,
-  existing AppKit control wrappers as needed,
-  `01_Project/MousePlusTests/SettingsWorkspaceCoordinatorTests.swift`,
-  `01_Project/MousePlusTests/WorkspaceAccessibilityTests.swift`
-  - Keep the current master checkbox; relabel the response slider as Motion speed without changing
-    its stored range/value semantics.
-  - Add four labeled `AppKitPopup` rows for Opening, Hover, Outer ring, and Branch change; disable
-    them with the slider when the master switch is off.
-  - Add stable accessibility identifiers and the Reduce Motion explanatory note. Do not add raw
-    SwiftUI controls or another sidebar section.
-  - Keep `RingPreviewSelector` motion disabled and update it to the new model API.
-  - Success: values save through the existing debounced fresh-read merge, survive relaunch, live-apply
-    to the next HUD invocation, and are complete/understandable through VoiceOver.
-  - Backpressure: focused Settings persistence/accessibility tests, `git diff --check`, Debug build.
+- [x] **4.1: Expose all styles and add safe shared-renderer replay.**
+  - Depends on: 3.1, 3.2, 3.3.
+  - Targets: `Views/RingAppearanceSettingsPane.swift`, new `Views/Components/HUDOpeningPreview.swift`,
+    `Views/RingMenuView.swift`; `../MousePlusTests/SettingsWorkspaceCoordinatorTests.swift`,
+    `WorkspaceAccessibilityTests.swift`, new `HUDOpeningPreviewTests.swift`.
+  - Work: extend existing Opening popup in the spec's order; add the fixed preview and
+    existing `AppKitButton` wrapper immediately below it. Reuse current bindings and
+    disabled/accessibility conventions; do not create a new Settings destination.
+  - Work: isolated current-layout model, explicit replay token, initial static display,
+    one replay per style selection, speed applied on next replay, cancel on pane exit,
+    effective Reduce Motion caption, and no command/AX activation path. Existing menu
+    editor preview continues to suppress all motion and retain editing selection.
+  - Success: exercise actual native popup/replay actions; every style persists/reloads and
+    live-applies while preserving an unrelated external edit. Replay adds no dirty fields,
+    save/live-apply events, service queries or actions. Rapid replay replaces previous work;
+    Off and unloaded states disable controls correctly. Keyboard/AX metadata is correct.
+  - Backpressure: F narrowed to coordinator, accessibility, opening preview and opening
+    tests; B. Review control placement in running Settings at its minimum window size.
 
-### Wave 5 — Closure gate
+### Wave 5 — Integration and live acceptance
 
-- [ ] **5.1: Complete automated, adversarial, performance, and signed-live verification**
-  → tests, `docs/sessions/`, `docs/PROJECT_STATE.md`, `docs/TASKS.md`
-  - Run focused tests and the complete MousePlus test target; run `git diff --check`; run the
-    authoritative Debug build.
-  - Review for accidental animation of layout, labels, pointer geometry, panel frame, accessibility
-    order, and action/dismiss paths. Confirm no continuous timeline/timer remains active at rest.
-  - Profile or inspect Core Animation behavior with twelve app wedges and rapid sweeps; the gate is
-    no visible hitch, runaway redraw, or idle animation rather than an unmeasured optimization claim.
-  - Signed live matrix: hold-release and tap-toggle; fast invoke→release; static submenu; 12-app full
-    circle; repeated Apps→Snap→Apps; each role Off; master Off; slow/fast duration extremes; Reduce
-    Motion; VoiceOver activation; Escape/click-outside/direct-action dismissal.
-  - User acceptance: motion improves hierarchy and feedback without making the HUD feel slower or
-    causing a visible wedge to disagree with the action under the pointer.
-  - Backpressure:
-    `xcodebuild -workspace 01_Project/MousePlus.xcworkspace -scheme MousePlus -configuration Debug test`
-    then
-    `xcodebuild -workspace 01_Project/MousePlus.xcworkspace -scheme MousePlus -configuration Debug build`
+- [ ] **5.1: Verify all contracts and record an accurate handoff.**
+  - Depends on: 4.1.
+  - Targets: all changed source/tests, this plan, specification, `docs/PROJECT_STATE.md`,
+    `docs/TASKS.md`, and a new session log when closing implementation.
+  - Work: run F, T, B and D; inspect actual result bundles. Review lifecycle cancellation,
+    cross-role transactions, material masks, stable hit/AX geometry, native control wiring,
+    preview isolation, and idle work. Fix concrete issues before the live handoff.
+  - Live matrix: all four new styles plus Fade/Off; 0.05/0.15/0.5 seconds; both trigger modes;
+    early release, repeated reopen, center drag/action, Escape/outside/direct dismissal;
+    static branches and twelve-app Apps → Snap → Apps; independent counts/rotations and
+    empty slots; labels on/off; maximum supported geometry at screen edges; master Off,
+    live preference changes, Reduce Motion; preview replay/pane navigation; VoiceOver and
+    keyboard control traversal. Observe smoothness and any clipping/seams on supported Macs.
+  - Success: launch the exact signed build and identify its path; signature verification
+    passes; test results and actual live observations are recorded separately. Visual
+    acceptance covers each new effect, not just an app-launch smoke. Record any untested
+    OS/device cases or missing VoiceOver/performance observations explicitly.
+  - Backpressure: F + T + B + D; `codesign --verify --deep --strict` with the exact built app
+    path; signed live matrix and user acceptance. No invented measurements or inherited
+    Motion v1 results. If live review is pending, keep this task open.
+  - Live remediation: user verification found that Settings replayed the selected style but a
+    fresh runtime HUD did not, and that a HUD opened over the active Settings window ignored
+    clicks in Settings and did not reliably close on a repeated trigger. These are blocking
+    lifecycle defects. Same-app Settings dismissal is now live-confirmed. The apparent remaining
+    runtime-animation failure was first observed while three different MousePlus binaries were
+    running concurrently. A subsequent clean single-process check still showed only the panel's
+    quick fade, confirming initial insertion settles before the selected renderer is visible. The
+    live panel now performs the preview's reliable replay-identity transition one frame after mount,
+    guarded against stale invocations. The expanded 31-test focused suite passes. User verification
+    confirms that the selected animation now runs in the actual HUD, but the entire settled HUD is
+    briefly visible before that animation begins. Acceptance remains blocked. The next remediation
+    must mount animated runtime content concealed and non-playing, then arm exactly one guarded
+    post-mount replay; Off and accessibility-resolved instant presentation must remain immediately
+    visible.
+  - Concealed-mount remediation implemented: runtime requests explicitly await mount, with hidden
+    artwork/center and no playback task armed. The existing guarded callback starts one replay;
+    early interaction or preference changes settle immediately and suppress that delayed replay.
+    Off/disabled motion remain visible; Reduce Motion retains its Fade fallback. The failing
+    playback-arming regression is now green, and 51 focused tests pass, including real-panel
+    concealment/replay/interruption checks. Fresh Debug build and strict Developer ID verification
+    pass at `/tmp/MousePlus-ConcealedMount-Live.mCxNaw/Build/Products/Debug/MousePlus.app`
+    (2026-09-05 12:35:47 CEST). Actual material pixels, user flash confirmation, tap-toggle, and
+    remaining visual/accessibility acceptance still require user review. Task 5.1 stays open.
+  - Latest user review supersedes the acceptance expectation above: the flash is gone, but runtime
+    opening is back to a fade and the selected effect is not visible. The exact cause is not yet
+    established. The 51-test pass is valid automated evidence, not proof of the actual visual result:
+    hosted opening tests record frames with clear placeholder content, bypassing the full ring's
+    material composition and interaction-driven settle callbacks. Next: trace the selected request,
+    awaiting-mount flag, guarded replay, settle causes, and displayed progress through the actual
+    runtime renderer; restore the effect while keeping the initial frame concealed. No new fix or
+    rollback was made during pre-clear logging. App-control preference superseded by the later standing quit/relaunch authorization (see latest session entry).
 
----
 
-## Wave Dependencies
+  - Runtime diagnosis follow-up (2026-09-05): full RingMenuView, centered on the pointer with
+    interactions enabled and the production 16 ms replay delay, produces intermediate frames for
+    every animated style. Isolated AppKit bitmap captures show a concealed mount and progressive
+    Staggered Segments using six/eight slots and independent rotations. An initial test at a fixed
+    screen point failed because it put a wedge under the physical pointer; tracing confirmed
+    legitimate hover settlement. That is not proof of a controller-placement defect or the user's
+    root cause. No speculative playback/placement fix was applied.
+  - Added two repeatable full-renderer regression tests: selected effect/intermediate frames and
+    actual RingMenuView selection-driven interruption before replay. Physical hover is disabled
+    in these retained automated tests; native interaction still has its existing coverage. Added
+    bounded Debug-only per-panel logging of selected style, effective frame effect, replay,
+    intermediate frame, and first settle reason. 53 focused tests pass; stronger selected-effect and center-concealment assertions passed in a
+    targeted rerun. Fresh Debug build and strict Developer ID verification pass at
+    `/tmp/MousePlus-OpeningDiagnostic-Live/Build/Products/Debug/MousePlus.app`
+    (2026-09-05 13:17:04 CEST). Next is a user-controlled reproduction and HUDOpening log
+    inspection with that diagnostic app; Task 5.1 remains open.
 
-```text
-Wave 1: persisted model + pure policy
-   ↓
-Wave 2: scoped hover/dimming + outer reveal
-   ↓
-Wave 3: summon + branch lifecycle
-   ↓
-Wave 4: Settings surface over verified roles
-   ↓
-Wave 5: full closure gate
-```
+  - Follow-up correction: the first diagnostic artifact compiled out the owner because custom
+    Debug.xcconfig did not define Swift DEBUG. Added the inherited DEBUG compilation condition;
+    fresh build and strict signature pass, and diagnostic format strings are verified in the
+    executable. Quit prior PID 97681 gracefully and launched PID 1506 from
+    `/tmp/MousePlus-OpeningDiagnostic-Enabled/Build/Products/Debug/MousePlus.app`.
+    The user's global preference now explicitly authorizes this quit/relaunch for every fresh
+    runnable desktop-app build. Await a new opening trace; the fade-only cause is still unverified.
 
-Wave 4 intentionally follows runtime implementation so Settings never advertises an effect that does
-not exist. Wave 3 follows Wave 2 because branch replacement must reuse the outer presentation seam,
-not create a second animation system.
+  - User confirmation: the keyboard shortcut animates correctly, and mapping the mouse button to
+    that shortcut in BetterMouse works too. Keep MousePlus's direct mouse binding disabled to
+    avoid duplicate triggers in that setup. Live logs from the corrected diagnostic build show
+    both full 0.5-second stagger playback and failing invocations settled by pointer hover at
+    progress zero before replay. Trigger coordinates, mounted local pointer/center, and first
+    settle pointer are now logged. No native-trigger fix or coordinate root cause is established;
+    Task 5.1 remains open for that path and the rest of the acceptance matrix.
 
-## Operational Learnings
+## Operational learnings / risks
 
-- The non-activating panel's reliable release boundary is AppKit `mouseUp`; animation must not move
-  commit ownership back into SwiftUI gesture completion.
-- A visual transform can temporarily disagree with final radial hit testing. Keep durations short,
-  keep logical geometry final, and prefer opacity/emphasis when spatial interpolation adds no meaning.
-- The editor preview previously jumped when it inherited runtime spring/scale animation; do not
-  re-enable it incidentally while migrating the appearance model.
-- `AnnularWedge` already supplies the correct angle/radius interpolation seam; do not replace the
-  geometry engine or add a `Canvas` merely to animate it.
+- Static editor preview currently suppresses motion twice (`interactionEnabled` policy and
+  its own disabled motion config/transaction). Animate only the dedicated new preview.
+- Masks and scale can affect AppKit material compositing and accessibility frames; pure
+  geometry tests cannot close those risks. Require hosted/live evidence.
+- Opening effects must not make hidden wedges await visibility before accepting input.
+  Conversely, first valid aiming should reveal the final layout immediately.
+- The existing native release bridge is authoritative; do not replace it with only a
+  SwiftUI gesture because hosted gesture delivery was previously unreliable.
+- Configurable ring radii plus Bloom's overshoot require checking the existing panel
+  padding at maximum settings. Prefer bounded artwork/tuning over changing panel geometry.
 
-## Blocked Tasks
+## Blocked tasks
 
-None. Signed live verification requires the user's normal Accessibility-approved build/run flow, as
-with prior HUD closure gates, but implementation can proceed through the automated waves first.
+None at planning time. Implementation awaits a future execution request. Existing Logitech
+capture and tip-jar URL blockers do not affect this feature.
 
-## Execution Log
+## Execution log
 
-| Wave | Started | Completed | Commits |
-|------|---------|-----------|---------|
-| 1 | 2026-09-04 | 2026-09-04 | `2fa266a`, `582513d` |
-| 2 | 2026-09-04 | 2026-09-04 | `6bec144`, `2f1a208` |
-| 3 | 2026-09-04 | 2026-09-04 | `1d4e459` |
-| 4 | 2026-09-04 | 2026-09-04 | `fcec53e` |
-| 5 | | | |
+| Wave | Started | Completed | Evidence |
+|---|---|---|---|
+| 1 | 2026-09-05 | 2026-09-05 | 31 focused tests + authoritative Debug build passed |
+| 2 | 2026-09-05 | 2026-09-05 | 39 focused tests + authoritative Debug build passed |
+| 3 | 2026-09-05 | 2026-09-05 | 35 focused tests + authoritative Debug build passed |
+| 4 | 2026-09-05 | 2026-09-05 | 79 focused tests + authoritative Debug build + minimum-size live Settings inspection passed |
+| 5 | 2026-09-05 | — | Review fixed endpoint-only interpolation (`e96ba44`), same-app dismissal/tap-toggle ownership, and initial runtime playback. A clean single-process check confirmed insertion still settled before spatial playback became visible, so runtime now performs the working preview's replay-identity transition one frame after panel mount with stale-invocation protection. The earlier 112 focused/290 full suites and latest 31 focused tests pass; Settings-click dismissal is live-confirmed. A fresh clean build at `/tmp/MousePlus-OpeningStyles-PostMount-Live/Build/Products/Debug/MousePlus.app` is timestamped 2026-09-05 11:10:58 CEST and passes strict Developer ID verification. Runtime animation and remaining live acceptance remain. |
 
----
-*Delete this root plan after all tasks close; preserve the outcome in the session log and project state.*
+Delete this disposable plan only after all tasks close; retain the specification and
+completion evidence. Sync task completion with `docs/TASKS.md` during execution.

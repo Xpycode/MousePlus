@@ -30,6 +30,7 @@ struct HUDOpeningMotionRequest: Equatable, Sendable {
     let descriptor: HUDMotionPresentationDescriptor
     let playbackEnabled: Bool
     let invocationID: Int
+    var isAwaitingMount = false
 
     var shouldAnimate: Bool {
         playbackEnabled && descriptor.effect != .instant
@@ -38,6 +39,7 @@ struct HUDOpeningMotionRequest: Equatable, Sendable {
 
 enum HUDOpeningMotionTransition: Equatable, Sendable {
     case unchanged
+    case awaitMount
     case replay
     case settle
 
@@ -46,8 +48,10 @@ enum HUDOpeningMotionTransition: Equatable, Sendable {
         current: HUDOpeningMotionRequest
     ) -> Self {
         guard current.shouldAnimate else { return .settle }
-        guard let previous else { return .replay }
-        if previous.invocationID != current.invocationID { return .replay }
+        guard let previous else { return current.isAwaitingMount ? .awaitMount : .replay }
+        if previous.invocationID != current.invocationID {
+            return current.isAwaitingMount ? .awaitMount : .replay
+        }
         if previous != current { return .settle }
         return .unchanged
     }
@@ -73,7 +77,8 @@ struct HUDOpeningMotionFrame: Equatable, Sendable {
         descriptor: HUDMotionPresentationDescriptor,
         progress rawProgress: CGFloat,
         deadZoneRadius: CGFloat = 0,
-        revealRadius: CGFloat = 0
+        revealRadius: CGFloat = 0,
+        isConcealed: Bool = false
     ) -> Self {
         let progress = min(max(rawProgress, 0), 1)
         let eased = easeOut(progress)
@@ -119,8 +124,8 @@ struct HUDOpeningMotionFrame: Equatable, Sendable {
         return Self(
             effect: descriptor.effect,
             progress: progress,
-            artworkOpacity: artworkOpacity,
-            centerOpacity: centerOpacity,
+            artworkOpacity: isConcealed ? 0 : artworkOpacity,
+            centerOpacity: isConcealed ? 0 : centerOpacity,
             artworkScale: artworkScale,
             mask: mask
         )

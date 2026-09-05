@@ -6,7 +6,8 @@ import AppKit
 ///   - **Escape** (keyCode 53) → `onEscape`. The owner decides whether that
 ///     collapses an expanded outer ring or fully closes the root.
 ///   - **Mouse-down in another app** → `onClickOutside` (full dismiss).
-///   - **Mouse-down in our panel's transparent corner** → `onLocalMouseDown`.
+///   - **Mouse-down in MousePlus** → `onLocalMouseDown`; the owner distinguishes
+///     HUD content/corners from sibling windows such as Settings.
 ///
 /// Key (Escape) handling needs BOTH a global and a local monitor:
 ///   - `addGlobalMonitorForEvents` only sees events destined for **other** apps.
@@ -19,7 +20,8 @@ import AppKit
 ///
 /// Global mouse-down needs no frame math: it is by definition destined for
 /// another app / the desktop. Local mouse-down is handed to the owner because
-/// only the window controller knows the panel's coordinate space and HUD center.
+/// only the window controller knows the panel's coordinate space and whether
+/// the event belongs to the HUD panel or another MousePlus window.
 protocol EventMonitorProviding {
     func addGlobalMonitor(matching mask: NSEvent.EventTypeMask,
                           handler: @escaping (NSEvent) -> Void) -> Any?

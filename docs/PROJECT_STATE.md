@@ -1,6 +1,6 @@
 # Project State
 
-**Last updated:** 2026-09-04
+**Last updated:** 2026-09-05
 
 ## Identity
 
@@ -11,22 +11,18 @@
 
 ## Now
 
-- **Phase:** HUD Motion v1 implementation; Wave 4 of 5 complete. <!-- Phase changed: 2026-09-04 -->
-- **Focus:** Role-specific Animation controls are implemented and verified through native control actions, persistence/reload, and accessibility metadata.
-- **Blocker:** Advanced Logitech-button support is paused until raw MX4/MX3S captures resolve the HID++ strategy decision. `APP_CHROME_SETTINGS_PLAN.md`'s Leave-a-Tip button still needs a tip-jar platform/URL from the user.
-- **Next:** Execute Wave 5: full automated/adversarial closure, performance inspection, and signed live verification of both trigger modes, rapid re-pointing, Reduce Motion, and VoiceOver.
+- **Phase:** HUD Opening Styles implementation; Wave 5 verification in progress. <!-- Phase changed: 2026-09-05 -->
+- **Focus:** User confirms the selected opening animation works through the keyboard shortcut and through BetterMouse mapped to that shortcut. Direct MousePlus mouse-button triggering still has a reported fade-only failure; failing live traces show hover settlement before replay.
+- **Blocker:** Native mouse-trigger opening acceptance remains open; BetterMouse → keyboard shortcut is a user-verified working setup. Unrelated: advanced Logitech support awaits raw captures/strategy, and Leave-a-Tip awaits a platform/URL.
+- **Next:** Preserve the working BetterMouse → ⌃⌥⌘M setup with MousePlus's direct mouse binding disabled. If resuming native-trigger remediation, compare its initial pointer/hover coordinates with the working keyboard path; do not change playback without evidence. Task 5.1 remains open for native-trigger and remaining visual/accessibility checks. Fresh runnable builds are automatically quit/relaunched under the user's new global preference.
 
 ## Recent
 
-- **2026-09-04:** Completed HUD Motion v1 Wave 4 (`fcec53e`): native Opening, Hover, Outer ring, and Branch change controls, Motion speed, and the Reduce Motion note. Fixed native accessibility value reporting; all 33 focused Settings/control/accessibility tests and the authoritative Debug build pass. Full-suite and signed live acceptance remain in Wave 5.
-- **2026-09-04:** Completed HUD Motion v1 Wave 3: summon fades without changing the panel; static and dynamic outer branches crossfade using frozen geometry/icons and guarded accessibility activation. Collapse removes the whole transition owner immediately. All 48 focused tests and the authoritative Debug build pass; signed visual and VoiceOver checks remain in Wave 5.
-- **2026-09-04:** Completed HUD Motion v1 Wave 2: hover emphasis is wedge-local, localized outer wedges unfold from their parent direction, full-circle Apps wedges reveal outward simultaneously, and Reduce Motion/Off modes avoid spatial presentation. All 39 focused tests and the authoritative Debug build pass; an independent review found no code defects, with live visual checks deferred to the closure gate.
-- **2026-09-04:** Completed HUD Motion v1 Wave 1: legacy animation settings migrate losslessly into independently tolerant role styles, and a pure policy resolves master/style/duration/Reduce Motion combinations without touching interaction state. All 21 focused tests pass.
-- **2026-09-04:** Audited HUD animation feasibility and created a five-wave Motion v1 plan for safe semantic effects, role-specific Settings controls, accessibility, and signed live verification.
-- **2026-09-04:** Closed App Switcher v1 after a fresh signed build: the user confirmed recent-usage ordering and clean rapid Apps↔Snap re-pointing with no stale app icons. Captured a later investigation into feasible and unsuitable HUD animations.
-- **2026-09-04:** Prototyped and live-verified a full-circle running-app switcher aligned to the Apps wedge; fixed the test-run handoff by relaunching the exact rebuilt bundle, and confirmed outer labels can be disabled.
-- **2026-09-04:** Fixed tap-toggle commits at the native AppKit mouse-up boundary; the full 249-test suite and signed build pass, and the user confirmed both static and dynamic Safari activation.
-- **2026-09-04:** Clarified dynamic Apps editing: the inspector now shows a read-only running-app source, hides inactive preserved children, centralizes outer-item creation under Menu & Rings, and keeps Move/Delete together at the bottom. Signed builds pass; the live HUD screenshot confirms real app names/icons.
+- **2026-09-05:** User confirms keyboard-triggered animation works and BetterMouse mapping the mouse button to that shortcut also works. Recorded the preferred working setup; direct mouse-trigger failure remains open. Live diagnostics distinguish full stagger playback from hover cancellation before replay.
+- **2026-09-05:** User still reports a fade in the real HUD. Found that custom Debug config omitted the Swift DEBUG condition, so the first diagnostic build contained no trace owner. Enabled DEBUG, verified trace strings and strict signature, gracefully quit the old copy and launched the corrected build. Global quit/relaunch preference saved in Codex instructions.
+- **2026-09-05:** Added full-renderer playback/interruption regressions and bounded Debug runtime diagnostics. 53 focused tests pass; centered live-interaction test and isolated stagger material captures show selected playback. A fixed-position test false alarm was legitimate pointer hover, not a proven mount defect. User live reproduction remains open.
+- **2026-09-05:** User reports the concealed-mount build is flash-free but only fades in again. Recorded the selected-animation regression and the gap in hosted frame tests; no further code fix during pre-clear logging.
+- **2026-09-05:** Implemented concealed, non-playing runtime mounting with guarded replay and early-interruption protection. The regression failed before the playback fix; all 51 focused tests now pass, including real-panel lifecycle coverage. Fresh Debug build and strict Developer ID signature verification pass; user visual acceptance remains pending.
 
 ## Progress
 
@@ -35,8 +31,10 @@
 - **Ring UI:** Complete and live-verified.
 - **Ring-controls reorganization (Menu/Inner/Middle/Outer tabs + per-ring labels):** 4/4 waves complete; automated, adversarial, signed-build, and user-driven checks passed.
 - **HUD actions:** Window snapping and keystroke delivery work; App Switcher v1 is complete and signed-live verified, including MRU order and rapid re-point safety; menu-bar mirror, system toggles, and screenshots remain.
+- **HUD Motion v1:** 5/5 waves complete; automated checks and independent review passed, with overall signed-live acceptance from the user.
+- **HUD Opening Styles:** Wave 5 verification in progress; 6/7 implementation tasks complete. Selected runtime animation is user-verified through keyboard and BetterMouse-to-keyboard triggering; direct native mouse-trigger and remaining accessibility acceptance are open.
 - **Trigger backend:** Keyboard and standard mouse paths work; advanced Logitech HID++ support remains undecided.
-- **Task tracker:** 6/7 current sprint tasks complete; 28/30 tracked items complete overall (93%).
+- **Task tracker:** 0/1 current sprint tasks complete; 35/37 tracked items complete overall (95%), with one backlog item.
 
 ## Risks and Backlog
 
@@ -65,7 +63,9 @@
 - HUD action roadmap: `HUD_ACTIONS_PLAN.md`
 - App menu-bar mirror (Feature A) implementation plan: `APP_COMMANDS_PLAN.md`
 - Dynamic app switcher (Feature C) implementation plan: `APP_SWITCHER_PLAN.md`
-- Current HUD Motion v1 implementation plan: `../IMPLEMENTATION_PLAN.md`
+- HUD Motion v1 completion and pre-clear handoff: `sessions/2026-09-05.md`
+- Current opening-styles implementation plan: `../IMPLEMENTATION_PLAN.md`
+- Opening-styles behavior, preview, and acceptance criteria: `../specs/hud-opening-styles.md`
 - System toggles (Feature D) implementation plan: `SYSTEM_TOGGLES_PLAN.md`
 - Help/Feedback/Tip/Appearance Settings plan: `APP_CHROME_SETTINGS_PLAN.md`
 - Send Keystroke implementation record: `SEND_KEYSTROKE_PLAN.md`

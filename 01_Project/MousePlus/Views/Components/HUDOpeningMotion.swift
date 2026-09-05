@@ -1,5 +1,17 @@
 import SwiftUI
 
+struct HUDOpeningPlaybackSeed: Equatable {
+    let progress: CGFloat
+    let isPlaybackPending: Bool
+    let isConcealed: Bool
+
+    init(request: HUDOpeningMotionRequest) {
+        progress = request.shouldAnimate ? 0 : 1
+        isPlaybackPending = request.shouldAnimate && !request.isAwaitingMount
+        isConcealed = request.shouldAnimate && request.isAwaitingMount
+    }
+}
+
 /// Owns the single normalized clock for one menu entrance or Settings replay.
 /// Removing this view cancels the one view-scoped playback task; there are no
 /// per-wedge tasks that can survive HUD teardown.
@@ -13,6 +25,8 @@ struct HUDOpeningMotion<Content: View>: View {
     @State private var progress: CGFloat
     @State private var playbackGeneration = 0
     @State private var playbackPending = false
+    @State private var isConcealed: Bool
+    @State private var mountWasInterrupted = false
 
     init(
         request: HUDOpeningMotionRequest,
@@ -26,7 +40,12 @@ struct HUDOpeningMotion<Content: View>: View {
         self.deadZoneRadius = deadZoneRadius
         self.revealRadius = revealRadius
         self.content = content
-        _progress = State(initialValue: request.shouldAnimate ? 0 : 1)
+        let seed = HUDOpeningPlaybackSeed(request: request)
+        _progress = State(initialValue: seed.progress)
+        // Runtime mounts concealed with no clock running. Only the guarded
+        // post-mount request arms playback; previews can still start directly.
+        _playbackPending = State(initialValue: seed.isPlaybackPending)
+        _isConcealed = State(initialValue: seed.isConcealed)
     }
 
     var body: some View {
@@ -35,12 +54,16 @@ struct HUDOpeningMotion<Content: View>: View {
             progress: progress,
             deadZoneRadius: deadZoneRadius,
             revealRadius: revealRadius,
+            isConcealed: isConcealed,
             content: content
         )
-        .onAppear {
-            apply(HUDOpeningMotionTransition.resolve(previous: nil, current: request))
-        }
         .onChange(of: request) { previous, current in
+            // Aiming or a preference change can settle the HUD before its
+            // mount callback arrives. That callback must not hide it again.
+            if previous.isAwaitingMount, mountWasInterrupted, !current.isAwaitingMount {
+                settle()
+                return
+            }
             apply(HUDOpeningMotionTransition.resolve(previous: previous, current: current))
         }
         .onChange(of: settleID) { _, _ in settle() }
@@ -78,6 +101,16 @@ struct HUDOpeningMotion<Content: View>: View {
         switch transition {
         case .unchanged:
             break
+        case .awaitMount:
+            playbackPending = false
+            playbackGeneration &+= 1
+            mountWasInterrupted = false
+            var reset = Transaction()
+            reset.disablesAnimations = true
+            withTransaction(reset) {
+                progress = 0
+                isConcealed = true
+            }
         case .settle:
             settle()
         case .replay:
@@ -85,16 +118,23 @@ struct HUDOpeningMotion<Content: View>: View {
             playbackGeneration &+= 1
             var reset = Transaction()
             reset.disablesAnimations = true
-            withTransaction(reset) { progress = 0 }
+            withTransaction(reset) {
+                progress = 0
+                isConcealed = false
+            }
         }
     }
 
     private func settle() {
         playbackPending = false
         playbackGeneration &+= 1
+        mountWasInterrupted = true
         var transaction = Transaction()
         transaction.disablesAnimations = true
-        withTransaction(transaction) { progress = 1 }
+        withTransaction(transaction) {
+            progress = 1
+            isConcealed = false
+        }
     }
 }
 
@@ -108,6 +148,7 @@ struct HUDOpeningMotionContent<Content: View>: View, Animatable {
     var progress: CGFloat
     let deadZoneRadius: CGFloat
     let revealRadius: CGFloat
+    var isConcealed = false
     let content: (HUDOpeningMotionFrame) -> Content
 
     var animatableData: CGFloat {
@@ -120,7 +161,8 @@ struct HUDOpeningMotionContent<Content: View>: View, Animatable {
             descriptor: descriptor,
             progress: progress,
             deadZoneRadius: deadZoneRadius,
-            revealRadius: revealRadius
+            revealRadius: revealRadius,
+            isConcealed: isConcealed
         )
     }
 

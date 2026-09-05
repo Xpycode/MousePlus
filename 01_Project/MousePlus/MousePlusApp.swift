@@ -315,17 +315,26 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // initial inside-r1 position explicitly so event coalescing cannot lose
         // the first half of Reveal's natural center-to-parent traversal.
         ringViewModel.updateActive(at: .zero, center: .zero)
+        let mountedOpeningID = ringViewModel.prepareOpeningPlayback()
 
         // Runtime primary-button commits come from RingHostingView's native
         // mouse-up callback below. SwiftUI's DragGesture release is unreliable
         // in the tested non-activating panel, so keep it selection-only here.
-        let view = RingMenuView(
+        var view = RingMenuView(
             viewModel: ringViewModel,
             commitsOnPointerRelease: false,
             onCenterDrag: commitsOnPointerRelease ? { [weak controller] delta in
                 controller?.movePanel(by: delta)
             } : nil
         )
+        #if DEBUG
+        let openingDiagnostics = HUDOpeningDiagnostics(
+            invocation: mountedOpeningID, configuration: ringViewModel.appearance.motion,
+            triggerPoint: pointerLocation
+        )
+        view.onOpeningFrame = openingDiagnostics.record
+        view.onOpeningSettle = openingDiagnostics.settle
+        #endif
         controller.show(
             at: pointerLocation,
             outerRadius: ringViewModel.radii.r3,
@@ -342,6 +351,30 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 ringViewModel?.updateActive(at: point, center: center)
             }
         )
+
+        #if DEBUG
+        if let coordinates = controller.hitTestCoordinates(forScreenPoint: NSEvent.mouseLocation) {
+            openingDiagnostics.mounted(point: coordinates.point, center: coordinates.center)
+        }
+        #endif
+
+        // Mount animated content concealed and with no playback armed: initial
+        // insertion can otherwise flash a settled frame in an AppKit panel.
+        // Replay after one mounted frame, matching the
+        // Settings preview's reliable identity-change path. The captured ID
+        // prevents delayed work from touching a newer invocation.
+        Task { @MainActor [weak self, weak controller] in
+            do {
+                try await Task.sleep(for: .milliseconds(16))
+            } catch {
+                return
+            }
+            guard let self, controller?.isVisible == true else { return }
+            #if DEBUG
+            openingDiagnostics.replay()
+            #endif
+            self.ringViewModel.replayOpening(afterMounting: mountedOpeningID)
+        }
 
         startDismissMonitor()
     }
@@ -442,15 +475,41 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             },
             onLocalMouseDown: { [weak self] event in
                 guard let self,
-                      self.configuration.behavior.dismissOnClickOutside,
-                      self.ringWindowController?.shouldDismiss(
-                        forLocalMouseDown: event,
-                        outerRadius: self.ringViewModel.radii.r3
-                      ) == true else { return false }
-                self.closeRing()
-                return true
+                      self.configuration.behavior.dismissOnClickOutside else { return false }
+                // The trigger service owns tap-toggle semantics. If this same
+                // press also lands in the panel's transparent square, closing
+                // here races the queued trigger and can immediately reopen it.
+                guard !Self.isTapToggleMouseTrigger(
+                    eventType: event.type,
+                    buttonNumber: event.buttonNumber,
+                    binding: self.configuration.triggers.mouseButton
+                ),
+                      let disposition = self.ringWindowController?.localMouseDownDisposition(
+                          for: event,
+                          outerRadius: self.ringViewModel.radii.r3
+                      ) else { return false }
+                switch disposition {
+                case .ignore:
+                    return false
+                case .dismissPreservingEvent:
+                    self.closeRing()
+                    return false
+                case .dismissConsumingEvent:
+                    self.closeRing()
+                    return true
+                }
             }
         )
+    }
+
+    static func isTapToggleMouseTrigger(
+        eventType: NSEvent.EventType,
+        buttonNumber: Int,
+        binding: TriggerBinding
+    ) -> Bool {
+        guard eventType == .otherMouseDown,
+              case .mouseButton(let configuredButton, let mode) = binding else { return false }
+        return mode == .tapToggle && buttonNumber == configuredButton
     }
 
     private func stopDismissMonitor() {

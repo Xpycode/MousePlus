@@ -21,6 +21,56 @@ final class DismissMonitorTests: XCTestCase {
         ), "A square panel corner lies beyond the circular HUD")
     }
 
+    func testLocalMouseDispositionDismissesSiblingWindowWithoutEatingItsClick() {
+        XCTAssertEqual(
+            HUDLocalMouseDownDisposition.resolve(
+                eventBelongsToPanel: false,
+                isOutsideHUD: false
+            ),
+            .dismissPreservingEvent
+        )
+        XCTAssertEqual(
+            HUDLocalMouseDownDisposition.resolve(
+                eventBelongsToPanel: true,
+                isOutsideHUD: true
+            ),
+            .dismissConsumingEvent
+        )
+        XCTAssertEqual(
+            HUDLocalMouseDownDisposition.resolve(
+                eventBelongsToPanel: true,
+                isOutsideHUD: false
+            ),
+            .ignore
+        )
+    }
+
+    func testTapToggleMouseTriggerIsOwnedOnlyByTriggerPath() {
+        let tapToggle = TriggerBinding.mouseButton(buttonNumber: 4, mode: .tapToggle)
+        let holdRelease = TriggerBinding.mouseButton(buttonNumber: 4, mode: .holdRelease)
+
+        XCTAssertTrue(AppDelegate.isTapToggleMouseTrigger(
+            eventType: .otherMouseDown,
+            buttonNumber: 4,
+            binding: tapToggle
+        ))
+        XCTAssertFalse(AppDelegate.isTapToggleMouseTrigger(
+            eventType: .otherMouseDown,
+            buttonNumber: 5,
+            binding: tapToggle
+        ))
+        XCTAssertFalse(AppDelegate.isTapToggleMouseTrigger(
+            eventType: .otherMouseDown,
+            buttonNumber: 4,
+            binding: holdRelease
+        ))
+        XCTAssertFalse(AppDelegate.isTapToggleMouseTrigger(
+            eventType: .leftMouseDown,
+            buttonNumber: 4,
+            binding: tapToggle
+        ))
+    }
+
     func testStartIsIdempotentAndStopRemovesEveryMonitor() {
         let provider = RecordingEventMonitorProvider()
         let monitor = DismissMonitor(provider: provider)

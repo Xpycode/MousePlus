@@ -12,13 +12,10 @@
 <!-- Active work. Populated by /plan or /execute. Keep focused (3-7 tasks). -->
 <!-- When done: /log moves to tasks-archive.md -->
 
-- [x] Task 1.1: Add the role-based HUD motion model and legacy animation-setting decode bridge.
-- [x] Task 1.2: Add a pure Reduce Motion-aware semantic motion policy resolver.
-- [x] Task 2.1: Replace the blanket spring with scoped hover and branch-dimming feedback.
-- [x] Task 2.2: Implement localized and full-circle outer-ring reveal presentations.
-- [x] Task 3.1: Add a short summon fade and intentional outer-branch crossfade.
-- [x] Task 4.1: Expand Ring Appearance → Animation with role-specific native controls.
-- [ ] Task 5.1: Complete automated, adversarial, performance, accessibility, and signed-live verification.
+Implementation in progress; user confirms selected runtime animation works via keyboard and BetterMouse mapped to keyboard. Direct native mouse-trigger behavior remains open; 53 focused tests pass. Details and validation:
+[HUD Opening Styles implementation plan](../IMPLEMENTATION_PLAN.md).
+
+- [ ] Task 5.1: Close remaining native mouse-trigger and visual/accessibility acceptance. User confirms selected animation works via keyboard and BetterMouse → ⌃⌥⌘M; direct MousePlus mouse-button triggering still reports fade-only. Failing live traces show pointer-hover settlement at progress zero before replay; initial native pointer/hover coordinates need comparison. Preserve the working BetterMouse setup. Settings-click dismissal remains accepted.
 
 ---
 

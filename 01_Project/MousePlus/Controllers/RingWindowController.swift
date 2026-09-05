@@ -85,6 +85,23 @@ final class RingWindowController {
         )
     }
 
+    /// Classifies a local click while the HUD is visible. Clicks in another
+    /// MousePlus window (notably Settings) are outside the HUD too, but must be
+    /// preserved so the control the user clicked still receives its event.
+    func localMouseDownDisposition(
+        for event: NSEvent,
+        outerRadius: CGFloat
+    ) -> HUDLocalMouseDownDisposition {
+        guard let panel, hostingView != nil else { return .ignore }
+        let eventBelongsToPanel = event.window === panel
+        let isOutsideHUD = eventBelongsToPanel
+            && shouldDismiss(forLocalMouseDown: event, outerRadius: outerRadius)
+        return .resolve(
+            eventBelongsToPanel: eventBelongsToPanel,
+            isOutsideHUD: isOutsideHUD
+        )
+    }
+
     func show<Content: View>(
         at point: NSPoint,
         outerRadius: CGFloat,
@@ -195,6 +212,17 @@ final class RingWindowController {
 enum HUDDismissalGeometry {
     static func isOutsideHUD(point: CGPoint, center: CGPoint, outerRadius: CGFloat) -> Bool {
         hypot(point.x - center.x, point.y - center.y) > outerRadius
+    }
+}
+
+enum HUDLocalMouseDownDisposition: Equatable {
+    case ignore
+    case dismissPreservingEvent
+    case dismissConsumingEvent
+
+    static func resolve(eventBelongsToPanel: Bool, isOutsideHUD: Bool) -> Self {
+        guard eventBelongsToPanel else { return .dismissPreservingEvent }
+        return isOutsideHUD ? .dismissConsumingEvent : .ignore
     }
 }
 

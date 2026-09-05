@@ -1,8 +1,21 @@
 # Completed Tasks
 
-**Total archived:** 22
-**Last updated:** 2026-09-04
+**Total archived:** 35
+**Last updated:** 2026-09-05
 
+- [x] (2026-09-05) HUD Opening Styles — Task 4.1: Expose all styles in native Settings and add an isolated replay preview.
+- [x] (2026-09-05) HUD Opening Styles — Task 3.3: Implement Staggered Segments with one shared animation clock.
+- [x] (2026-09-05) HUD Opening Styles — Task 3.2: Implement bounded Bloom with fixed native and accessibility targets.
+- [x] (2026-09-05) HUD Opening Styles — Task 3.1: Implement Circular Sweep and Iris Reveal masks.
+- [x] (2026-09-05) HUD Opening Styles — Task 2.1: Extract the shared opening lifecycle while preserving immediate interaction.
+- [x] (2026-09-05) HUD Opening Styles — Task 1.1: Extend persisted opening styles and motion policy without changing defaults.
+- [x] (2026-09-05) HUD Motion v1 — Task 5.1: Complete automated, adversarial, performance/accessibility review, signed build, and overall user live acceptance.
+- [x] (2026-09-04) HUD Motion v1 — Task 4.1: Expand Ring Appearance → Animation with role-specific native controls.
+- [x] (2026-09-04) HUD Motion v1 — Task 1.1: Add the role-based HUD motion model and legacy animation-setting decode bridge.
+- [x] (2026-09-04) HUD Motion v1 — Task 1.2: Add a pure Reduce Motion-aware semantic motion policy resolver.
+- [x] (2026-09-04) HUD Motion v1 — Task 2.1: Replace the blanket spring with scoped hover and branch-dimming feedback.
+- [x] (2026-09-04) HUD Motion v1 — Task 2.2: Implement localized and full-circle outer-ring reveal presentations.
+- [x] (2026-09-04) HUD Motion v1 — Task 3.1: Add a short summon fade and intentional outer-branch crossfade.
 - [x] (2026-09-04) Tasks 4.1–4.2: Pass automated, adversarial, signed-live, and documentation closure gates (ring-controls reorganization)
 - [x] (2026-09-04) Task 3.2: Preserve label settings across every Settings write and recovery path
 - [x] (2026-09-04) Task 3.1: Integrate label policy across live HUD and preview

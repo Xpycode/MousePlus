@@ -94,6 +94,60 @@ final class MousePlusTests: XCTestCase {
 
 @MainActor
 final class RingRuntimeInteractionTests: XCTestCase {
+    func testRuntimeMountDoesNotArmPlaybackBeforeGuardedReplay() {
+        let model = makeModel()
+        model.isVisible = true
+        model.appearance.motion = HUDMotionConfiguration(summon: .circularSweep)
+        let mountedID = model.prepareOpeningPlayback()
+        let view = RingMenuView(viewModel: model)
+        let mountedRequest = view.openingMotionRequest(reduceMotion: false)
+
+        XCTAssertTrue(mountedRequest.isAwaitingMount)
+        XCTAssertEqual(HUDOpeningPlaybackSeed(request: mountedRequest).progress, 0)
+        XCTAssertFalse(HUDOpeningPlaybackSeed(request: mountedRequest).isPlaybackPending)
+
+        model.replayOpening(afterMounting: mountedID)
+        let replay = view.openingMotionRequest(reduceMotion: false)
+        XCTAssertFalse(replay.isAwaitingMount)
+        XCTAssertEqual(HUDOpeningMotionTransition.resolve(previous: mountedRequest, current: replay), .replay)
+        model.replayOpening(afterMounting: mountedID)
+        XCTAssertEqual(view.openingMotionRequest(reduceMotion: false), replay)
+    }
+
+    func testOldMountCallbackCannotUnconcealAReopenedHUD() {
+        let model = makeModel()
+        model.isVisible = true
+        let oldID = model.prepareOpeningPlayback()
+        model.isVisible = false
+        model.isVisible = true
+        let newID = model.prepareOpeningPlayback()
+
+        model.replayOpening(afterMounting: oldID)
+
+        XCTAssertEqual(model.openingInvocationID, newID)
+        XCTAssertTrue(model.openingIsAwaitingMount)
+    }
+
+    func testRuntimeOpeningReplayAdvancesOnlyForItsVisibleMountedInvocation() {
+        let model = makeModel()
+        model.isVisible = true
+
+        let firstMountedID = model.prepareOpeningPlayback()
+        XCTAssertEqual(model.openingInvocationID, firstMountedID)
+
+        model.replayOpening(afterMounting: firstMountedID)
+        XCTAssertEqual(model.openingInvocationID, firstMountedID + 1)
+
+        // A duplicate/stale callback cannot replay the current HUD again.
+        model.replayOpening(afterMounting: firstMountedID)
+        XCTAssertEqual(model.openingInvocationID, firstMountedID + 1)
+
+        let secondMountedID = model.prepareOpeningPlayback()
+        model.isVisible = false
+        model.replayOpening(afterMounting: secondMountedID)
+        XCTAssertEqual(model.openingInvocationID, secondMountedID)
+    }
+
     func testHoldReleaseFallsBackToTrackedSelectionWhenPanelCoordinatesAreUnavailable() {
         let model = makeModel()
         model.updateActive(at: point(model, .middle, 0), center: .zero)

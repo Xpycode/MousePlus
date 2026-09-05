@@ -3,6 +3,10 @@
 
 #include "Shared.xcconfig"
 
+// Enable Swift's Debug-only diagnostics; configuration names do not define
+// compilation conditions automatically when using custom xcconfig files.
+SWIFT_ACTIVE_COMPILATION_CONDITIONS = $(inherited) DEBUG
+
 // Stable signing for Debug builds.
 //
 // Without this, ad-hoc signing (`-`) gives every build a different cdhash,
