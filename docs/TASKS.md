@@ -12,10 +12,10 @@
 <!-- Active work. Populated by /plan or /execute. Keep focused (3-7 tasks). -->
 <!-- When done: /log moves to tasks-archive.md -->
 
-Implementation in progress; user confirms selected runtime animation works via keyboard and BetterMouse mapped to keyboard. Direct native mouse-trigger behavior remains open; 53 focused tests pass. Details and validation:
+Implementation in progress; fixed a reproduced post-mount panel-center drift, with 303 scheme tests passing. User confirms selected runtime animation works via keyboard and BetterMouse mapped to keyboard. Direct physical mouse-trigger behavior remains open. Details and validation:
 [HUD Opening Styles implementation plan](../IMPLEMENTATION_PLAN.md).
 
-- [ ] Task 5.1: Close remaining native mouse-trigger and visual/accessibility acceptance. User confirms selected animation works via keyboard and BetterMouse → ⌃⌥⌘M; direct MousePlus mouse-button triggering still reports fade-only. Failing live traces show pointer-hover settlement at progress zero before replay; initial native pointer/hover coordinates need comparison. Preserve the working BetterMouse setup. Settings-click dismissal remains accepted.
+- [ ] Task 5.1: Close remaining native mouse-trigger and visual/accessibility acceptance. User confirms selected animation works via keyboard and BetterMouse → ⌃⌥⌘M; direct MousePlus mouse-button triggering previously reported fade-only and has not been physically rechecked after the layout fix. The new diagnostics and a failing regression exposed post-mount panel-center drift, now fixed. Preserve the working BetterMouse setup and disabled direct binding: the user explicitly wants button 5 to stop advancing Warp tabs. Any physical native-trigger reproduction must be isolated from Warp. Settings-click dismissal remains accepted.
 
 ---
 

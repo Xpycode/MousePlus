@@ -12,17 +12,17 @@
 ## Now
 
 - **Phase:** HUD Opening Styles implementation; Wave 5 verification in progress. <!-- Phase changed: 2026-09-05 -->
-- **Focus:** User confirms the selected opening animation works through the keyboard shortcut and through BetterMouse mapped to that shortcut. Direct MousePlus mouse-button triggering still has a reported fade-only failure; failing live traces show hover settlement before replay.
+- **Focus:** Live acceptance of the HUD center-drift fix through the working BetterMouse shortcut. All 303 scheme tests pass; direct physical mouse-trigger and remaining visual/accessibility acceptance are still open.
 - **Blocker:** Native mouse-trigger opening acceptance remains open; BetterMouse → keyboard shortcut is a user-verified working setup. Unrelated: advanced Logitech support awaits raw captures/strategy, and Leave-a-Tip awaits a platform/URL.
-- **Next:** Preserve the working BetterMouse → ⌃⌥⌘M setup with MousePlus's direct mouse binding disabled. If resuming native-trigger remediation, compare its initial pointer/hover coordinates with the working keyboard path; do not change playback without evidence. Task 5.1 remains open for native-trigger and remaining visual/accessibility checks. Fresh runnable builds are automatically quit/relaunched under the user's new global preference.
+- **Next:** Verify the fixed HUD visually through BetterMouse → ⌃⌥⌘M, keeping MousePlus's direct mouse binding disabled. The user explicitly requires that button 5 never resume advancing Warp tabs. Native-trigger reproduction must be isolated from Warp and preserve the working mapping; Task 5.1 remains open for physical-trigger and remaining visual/accessibility acceptance.
 
 ## Recent
 
+- **2026-09-05:** Added source/hover-coordinate diagnostics, reproduced center drift in a failing real-renderer panel test, and fixed the hosted root size; 303 tests pass. User requires BetterMouse to keep suppressing Warp tab navigation.
 - **2026-09-05:** User confirms keyboard-triggered animation works and BetterMouse mapping the mouse button to that shortcut also works. Recorded the preferred working setup; direct mouse-trigger failure remains open. Live diagnostics distinguish full stagger playback from hover cancellation before replay.
 - **2026-09-05:** User still reports a fade in the real HUD. Found that custom Debug config omitted the Swift DEBUG condition, so the first diagnostic build contained no trace owner. Enabled DEBUG, verified trace strings and strict signature, gracefully quit the old copy and launched the corrected build. Global quit/relaunch preference saved in Codex instructions.
 - **2026-09-05:** Added full-renderer playback/interruption regressions and bounded Debug runtime diagnostics. 53 focused tests pass; centered live-interaction test and isolated stagger material captures show selected playback. A fixed-position test false alarm was legitimate pointer hover, not a proven mount defect. User live reproduction remains open.
 - **2026-09-05:** User reports the concealed-mount build is flash-free but only fades in again. Recorded the selected-animation regression and the gap in hosted frame tests; no further code fix during pre-clear logging.
-- **2026-09-05:** Implemented concealed, non-playing runtime mounting with guarded replay and early-interruption protection. The regression failed before the playback fix; all 51 focused tests now pass, including real-panel lifecycle coverage. Fresh Debug build and strict Developer ID signature verification pass; user visual acceptance remains pending.
 
 ## Progress
 

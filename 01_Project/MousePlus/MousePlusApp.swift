@@ -248,14 +248,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             for await event in service.events {
                 guard let self else { return }
                 switch event {
-                case .down(_, .holdRelease, let pointerLocation):
-                    self.showRing(at: pointerLocation, commitsOnPointerRelease: false)
+                case .down(let source, .holdRelease, let pointerLocation):
+                    self.showRing(at: pointerLocation, commitsOnPointerRelease: false, source: source)
                 case .moved(_, .holdRelease, let pointerLocation):
                     self.updateRingSelection(at: pointerLocation)
                 case .up(_, .holdRelease, let pointerLocation):
                     self.hideRing(commitHovered: true, pointerLocation: pointerLocation)
-                case .down(_, .tapToggle, let pointerLocation):
-                    self.toggleRing(at: pointerLocation)
+                case .down(let source, .tapToggle, let pointerLocation):
+                    self.toggleRing(at: pointerLocation, source: source)
                 case .moved(_, .tapToggle, _), .up(_, .tapToggle, _):
                     break  // tap-toggle selection/commit stays in the SwiftUI gesture path
                 }
@@ -300,7 +300,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
-    private func showRing(at pointerLocation: CGPoint, commitsOnPointerRelease: Bool) {
+    private func showRing(at pointerLocation: CGPoint, commitsOnPointerRelease: Bool,
+                          source: TriggerSource) {
         // keyDown repeats while held — without this guard each tick creates a new NSPanel.
         guard let controller = ringWindowController, !controller.isVisible else { return }
 
@@ -330,10 +331,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         #if DEBUG
         let openingDiagnostics = HUDOpeningDiagnostics(
             invocation: mountedOpeningID, configuration: ringViewModel.appearance.motion,
-            triggerPoint: pointerLocation
+            triggerPoint: pointerLocation, source: source,
+            commitsOnPointerRelease: commitsOnPointerRelease
         )
         view.onOpeningFrame = openingDiagnostics.record
         view.onOpeningSettle = openingDiagnostics.settle
+        view.onOpeningHover = { [weak controller, weak ringViewModel] point, center, hasSelection in
+            let screenPoint = NSEvent.mouseLocation
+            openingDiagnostics.hover(
+                point: point, center: center, hasSelection: hasSelection,
+                screenPoint: screenPoint,
+                nativeCoordinates: controller?.hitTestCoordinates(forScreenPoint: screenPoint),
+                deadZoneRadius: ringViewModel?.radii.r0 ?? 0
+            )
+        }
         #endif
         controller.show(
             at: pointerLocation,
@@ -445,11 +456,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     /// Tap-toggle entry point: open the ring if hidden, close it (no commit) if visible.
-    private func toggleRing(at pointerLocation: CGPoint) {
+    private func toggleRing(at pointerLocation: CGPoint, source: TriggerSource) {
         if ringWindowController?.isVisible == true {
             hideRing(commitHovered: false)
         } else {
-            showRing(at: pointerLocation, commitsOnPointerRelease: true)
+            showRing(at: pointerLocation, commitsOnPointerRelease: true, source: source)
         }
     }
 

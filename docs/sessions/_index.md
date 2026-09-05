@@ -10,7 +10,7 @@
 
 | Date | Focus | Outcome | Log |
 |------|-------|---------|-----|
-| 2026-09-05 | Complete HUD Motion v1 and implement HUD Opening Styles | User confirms selected animation works via keyboard and BetterMouse-to-keyboard mapping. Direct native mouse trigger still fails; live trace shows early hover settlement. Global fresh-build quit/relaunch preference saved and applied. | [→](2026-09-05.md) |
+| 2026-09-05 | HUD Opening Styles and trigger diagnosis | Fixed reproduced post-mount center drift; 303 tests pass. BetterMouse mapping must keep suppressing Warp tab navigation. Physical native-trigger and remaining visual/accessibility acceptance stay open. | [→](2026-09-05.md) |
 | 2026-09-04 | Execute HUD Motion v1 Wave 3 | Added summon fade and safe outer-branch crossfades; immediate commit/dismissal preserved. All 48 focused tests and Debug build pass. Next: Wave 4 native motion controls; live checks remain in Wave 5. | [→](2026-09-04.md) |
 | 2026-09-04 | Investigate HUD animation feasibility | Confirmed the overlay can support restrained role-based motion; recorded safe effects, rejected disruptive ones, and established immediate interaction with Reduce Motion-aware presentation. Next: plan Motion v1. | [→](2026-09-04.md) |
 | 2026-09-04 | Close the remaining App Switcher v1 live checks | A fresh signed build passed; the user confirmed recent-usage ordering and clean rapid Apps↔Snap re-pointing with no stale icons. App Switcher v1 is complete; HUD-animation feasibility was captured for later. | [→](2026-09-04.md) |

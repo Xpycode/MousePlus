@@ -14,9 +14,13 @@ final class HUDOpeningDiagnostics {
     private var recordedInterruption = false
     private var sawIntermediateFrame = false
     private var latestProgress: CGFloat = 0
+    private var hoverStages: Set<String> = []
 
-    init(invocation: Int, configuration: HUDMotionConfiguration, triggerPoint: CGPoint) {
+    init(invocation: Int, configuration: HUDMotionConfiguration, triggerPoint: CGPoint,
+         source: TriggerSource, commitsOnPointerRelease: Bool) {
         self.invocation = invocation
+        let sourceName = String(describing: source)
+        Self.logger.notice("Opening \(invocation): source=\(sourceName, privacy: .public) tapToggle=\(commitsOnPointerRelease)")
         Self.logger.notice("Opening \(invocation): mount selected=\(configuration.summon.rawValue, privacy: .public) enabled=\(configuration.isEnabled) duration=\(configuration.baseDuration)")
         let pointer = NSEvent.mouseLocation
         Self.logger.notice("Opening \(invocation): trigger=(\(Double(triggerPoint.x)),\(Double(triggerPoint.y))) pointer=(\(Double(pointer.x)),\(Double(pointer.y)))")
@@ -28,6 +32,23 @@ final class HUDOpeningDiagnostics {
 
     func replay() {
         Self.logger.notice("Opening \(self.invocation): post-mount replay requested")
+    }
+
+    /// At most two samples per invocation: initial hover and first valid aim.
+    /// Compare deltas from each center; the host includes panel padding while
+    /// the SwiftUI hit surface does not. Absolute local points differ normally.
+    func hover(point: CGPoint, center: CGPoint, hasSelection: Bool,
+               screenPoint: CGPoint, nativeCoordinates: (point: CGPoint, center: CGPoint)?,
+               deadZoneRadius: CGFloat) {
+        let stage = hasSelection ? "first selected hover" : "first unselected hover"
+        guard hoverStages.insert(stage).inserted else { return }
+        Self.logger.notice("Opening \(self.invocation): \(stage, privacy: .public) local=(\(Double(point.x)),\(Double(point.y))) center=(\(Double(center.x)),\(Double(center.y))) deadZone=\(Double(deadZoneRadius))")
+        Self.logger.notice("Opening \(self.invocation): hover screen=(\(Double(screenPoint.x)),\(Double(screenPoint.y)))")
+        if let nativeCoordinates {
+            let delta = CGPoint(x: nativeCoordinates.point.x - nativeCoordinates.center.x,
+                                y: nativeCoordinates.point.y - nativeCoordinates.center.y)
+            Self.logger.notice("Opening \(self.invocation): hover nativeDelta=(\(Double(delta.x)),\(Double(delta.y)))")
+        }
     }
 
     func record(_ frame: HUDOpeningMotionFrame) {

@@ -291,6 +291,20 @@ git diff --check
     settle pointer are now logged. No native-trigger fix or coordinate root cause is established;
     Task 5.1 remains open for that path and the rest of the acceptance matrix.
 
+  - Coordinate remediation (2026-09-05): source-tagged first-hover diagnostics exposed a stationary
+    keyboard pointer moving from the HUD center to roughly 24 points below it after mount. A new
+    real-renderer/controller regression reproduced changing host bounds and center before replay.
+    Disabling hosting sizing constraints alone did not fix it; explicitly framing the hosted root
+    to the controller's padded square did. The regression fails before and passes after the fix;
+    all 303 scheme tests pass with zero skips/failures. Fresh Debug build and strict signature pass;
+    `/tmp/MousePlus-OpeningCoordinate-Live/Build/Products/Debug/MousePlus.app` was relaunched as
+    PID 59912. Live keyboard traces show matching native/SwiftUI deltas and intermediate stagger
+    frames; physical movement and edge clamping remain legitimate interruptions. Playback and
+    trigger delivery are unchanged.
+    The user explicitly requires BetterMouse to continue suppressing button-5 Forward/next-tab in
+    Warp. Preserve the mapping and disabled MousePlus direct binding. Native physical-trigger
+    acceptance remains open and must use an isolated setup that cannot send Forward to Warp.
+
 ## Operational learnings / risks
 
 - Static editor preview currently suppresses motion twice (`interactionEnabled` policy and

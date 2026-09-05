@@ -113,7 +113,13 @@ final class RingWindowController {
         let panel = createPanel(side: side)
         let squareSize = NSSize(width: side, height: side)
 
-        let hostingView = RingHostingView(rootView: AnyView(content))
+        let hostingView = RingHostingView(rootView: AnyView(
+            content.frame(width: side, height: side)
+        ))
+        // The controller owns the padded panel frame. Hosting's default size
+        // constraints otherwise resize it to the smaller ring after mounting,
+        // moving the center under a stationary pointer and selecting a wedge.
+        hostingView.sizingOptions = []
         hostingView.frame = NSRect(origin: .zero, size: squareSize)
         hostingView.onPrimaryMouseUp = onPrimaryMouseUp
         hostingView.onOtherMouseDragged = onOtherMouseDragged

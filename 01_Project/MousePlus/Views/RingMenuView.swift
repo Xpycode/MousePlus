@@ -41,6 +41,10 @@ struct RingMenuView: View {
     /// The observer must not mutate view state.
     var onOpeningFrame: ((HUDOpeningMotionFrame) -> Void)?
     var onOpeningSettle: ((String) -> Void)?
+    #if DEBUG
+    /// First-hover diagnostics use the exact coordinates passed to hit testing.
+    var onOpeningHover: ((CGPoint, CGPoint, Bool) -> Void)?
+    #endif
 
     private var effectiveOpeningReplayID: Int {
         presentationMode == .live ? viewModel.openingInvocationID : openingReplayID
@@ -226,6 +230,9 @@ struct RingMenuView: View {
         .onContinuousHover { phase in
             if interactionEnabled, case .active(let location) = phase {
                 viewModel.updateActive(at: location, center: center)
+                #if DEBUG
+                onOpeningHover?(location, center, viewModel.activeSelection != nil)
+                #endif
                 if viewModel.activeSelection != nil { settleOpening("pointer hover") }
             }
             // .ended → leave selection as-is; a click commits it.

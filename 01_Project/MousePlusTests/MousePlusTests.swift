@@ -94,6 +94,35 @@ final class MousePlusTests: XCTestCase {
 
 @MainActor
 final class RingRuntimeInteractionTests: XCTestCase {
+    func testRuntimePanelKeepsSummonPointCenteredAfterHostedLayoutAndReplay() async throws {
+        let model = RingViewModel()
+        model.appearance.motion = HUDMotionConfiguration(baseDuration: 0.5, summon: .staggeredSegments)
+        model.isVisible = true
+        let mountedID = model.prepareOpeningPlayback()
+        let screen = try XCTUnwrap(NSScreen.main)
+        let summonPoint = CGPoint(x: screen.visibleFrame.midX, y: screen.visibleFrame.midY)
+        let controller = RingWindowController()
+        // Use the actual renderer and controller placement. Physical hover is
+        // disabled so user movement cannot change this fixed screen-point test.
+        controller.show(at: summonPoint, outerRadius: model.radii.r3,
+                        content: RingMenuView(viewModel: model, interactionEnabled: false))
+        defer { controller.hide() }
+
+        let initial = try XCTUnwrap(controller.hitTestCoordinates(forScreenPoint: summonPoint))
+        try await Task.sleep(for: .milliseconds(80))
+        let mounted = try XCTUnwrap(controller.hitTestCoordinates(forScreenPoint: summonPoint))
+        model.replayOpening(afterMounting: mountedID)
+        try await Task.sleep(for: .milliseconds(100))
+        let playing = try XCTUnwrap(controller.hitTestCoordinates(forScreenPoint: summonPoint))
+
+        for coordinates in [initial, mounted, playing] {
+            XCTAssertEqual(coordinates.point.x, coordinates.center.x, accuracy: 1)
+            XCTAssertEqual(coordinates.point.y, coordinates.center.y, accuracy: 1)
+            XCTAssertEqual(coordinates.center.x, initial.center.x, accuracy: 1)
+            XCTAssertEqual(coordinates.center.y, initial.center.y, accuracy: 1)
+        }
+    }
+
     func testRuntimeMountDoesNotArmPlaybackBeforeGuardedReplay() {
         let model = makeModel()
         model.isVisible = true
