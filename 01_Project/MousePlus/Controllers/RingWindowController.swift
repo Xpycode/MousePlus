@@ -1,6 +1,46 @@
 import AppKit
 import SwiftUI
 
+/// Binds native pointer sequences to the HUD invocation in which they began.
+/// An in-place profile replacement keeps the same hosting view, so callbacks
+/// alone cannot distinguish a stale release/drag from input for new content.
+struct HUDNativeInputOwnership {
+    private var generation = 0
+    private var primaryDownGeneration: Int?
+    private var auxiliaryDownGenerations: [Int: Int] = [:]
+    private var acceptsUntrackedAuxiliaryDrag = true
+
+    mutating func beginReplacement(adoptingAuxiliaryButton buttonNumber: Int? = nil) {
+        generation &+= 1
+        acceptsUntrackedAuxiliaryDrag = false
+        if let buttonNumber {
+            auxiliaryDownGenerations[buttonNumber] = generation
+        }
+    }
+
+    mutating func primaryDown() {
+        primaryDownGeneration = generation
+    }
+
+    mutating func consumePrimaryUp() -> Bool {
+        defer { primaryDownGeneration = nil }
+        return primaryDownGeneration == generation
+    }
+
+    mutating func auxiliaryDown(buttonNumber: Int) {
+        auxiliaryDownGenerations[buttonNumber] = generation
+    }
+
+    func ownsAuxiliaryDrag(buttonNumber: Int) -> Bool {
+        acceptsUntrackedAuxiliaryDrag
+            || auxiliaryDownGenerations[buttonNumber] == generation
+    }
+
+    mutating func auxiliaryUp(buttonNumber: Int) {
+        auxiliaryDownGenerations[buttonNumber] = nil
+    }
+}
+
 /// An `NSHostingView` subclass that accepts the first mouse click.
 ///
 /// The ring overlay lives in a non-activating panel, so without this the very
@@ -12,8 +52,14 @@ final class RingHostingView<Content: View>: NSHostingView<Content> {
     var onPrimaryMouseUp: ((CGPoint, CGPoint) -> Void)?
     var onOtherMouseDragged: ((CGPoint, CGPoint) -> Void)?
     private var pointerTrackingArea: NSTrackingArea?
+    private var inputOwnership = HUDNativeInputOwnership()
 
     override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
+
+    override func mouseDown(with event: NSEvent) {
+        inputOwnership.primaryDown()
+        super.mouseDown(with: event)
+    }
 
     /// SwiftUI's `DragGesture.onEnded` is not reliably delivered inside the
     /// tested non-activating panel. Forward the native primary-button
@@ -21,7 +67,7 @@ final class RingHostingView<Content: View>: NSHostingView<Content> {
     /// final-position hit test.
     override func mouseUp(with event: NSEvent) {
         super.mouseUp(with: event)
-        guard let onPrimaryMouseUp else { return }
+        guard inputOwnership.consumePrimaryUp(), let onPrimaryMouseUp else { return }
         let point = convert(event.locationInWindow, from: nil)
         let center = CGPoint(x: bounds.midX, y: bounds.midY)
         onPrimaryMouseUp(point, center)
@@ -41,13 +87,28 @@ final class RingHostingView<Content: View>: NSHostingView<Content> {
     }
 
     override func otherMouseDragged(with event: NSEvent) {
-        guard let onOtherMouseDragged else {
+        guard inputOwnership.ownsAuxiliaryDrag(buttonNumber: event.buttonNumber),
+              let onOtherMouseDragged else {
             super.otherMouseDragged(with: event)
             return
         }
         let point = convert(event.locationInWindow, from: nil)
         let center = CGPoint(x: bounds.midX, y: bounds.midY)
         onOtherMouseDragged(point, center)
+    }
+
+    override func otherMouseDown(with event: NSEvent) {
+        inputOwnership.auxiliaryDown(buttonNumber: event.buttonNumber)
+        super.otherMouseDown(with: event)
+    }
+
+    override func otherMouseUp(with event: NSEvent) {
+        inputOwnership.auxiliaryUp(buttonNumber: event.buttonNumber)
+        super.otherMouseUp(with: event)
+    }
+
+    func beginReplacement(adoptingAuxiliaryButton buttonNumber: Int?) {
+        inputOwnership.beginReplacement(adoptingAuxiliaryButton: buttonNumber)
     }
 }
 
@@ -143,6 +204,34 @@ final class RingWindowController {
         panel?.orderOut(nil)
         panel = nil
         hostingView = nil
+    }
+
+    /// Replaces a visible invocation without ordering the panel out or changing
+    /// its anchor. The caller supplies a renderer with opening playback disabled,
+    /// so remounting updates mode-specific center/native-event behavior without
+    /// replaying summon motion.
+    func replaceContent<Content: View>(
+        outerRadius: CGFloat,
+        content: Content,
+        onPrimaryMouseUp: ((CGPoint, CGPoint) -> Void)?,
+        onOtherMouseDragged: ((CGPoint, CGPoint) -> Void)?,
+        adoptingAuxiliaryButton: Int? = nil
+    ) {
+        guard let panel, let hostingView else { return }
+        let side = HUDPanelGeometry.squareSide(outerRadius: outerRadius)
+        let center = CGPoint(x: panel.frame.midX, y: panel.frame.midY)
+        let size = CGSize(width: side, height: side)
+        let proposed = CGPoint(x: center.x - side / 2, y: center.y - side / 2)
+        let screen = panel.screen ?? NSScreen.screens.first { $0.frame.contains(center) } ?? NSScreen.main
+        let origin = screen.map {
+            HUDPanelGeometry.clampedOrigin(proposed, size: size, in: $0.visibleFrame)
+        } ?? proposed
+        panel.setFrame(CGRect(origin: origin, size: size), display: true)
+        hostingView.beginReplacement(adoptingAuxiliaryButton: adoptingAuxiliaryButton)
+        hostingView.rootView = AnyView(content.frame(width: side, height: side))
+        hostingView.frame = CGRect(origin: .zero, size: size)
+        hostingView.onPrimaryMouseUp = onPrimaryMouseUp
+        hostingView.onOtherMouseDragged = onOtherMouseDragged
     }
 
     /// Moves the current HUD by a global-coordinate delta while keeping the

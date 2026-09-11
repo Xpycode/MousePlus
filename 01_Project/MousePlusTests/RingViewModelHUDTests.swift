@@ -4,6 +4,18 @@ import CoreGraphics
 
 @MainActor
 final class RingViewModelHUDTests: XCTestCase {
+    func testProfileReplacementCancelsPendingOpeningReplay() {
+        let model = RingViewModel()
+        model.isVisible = true
+        let staleMountedID = model.prepareOpeningPlayback()
+
+        model.cancelOpeningPlayback()
+        model.replayOpening(afterMounting: staleMountedID)
+
+        XCTAssertFalse(model.openingIsAwaitingMount)
+        XCTAssertNotEqual(model.openingInvocationID, staleMountedID)
+    }
+
     func testOuterRingPolicyStateTransitionMatrix() {
         struct Case {
             let policy: OuterRingVisibility

@@ -71,6 +71,24 @@ final class DismissMonitorTests: XCTestCase {
         ))
     }
 
+    func testClosingInvocationClearsStaleReleaseOwnership() {
+        let source = TriggerSource(
+            route: .contextual,
+            physicalSource: .mouseButton(buttonNumber: 4)
+        )
+        var ownership = HUDInvocationOwnership()
+        _ = ownership.handle(.down(source: source, mode: .holdRelease, pointerLocation: .zero))
+
+        ownership.close()
+
+        XCTAssertNil(ownership.visibleRoute)
+        XCTAssertNil(ownership.releaseOwner)
+        XCTAssertEqual(
+            ownership.handle(.up(source: source, mode: .holdRelease, pointerLocation: .zero)),
+            .ignore
+        )
+    }
+
     func testStartIsIdempotentAndStopRemovesEveryMonitor() {
         let provider = RecordingEventMonitorProvider()
         let monitor = DismissMonitor(provider: provider)

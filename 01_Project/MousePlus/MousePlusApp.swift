@@ -1,6 +1,68 @@
 import AppKit
 import SwiftUI
 
+enum HUDInvocationOwnershipEffect: Equatable {
+    case show
+    case replace
+    case dismiss
+    case updateSelection
+    case commitRelease
+    case ignore
+}
+
+/// Pure event-ownership boundary for two independently configured HUD routes.
+/// Presentation can outlive a consumed Hold-release (for an expanded branch),
+/// while only the exact current physical source may own the next release.
+struct HUDInvocationOwnership: Equatable {
+    private(set) var visibleRoute: HUDInvocationRoute?
+    private(set) var presentationMode: TriggerMode?
+    private(set) var releaseOwner: TriggerSource?
+
+    mutating func handle(_ event: TriggerEvent) -> HUDInvocationOwnershipEffect {
+        switch event {
+        case .down(let source, let mode, _):
+            guard let visibleRoute else {
+                begin(source: source, mode: mode)
+                return .show
+            }
+            if visibleRoute != source.route {
+                begin(source: source, mode: mode)
+                return .replace
+            }
+            if mode == .tapToggle {
+                close()
+                return .dismiss
+            }
+            // Preserve the visible same-route layout while arming this exact
+            // physical source for its established Hold-release behavior.
+            presentationMode = mode
+            releaseOwner = source
+            return .ignore
+
+        case .moved(let source, let mode, _):
+            return mode == .holdRelease && releaseOwner == source
+                ? .updateSelection : .ignore
+
+        case .up(let source, let mode, _):
+            guard mode == .holdRelease, releaseOwner == source else { return .ignore }
+            releaseOwner = nil
+            return .commitRelease
+        }
+    }
+
+    mutating func close() {
+        visibleRoute = nil
+        presentationMode = nil
+        releaseOwner = nil
+    }
+
+    private mutating func begin(source: TriggerSource, mode: TriggerMode) {
+        visibleRoute = source.route
+        presentationMode = mode
+        releaseOwner = mode == .holdRelease ? source : nil
+    }
+}
+
 @main
 struct MousePlusApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
@@ -96,6 +158,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private lazy var ringViewModel = RingViewModel(actionResultRouter: actionResultRouter,
                                                     appSwitcherService: appSwitcherService)
     private var dismissMonitor: DismissMonitor?
+    private var invocationOwnership = HUDInvocationOwnership()
     let settingsActionContextProvider = SettingsActionContextProvider()
 
     /// Loaded config; drives dismiss behavior. Sensible default until load completes.
@@ -247,19 +310,26 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         triggerEventTask = Task { [weak self] in
             for await event in service.events {
                 guard let self else { return }
-                switch event {
-                case .down(let source, .holdRelease, let pointerLocation):
-                    self.showRing(at: pointerLocation, commitsOnPointerRelease: false, source: source)
-                case .moved(_, .holdRelease, let pointerLocation):
-                    self.updateRingSelection(at: pointerLocation)
-                case .up(_, .holdRelease, let pointerLocation):
-                    self.hideRing(commitHovered: true, pointerLocation: pointerLocation)
-                case .down(let source, .tapToggle, let pointerLocation):
-                    self.toggleRing(at: pointerLocation, source: source)
-                case .moved(_, .tapToggle, _), .up(_, .tapToggle, _):
-                    break  // tap-toggle selection/commit stays in the SwiftUI gesture path
-                }
+                self.handleTriggerEvent(event)
             }
+        }
+    }
+
+    private func handleTriggerEvent(_ event: TriggerEvent) {
+        let effect = invocationOwnership.handle(event)
+        switch (effect, event) {
+        case (.show, .down(let source, let mode, let pointerLocation)):
+            showRing(at: pointerLocation, commitsOnPointerRelease: mode == .tapToggle, source: source)
+        case (.replace, .down(let source, _, _)):
+            replaceRingInvocation(source: source)
+        case (.dismiss, _):
+            closeRing()
+        case (.updateSelection, .moved(_, _, let pointerLocation)):
+            updateRingSelection(at: pointerLocation)
+        case (.commitRelease, .up(_, _, let pointerLocation)):
+            hideRing(commitHovered: true, pointerLocation: pointerLocation)
+        default:
+            break
         }
     }
 
@@ -280,7 +350,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         AppDelegate.applyConfiguration = { [weak self] config in
             guard let self else { return }
             self.configuration = config
-            self.ringViewModel.load(from: config)
+            if !self.ringViewModel.isVisible {
+                self.ringViewModel.load(from: config)
+            }
             self.triggerService?.updateConfig(config.triggers)
             self.applySettingsHotkey(config.triggers.openSettings)
         }
@@ -291,7 +363,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         Task {
             if let config = try? await configService?.load() {
                 configuration = config
-                ringViewModel.load(from: config)
+                if !ringViewModel.isVisible {
+                    ringViewModel.load(from: config)
+                }
                 // Now that the saved triggers are loaded, snap the live monitors to them
                 // (setupTriggers may have started with the default before load finished).
                 triggerService?.updateConfig(config.triggers)
@@ -305,12 +379,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // keyDown repeats while held — without this guard each tick creates a new NSPanel.
         guard let controller = ringWindowController, !controller.isVisible else { return }
 
-        // Capture the frontmost app BEFORE showing our (non-activating) panel, so
-        // window/menu actions target the user's app rather than MousePlus.
-        ringViewModel.frontmostPID = NSWorkspace.shared.frontmostApplication?.processIdentifier
+        let resolvedProfile = resolveInvocation(route: source.route)
+        ringViewModel.load(resolved: resolvedProfile, presentation: configuration)
 
         // Each open starts at the root: no stale expansion/selection.
-        ringViewModel.reset()
         ringViewModel.isVisible = true
         // Every invocation is centered on the current pointer. Record that
         // initial inside-r1 position explicitly so event coalescing cannot lose
@@ -354,7 +426,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 [weak self, weak controller] point, center in
                 // A transparent-corner mouse-down may have dismissed the HUD
                 // before AppKit delivers this release.
-                guard let self, controller?.isVisible == true else { return }
+                guard let self, controller?.isVisible == true,
+                      Self.ownsTapTogglePrimaryCommit(self.invocationOwnership) else { return }
                 self.ringViewModel.commit(at: point, center: center)
             } : nil,
             onOtherMouseDragged: commitsOnPointerRelease ? nil : {
@@ -388,6 +461,61 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
 
         startDismissMonitor()
+    }
+
+    private func replaceRingInvocation(source: TriggerSource) {
+        guard ringWindowController?.isVisible == true else { return }
+        let resolvedProfile = resolveInvocation(route: source.route)
+        ringViewModel.cancelOpeningPlayback()
+        ringViewModel.load(resolved: resolvedProfile, presentation: configuration)
+        let commitsOnPointerRelease = invocationOwnership.presentationMode == .tapToggle
+        let triggeringAuxiliaryButton: Int?
+        if case .mouseButton(let buttonNumber) = source.physicalSource {
+            triggeringAuxiliaryButton = buttonNumber
+        } else {
+            triggeringAuxiliaryButton = nil
+        }
+        let view = RingMenuView(
+            viewModel: ringViewModel,
+            openingPlaybackEnabled: false,
+            commitsOnPointerRelease: false,
+            onCenterDrag: commitsOnPointerRelease ? { [weak ringWindowController] delta in
+                ringWindowController?.movePanel(by: delta)
+            } : nil
+        )
+        ringWindowController?.replaceContent(
+            outerRadius: ringViewModel.radii.r3,
+            content: view,
+            onPrimaryMouseUp: commitsOnPointerRelease ? {
+                [weak self, weak ringWindowController] point, center in
+                guard let self, ringWindowController?.isVisible == true,
+                      Self.ownsTapTogglePrimaryCommit(self.invocationOwnership) else { return }
+                self.ringViewModel.commit(at: point, center: center)
+            } : nil,
+            onOtherMouseDragged: commitsOnPointerRelease ? nil : {
+                [weak ringViewModel] point, center in
+                ringViewModel?.updateActive(at: point, center: center)
+            },
+            adoptingAuxiliaryButton: triggeringAuxiliaryButton
+        )
+    }
+
+    private func resolveInvocation(route: HUDInvocationRoute) -> ResolvedHUDProfile {
+        let app = NSWorkspace.shared.frontmostApplication
+        let snapshot = FrontmostAppSnapshot(
+            processIdentifier: app?.processIdentifier ?? 0,
+            bundleIdentifier: app?.bundleIdentifier,
+            localizedName: app?.localizedName
+        )
+        return configuration.resolveHUD(
+            route: route,
+            frontmostApp: snapshot,
+            mousePlusBundleIdentifier: Bundle.main.bundleIdentifier ?? "com.xpycode.MousePlus"
+        )
+    }
+
+    static func ownsTapTogglePrimaryCommit(_ ownership: HUDInvocationOwnership) -> Bool {
+        ownership.presentationMode == .tapToggle
     }
 
     /// Global auxiliary-button drags can remain owned by the app that received
@@ -449,19 +577,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// Single close path reused by trigger-release, in-view commits (via
     /// `requestClose`), Escape, and click-outside.
     private func closeRing() {
+        invocationOwnership.close()
         stopDismissMonitor()
         ringWindowController?.hide()
         ringViewModel.isVisible = false
         ringViewModel.reset()
-    }
-
-    /// Tap-toggle entry point: open the ring if hidden, close it (no commit) if visible.
-    private func toggleRing(at pointerLocation: CGPoint, source: TriggerSource) {
-        if ringWindowController?.isVisible == true {
-            hideRing(commitHovered: false)
-        } else {
-            showRing(at: pointerLocation, commitsOnPointerRelease: true, source: source)
-        }
     }
 
     // MARK: - Dismiss monitors (T10)

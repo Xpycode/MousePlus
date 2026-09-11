@@ -166,6 +166,11 @@ final class RingViewModel {
     /// actions target the user's app and not MousePlus. `nil` if none.
     var frontmostPID: pid_t?
 
+    /// Complete context selected before the panel is shown. The value and its
+    /// action layout remain fixed until a later invocation explicitly replaces
+    /// them; ordinary configuration saves never mutate a visible HUD.
+    private(set) var resolvedHUDProfile: ResolvedHUDProfile?
+
     private let actionService: ActionService
     private let actionResultRouter: ActionResultRouter
     private let appSwitcherService: AppSwitcherService
@@ -213,6 +218,23 @@ final class RingViewModel {
         appearance = config.appearance
         radii = config.appearance.bandRadii
         hudCustomization = config.hudCustomization
+        resolvedHUDProfile = nil
+        frontmostPID = nil
+        reset()
+    }
+
+    /// Loads one invocation's resolved action layout while inheriting all
+    /// presentation and behavior settings from Global configuration.
+    func load(resolved profile: ResolvedHUDProfile, presentation config: Configuration) {
+        innerItems = profile.actionLayout.inner
+        middleItems = profile.actionLayout.middle
+        appearance = config.appearance
+        radii = config.appearance.bandRadii
+        hudCustomization = config.hudCustomization
+        resolvedHUDProfile = profile
+        frontmostPID = profile.targetApplication.processIdentifier > 0
+            ? profile.targetApplication.processIdentifier
+            : nil
         reset()
     }
 
@@ -446,6 +468,15 @@ final class RingViewModel {
     /// a HUD that was closed and reopened in the meantime.
     func replayOpening(afterMounting mountedID: Int) {
         guard isVisible, openingInvocationID == mountedID else { return }
+        openingIsAwaitingMount = false
+        openingInvocationID &+= 1
+    }
+
+    /// Invalidates a pending mounted-frame replay when the visible panel is
+    /// repurposed for another route. Profile replacement is immediate and must
+    /// never inherit the first invocation's delayed summon motion.
+    func cancelOpeningPlayback() {
+        guard openingIsAwaitingMount else { return }
         openingIsAwaitingMount = false
         openingInvocationID &+= 1
     }
