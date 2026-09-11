@@ -16,6 +16,21 @@ struct ContinuousWorkspaceDebounceClock: WorkspaceDebounceClock {
 @MainActor
 @Observable
 final class SettingsWorkspaceCoordinator {
+    private enum MenuItemsMergeError: LocalizedError {
+        case appProfilesChangedExternally
+
+        var errorDescription: String? {
+            "App HUD profiles changed on disk while you were editing. "
+                + "Reload Settings before saving these changes."
+        }
+    }
+
+    enum AppHUDCreationResult: Equatable {
+        case created
+        case selectedExisting
+        case rejected
+    }
+
     enum Status: Equatable {
         case idle
         case loading
@@ -39,17 +54,15 @@ final class SettingsWorkspaceCoordinator {
     private var saveTask: Task<Bool, Never>?
     private var saveTaskID: UUID?
     private var generations: [Field: UInt] = [:]
-    private var sessionUndoMenuItems: (
-        inner: [RingMenuItem],
-        middle: [RingMenuItem],
-        hudCustomization: HUDCustomization
-    )?
+    private var menuItemsBaseline = Configuration()
+    private var sessionUndoMenuItems: (configuration: Configuration, selection: HUDProfileReference)?
 
     private(set) var configuration = Configuration()
     private(set) var status: Status = .idle
     private(set) var dirtyFields: Set<Field> = []
     private(set) var isLoaded = false
     private(set) var workspaceState = SettingsWorkspaceState()
+    private(set) var selectedHUDProfile: HUDProfileReference = .global
     let menuEditorModel = MenuEditorModel(
         inner: RingMenuItem.sampleInnerItems,
         middle: RingMenuItem.sampleItems
@@ -67,12 +80,26 @@ final class SettingsWorkspaceCoordinator {
         self.liveApply = liveApply
     }
 
+    /// Global is always first; app entries have deterministic bundle-ID order.
+    var editableHUDProfiles: [HUDProfileReference] {
+        [.global] + configuration.validAppHUDProfiles.keys.sorted().map {
+            .app(bundleIdentifier: $0)
+        }
+    }
+
+    var selectedAppHUDBundleIdentifier: String? {
+        guard case .app(let bundleIdentifier) = selectedHUDProfile else { return nil }
+        return bundleIdentifier
+    }
+
     func load() async {
         debounceTask?.cancel()
         status = .loading
         do {
             configuration = try await persistence.loadResult().configuration
-            menuEditorModel.load(from: configuration)
+            menuItemsBaseline = configuration
+            normalizeProfileSelection()
+            loadSelectedProfileIntoEditor()
             dirtyFields.removeAll()
             generations.removeAll()
             sessionUndoMenuItems = nil
@@ -90,9 +117,13 @@ final class SettingsWorkspaceCoordinator {
     /// Applies an edit owned by one or more panes and schedules one serialized save.
     func edit(_ fields: Set<Field>, _ mutation: (inout Configuration) -> Void) {
         guard isLoaded, !fields.isEmpty else { return }
+        if fields.contains(.menuItems) {
+            synchronizeEditorIfNeeded()
+        }
         mutation(&configuration)
         if fields.contains(.menuItems) {
-            menuEditorModel.load(from: configuration)
+            normalizeProfileSelection()
+            loadSelectedProfileIntoEditor()
         }
         markDirty(fields)
         scheduleSave()
@@ -104,12 +135,77 @@ final class SettingsWorkspaceCoordinator {
         // SwiftUI observation also reports coordinator-driven model loads (initial
         // load, reset, restore). Treat an identical model/config pair as a no-op
         // so merely revealing the pane cannot manufacture a dirty save.
-        guard configuration.inner != menuEditorModel.inner ||
-                configuration.middle != menuEditorModel.middle ||
-                configuration.hudCustomization != menuEditorModel.hudCustomization else { return }
-        configuration = menuEditorModel.merged(into: configuration)
+        guard editorDiffersFromSelectedProfile else { return }
+        guard mergeEditorIntoSelectedProfile() else { return }
         markDirty([.menuItems])
         scheduleSave()
+    }
+
+    /// Changes only in-memory editor context. Any pending model mutation is
+    /// captured first, but selecting an already-synchronized profile never saves.
+    @discardableResult
+    func selectHUDProfile(_ profile: HUDProfileReference) -> Bool {
+        guard isLoaded else { return false }
+        synchronizeEditorIfNeeded()
+        guard profileExists(profile) else {
+            if !profileExists(selectedHUDProfile) {
+                selectedHUDProfile = .global
+                loadSelectedProfileIntoEditor()
+            }
+            return false
+        }
+        selectedHUDProfile = profile
+        loadSelectedProfileIntoEditor()
+        workspaceState.reset = .idle
+        sessionUndoMenuItems = nil
+        return true
+    }
+
+    /// Creates one independent app layout from the current Global layout.
+    @discardableResult
+    func createAppHUD(forBundleIdentifier bundleIdentifier: String) -> AppHUDCreationResult {
+        guard isLoaded else { return .rejected }
+        synchronizeEditorIfNeeded()
+        if configuration.appHUDProfile(forBundleIdentifier: bundleIdentifier) != nil {
+            _ = selectHUDProfile(.app(bundleIdentifier: bundleIdentifier))
+            return .selectedExisting
+        }
+        guard !configuration.hasUnavailableAppHUDProfile(
+            forBundleIdentifier: bundleIdentifier
+        ) else { return .rejected }
+        let profile = configuration.makeAppHUDProfileFromGlobal()
+        guard configuration.setAppHUDProfile(profile, forBundleIdentifier: bundleIdentifier) else {
+            return .rejected
+        }
+        markDirty([.menuItems])
+        scheduleSave()
+        selectedHUDProfile = .app(bundleIdentifier: bundleIdentifier)
+        loadSelectedProfileIntoEditor()
+        workspaceState.reset = .idle
+        sessionUndoMenuItems = nil
+        return .created
+    }
+
+    /// Global cannot be deleted. Deleting any app profile keeps another valid
+    /// selection when possible and otherwise returns the editor to Global.
+    @discardableResult
+    func deleteAppHUD(forBundleIdentifier bundleIdentifier: String) -> Bool {
+        guard isLoaded else { return false }
+        synchronizeEditorIfNeeded()
+        guard configuration.removeAppHUDProfile(forBundleIdentifier: bundleIdentifier) else {
+            normalizeProfileSelection()
+            loadSelectedProfileIntoEditor()
+            return false
+        }
+        markDirty([.menuItems])
+        scheduleSave()
+        if selectedHUDProfile == .app(bundleIdentifier: bundleIdentifier) {
+            selectedHUDProfile = .global
+        }
+        loadSelectedProfileIntoEditor()
+        workspaceState.reset = .idle
+        sessionUndoMenuItems = nil
+        return true
     }
 
     @discardableResult
@@ -137,16 +233,13 @@ final class SettingsWorkspaceCoordinator {
         guard isLoaded else { return false }
         workspaceState.reset = .resetting
 
+        synchronizeEditorIfNeeded()
         guard await flush() else {
             workspaceState.reset = .failed(statusMessage)
             return false
         }
 
-        let previous = (
-            inner: configuration.inner,
-            middle: configuration.middle,
-            hudCustomization: configuration.hudCustomization
-        )
+        let previous = (configuration: configuration, selection: selectedHUDProfile)
         do {
             try await persistence.createBackup()
             workspaceState.durableBackupAvailable = true
@@ -155,11 +248,28 @@ final class SettingsWorkspaceCoordinator {
             return false
         }
 
-        edit([.menuItems]) {
-            $0.inner = RingMenuItem.sampleInnerItems
-            $0.middle = RingMenuItem.sampleItems
-            $0.hudCustomization = .default
+        switch selectedHUDProfile {
+        case .global:
+            configuration.inner = RingMenuItem.sampleInnerItems
+            configuration.middle = RingMenuItem.sampleItems
+            configuration.hudCustomization = .default
+        case .app(let bundleIdentifier):
+            guard var profile = configuration.appHUDProfile(forBundleIdentifier: bundleIdentifier) else {
+                selectedHUDProfile = .global
+                loadSelectedProfileIntoEditor()
+                workspaceState.reset = .failed("The selected App HUD is no longer available.")
+                return false
+            }
+            profile.inner = configuration.inner
+            profile.middle = configuration.middle
+            guard configuration.setAppHUDProfile(profile, forBundleIdentifier: bundleIdentifier) else {
+                workspaceState.reset = .failed("The selected App HUD could not be reset.")
+                return false
+            }
         }
+        loadSelectedProfileIntoEditor()
+        markDirty([.menuItems])
+        scheduleSave()
         guard await flush() else {
             workspaceState.reset = .failed(statusMessage)
             return false
@@ -173,11 +283,11 @@ final class SettingsWorkspaceCoordinator {
     @discardableResult
     func undoMenuItemsReset() async -> Bool {
         guard let previous = sessionUndoMenuItems, isLoaded else { return false }
-        edit([.menuItems]) {
-            $0.inner = previous.inner
-            $0.middle = previous.middle
-            $0.hudCustomization = previous.hudCustomization
-        }
+        replaceMenuItemsState(in: &configuration, with: previous.configuration)
+        selectedHUDProfile = profileExists(previous.selection) ? previous.selection : .global
+        loadSelectedProfileIntoEditor()
+        markDirty([.menuItems])
+        scheduleSave()
         guard await flush() else {
             workspaceState.reset = .failed(statusMessage)
             return false
@@ -199,11 +309,11 @@ final class SettingsWorkspaceCoordinator {
             return false
         }
 
-        edit([.menuItems]) {
-            $0.inner = backup.inner
-            $0.middle = backup.middle
-            $0.hudCustomization = backup.hudCustomization
-        }
+        replaceMenuItemsState(in: &configuration, with: backup)
+        normalizeProfileSelection()
+        loadSelectedProfileIntoEditor()
+        markDirty([.menuItems])
+        scheduleSave()
         guard await flush() else {
             workspaceState.reset = .failed(statusMessage)
             return false
@@ -318,14 +428,16 @@ final class SettingsWorkspaceCoordinator {
 
         do {
             var merged = try await persistence.loadResult().configuration
-            merge(fields: fields, from: edited, into: &merged)
+            try merge(fields: fields, from: edited, into: &merged)
             try await persistence.save(merged)
 
             for field in fields where generations[field] == savedGenerations[field] {
                 dirtyFields.remove(field)
             }
-            configuration = mergingUnsavedFields(from: configuration, into: merged)
-            menuEditorModel.load(from: configuration, preservingSelection: true)
+            menuItemsBaseline = merged
+            configuration = try mergingUnsavedFields(from: configuration, into: merged)
+            normalizeProfileSelection()
+            loadSelectedProfileIntoEditor(preservingItemSelection: true)
             // The runtime receives the exact complete snapshot that was made durable,
             // never a field fragment or the still-dirty editor configuration.
             liveApply(merged)
@@ -347,9 +459,9 @@ final class SettingsWorkspaceCoordinator {
     private func mergingUnsavedFields(
         from edited: Configuration,
         into persisted: Configuration
-    ) -> Configuration {
+    ) throws -> Configuration {
         var result = persisted
-        merge(fields: dirtyFields, from: edited, into: &result)
+        try merge(fields: dirtyFields, from: edited, into: &result)
         return result
     }
 
@@ -357,14 +469,174 @@ final class SettingsWorkspaceCoordinator {
         fields: Set<Field>,
         from edited: Configuration,
         into base: inout Configuration
-    ) {
+    ) throws {
         if fields.contains(.menuItems) {
             base.inner = edited.inner
             base.middle = edited.middle
             base.hudCustomization = edited.hudCustomization
+            try reconcileAppHUDProfileChanges(
+                from: menuItemsBaseline,
+                to: edited,
+                into: &base
+            )
         }
         if fields.contains(.triggers) { base.triggers = edited.triggers }
         if fields.contains(.appearance) { base.appearance = edited.appearance }
         if fields.contains(.behavior) { base.behavior = edited.behavior }
+    }
+
+    private var editorDiffersFromSelectedProfile: Bool {
+        let layout = selectedActionLayout
+        return layout.inner != menuEditorModel.inner ||
+            layout.middle != menuEditorModel.middle ||
+            configuration.hudCustomization != menuEditorModel.hudCustomization
+    }
+
+    private var selectedActionLayout: HUDActionLayout {
+        switch selectedHUDProfile {
+        case .global:
+            return configuration.globalHUDActionLayout
+        case .app(let bundleIdentifier):
+            return configuration.appHUDProfile(forBundleIdentifier: bundleIdentifier)?.layout
+                ?? configuration.globalHUDActionLayout
+        }
+    }
+
+    @discardableResult
+    private func mergeEditorIntoSelectedProfile() -> Bool {
+        configuration.hudCustomization = menuEditorModel.hudCustomization
+        switch selectedHUDProfile {
+        case .global:
+            configuration.inner = menuEditorModel.inner
+            configuration.middle = menuEditorModel.middle
+            return true
+        case .app(let bundleIdentifier):
+            guard var profile = configuration.appHUDProfile(forBundleIdentifier: bundleIdentifier) else {
+                selectedHUDProfile = .global
+                loadSelectedProfileIntoEditor()
+                return false
+            }
+            profile.inner = menuEditorModel.inner
+            profile.middle = menuEditorModel.middle
+            return configuration.setAppHUDProfile(profile, forBundleIdentifier: bundleIdentifier)
+        }
+    }
+
+    private func synchronizeEditorIfNeeded() {
+        guard editorDiffersFromSelectedProfile, mergeEditorIntoSelectedProfile() else { return }
+        markDirty([.menuItems])
+        scheduleSave()
+    }
+
+    private func loadSelectedProfileIntoEditor(preservingItemSelection: Bool = false) {
+        menuEditorModel.load(
+            actionLayout: selectedActionLayout,
+            hudCustomization: configuration.hudCustomization,
+            preservingSelection: preservingItemSelection
+        )
+    }
+
+    private func profileExists(_ profile: HUDProfileReference) -> Bool {
+        switch profile {
+        case .global: true
+        case .app(let bundleIdentifier):
+            configuration.appHUDProfile(forBundleIdentifier: bundleIdentifier) != nil
+        }
+    }
+
+    private func normalizeProfileSelection() {
+        if !profileExists(selectedHUDProfile) {
+            selectedHUDProfile = .global
+        }
+    }
+
+    private func replaceMenuItemsState(in target: inout Configuration, with source: Configuration) {
+        target.inner = source.inner
+        target.middle = source.middle
+        target.hudCustomization = source.hudCustomization
+        reconcileAppHUDProfiles(from: source, into: &target)
+    }
+
+    /// Reconciles all editable profiles while deliberately leaving quarantined
+    /// payloads in the fresh target untouched.
+    private func reconcileAppHUDProfiles(from source: Configuration, into target: inout Configuration) {
+        let desired = source.validAppHUDProfiles
+        for bundleIdentifier in target.validAppHUDProfiles.keys where desired[bundleIdentifier] == nil {
+            _ = target.removeAppHUDProfile(forBundleIdentifier: bundleIdentifier)
+        }
+        for (bundleIdentifier, profile) in desired {
+            _ = target.setAppHUDProfile(profile, forBundleIdentifier: bundleIdentifier)
+        }
+    }
+
+    /// Applies only this workspace's app-profile differences to a fresh disk
+    /// base, so external additions or edits to untouched profiles survive.
+    private func reconcileAppHUDProfileChanges(
+        from baseline: Configuration,
+        to edited: Configuration,
+        into target: inout Configuration
+    ) throws {
+        let original = baseline.validAppHUDProfiles
+        let desired = edited.validAppHUDProfiles
+        let changedBundleIdentifiers = Set(original.keys).union(desired.keys).filter {
+            original[$0] != desired[$0]
+        }
+        guard !changedBundleIdentifiers.isEmpty else { return }
+        guard !target.hasUnavailableAppHUDProfilesCollection else {
+            throw MenuItemsMergeError.appProfilesChangedExternally
+        }
+
+        for bundleIdentifier in changedBundleIdentifiers {
+            guard original[bundleIdentifier] != desired[bundleIdentifier] else { continue }
+            guard !target.hasUnavailableAppHUDProfile(
+                forBundleIdentifier: bundleIdentifier
+            ) else {
+                throw MenuItemsMergeError.appProfilesChangedExternally
+            }
+
+            switch (original[bundleIdentifier], desired[bundleIdentifier]) {
+            case (nil, .some(let desiredProfile)):
+                if let freshProfile = target.appHUDProfile(forBundleIdentifier: bundleIdentifier) {
+                    guard freshProfile == desiredProfile else {
+                        throw MenuItemsMergeError.appProfilesChangedExternally
+                    }
+                } else if !target.setAppHUDProfile(
+                    desiredProfile,
+                    forBundleIdentifier: bundleIdentifier
+                ) {
+                    throw MenuItemsMergeError.appProfilesChangedExternally
+                }
+
+            case (.some(let originalProfile), nil):
+                if let freshProfile = target.appHUDProfile(forBundleIdentifier: bundleIdentifier) {
+                    guard freshProfile == originalProfile,
+                          target.removeAppHUDProfile(
+                              forBundleIdentifier: bundleIdentifier
+                          ) else {
+                        throw MenuItemsMergeError.appProfilesChangedExternally
+                    }
+                }
+
+            case (.some, .some(let desiredProfile)):
+                guard var freshProfile = target.appHUDProfile(
+                    forBundleIdentifier: bundleIdentifier
+                ) else {
+                    throw MenuItemsMergeError.appProfilesChangedExternally
+                }
+                // Apply only the action arrays to the fresh typed profile. Its
+                // forward-compatible profile/layout/item JSON remains the merge base.
+                freshProfile.inner = desiredProfile.inner
+                freshProfile.middle = desiredProfile.middle
+                guard target.setAppHUDProfile(
+                    freshProfile,
+                    forBundleIdentifier: bundleIdentifier
+                ) else {
+                    throw MenuItemsMergeError.appProfilesChangedExternally
+                }
+
+            case (nil, nil):
+                break
+            }
+        }
     }
 }

@@ -108,13 +108,31 @@ final class MenuEditorModel {
     /// an autosave cannot tear down the active editor form (and its keyboard
     /// focus). Initial/recovery loads keep the default clearing behavior.
     func load(from config: Configuration, preservingSelection: Bool = false) {
+        load(
+            actionLayout: config.globalHUDActionLayout,
+            hudCustomization: config.hudCustomization,
+            preservingSelection: preservingSelection
+        )
+    }
+
+    /// Replace the working action layout while continuing to edit the one
+    /// global HUD-customization value shared by every profile.
+    func load(
+        actionLayout: HUDActionLayout,
+        hudCustomization: HUDCustomization,
+        preservingSelection: Bool = false
+    ) {
         let previousSelection = preservingSelection ? selection : nil
-        inner = config.inner
-        middle = config.middle
-        hudCustomization = config.hudCustomization
+        inner = actionLayout.inner
+        middle = actionLayout.middle
+        self.hudCustomization = hudCustomization
         enforceInnerInvariants()
         normalizeSnapPayloads()
         selection = previousSelection.flatMap(validSelection)
+    }
+
+    var actionLayout: HUDActionLayout {
+        HUDActionLayout(inner: inner, middle: middle)
     }
 
     private func validSelection(_ selection: SlotSelection) -> SlotSelection? {

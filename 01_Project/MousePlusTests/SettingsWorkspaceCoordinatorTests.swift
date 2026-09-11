@@ -5,6 +5,465 @@ import XCTest
 
 @MainActor
 final class SettingsWorkspaceCoordinatorTests: XCTestCase {
+    func testLoadExposesGlobalFirstAndKeepsProfileSelectionInMemoryOnly() async {
+        var initial = Configuration()
+        _ = initial.setAppHUDProfile(
+            AppHUDProfile(layout: labeledLayout("Finder")),
+            forBundleIdentifier: "com.apple.finder"
+        )
+        _ = initial.setAppHUDProfile(
+            AppHUDProfile(layout: labeledLayout("Safari")),
+            forBundleIdentifier: "com.apple.Safari"
+        )
+        let persistence = RecordingConfigurationPersistence(initial)
+        let coordinator = makeCoordinator(persistence)
+        await coordinator.load()
+
+        XCTAssertEqual(coordinator.editableHUDProfiles, [
+            .global,
+            .app(bundleIdentifier: "com.apple.Safari"),
+            .app(bundleIdentifier: "com.apple.finder"),
+        ])
+        XCTAssertTrue(coordinator.selectHUDProfile(.app(bundleIdentifier: "com.apple.finder")))
+        XCTAssertEqual(coordinator.selectedAppHUDBundleIdentifier, "com.apple.finder")
+        XCTAssertEqual(coordinator.menuEditorModel.middle[0].label, "Finder")
+        XCTAssertTrue(coordinator.dirtyFields.isEmpty)
+        var saveCount = await persistence.saveCount
+        XCTAssertEqual(saveCount, 0)
+
+        XCTAssertTrue(coordinator.selectHUDProfile(.global))
+        XCTAssertEqual(coordinator.menuEditorModel.middle, initial.middle)
+        XCTAssertNil(coordinator.selectedAppHUDBundleIdentifier)
+        let flushed = await coordinator.flush()
+        XCTAssertTrue(flushed)
+        saveCount = await persistence.saveCount
+        XCTAssertEqual(saveCount, 0)
+    }
+
+    func testCreateCopiesCurrentGlobalThenProfilesEditIndependentlyAcrossReload() async throws {
+        let persistence = RecordingConfigurationPersistence(Configuration())
+        let coordinator = makeCoordinator(persistence)
+        await coordinator.load()
+        coordinator.menuEditorModel.middle[0].label = "Current Global"
+
+        XCTAssertEqual(
+            coordinator.createAppHUD(forBundleIdentifier: "com.apple.finder"),
+            .created
+        )
+        XCTAssertEqual(coordinator.selectedHUDProfile, .app(bundleIdentifier: "com.apple.finder"))
+        XCTAssertEqual(coordinator.menuEditorModel.middle[0].label, "Current Global")
+        coordinator.menuEditorModel.inner[0].icon = "folder"
+        coordinator.menuEditorModel.middle[0].label = "Finder only"
+        coordinator.menuItemsDidChange()
+        let flushed = await coordinator.flush()
+        XCTAssertTrue(flushed)
+
+        let saved = await persistence.current
+        XCTAssertEqual(saved.middle[0].label, "Current Global")
+        let finder = try XCTUnwrap(saved.appHUDProfile(forBundleIdentifier: "com.apple.finder"))
+        XCTAssertEqual(finder.middle[0].label, "Finder only")
+        XCTAssertEqual(finder.inner[0].icon, "folder")
+
+        let relaunched = makeCoordinator(persistence)
+        await relaunched.load()
+        XCTAssertEqual(relaunched.selectedHUDProfile, .global)
+        XCTAssertTrue(relaunched.selectHUDProfile(.app(bundleIdentifier: "com.apple.finder")))
+        XCTAssertEqual(relaunched.menuEditorModel.middle[0].label, "Finder only")
+        XCTAssertTrue(relaunched.selectHUDProfile(.global))
+        XCTAssertEqual(relaunched.menuEditorModel.middle[0].label, "Current Global")
+    }
+
+    func testDuplicateCreateSelectsExistingWithoutOverwritingOrSaving() async throws {
+        var initial = Configuration()
+        _ = initial.setAppHUDProfile(
+            AppHUDProfile(layout: labeledLayout("Existing Finder")),
+            forBundleIdentifier: "com.apple.finder"
+        )
+        let persistence = RecordingConfigurationPersistence(initial)
+        let coordinator = makeCoordinator(persistence)
+        await coordinator.load()
+
+        XCTAssertEqual(
+            coordinator.createAppHUD(forBundleIdentifier: "com.apple.finder"),
+            .selectedExisting
+        )
+        XCTAssertEqual(coordinator.selectedHUDProfile, .app(bundleIdentifier: "com.apple.finder"))
+        XCTAssertEqual(coordinator.menuEditorModel.middle[0].label, "Existing Finder")
+        XCTAssertTrue(coordinator.dirtyFields.isEmpty)
+        let saveCount = await persistence.saveCount
+        XCTAssertEqual(saveCount, 0)
+        let current = await persistence.current
+        let stored = try XCTUnwrap(current.appHUDProfile(forBundleIdentifier: "com.apple.finder"))
+        XCTAssertEqual(stored.middle[0].label, "Existing Finder")
+    }
+
+    func testUnreadableDuplicateIsRejectedAndPreservedThroughUnrelatedMenuSave() async throws {
+        var object = try XCTUnwrap(
+            JSONSerialization.jsonObject(with: JSONEncoder().encode(Configuration()))
+                as? [String: Any]
+        )
+        object["appHUDProfiles"] = [
+            "com.example.future": ["futurePayload": ["token": "keep-me"]],
+        ]
+        let decoded = try JSONDecoder().decode(
+            Configuration.self,
+            from: JSONSerialization.data(withJSONObject: object)
+        )
+        let persistence = RecordingConfigurationPersistence(decoded)
+        let coordinator = makeCoordinator(persistence)
+        await coordinator.load()
+
+        XCTAssertEqual(
+            coordinator.createAppHUD(forBundleIdentifier: "com.example.future"),
+            .rejected
+        )
+        coordinator.menuEditorModel.middle[0].label = "Ordinary Global edit"
+        coordinator.menuItemsDidChange()
+        let flushed = await coordinator.flush()
+        XCTAssertTrue(flushed)
+
+        let saved = await persistence.current
+        let savedData = try JSONEncoder().encode(saved)
+        let savedObject = try XCTUnwrap(
+            JSONSerialization.jsonObject(with: savedData) as? [String: Any]
+        )
+        let profiles = try XCTUnwrap(savedObject["appHUDProfiles"] as? [String: Any])
+        let opaque = try XCTUnwrap(profiles["com.example.future"] as? [String: Any])
+        let payload = try XCTUnwrap(opaque["futurePayload"] as? [String: Any])
+        XCTAssertEqual(payload["token"] as? String, "keep-me")
+    }
+
+    func testAppEditUsesGlobalCustomizationWithoutWritingOtherActionProfiles() async throws {
+        var initial = Configuration()
+        initial.hudCustomization.middle.layout.angularOffset = 19
+        _ = initial.setAppHUDProfile(
+            AppHUDProfile(layout: labeledLayout("Finder")),
+            forBundleIdentifier: "com.apple.finder"
+        )
+        _ = initial.setAppHUDProfile(
+            AppHUDProfile(layout: labeledLayout("Safari")),
+            forBundleIdentifier: "com.apple.Safari"
+        )
+        let persistence = RecordingConfigurationPersistence(initial)
+        let coordinator = makeCoordinator(persistence)
+        await coordinator.load()
+        XCTAssertTrue(coordinator.selectHUDProfile(.app(bundleIdentifier: "com.apple.finder")))
+
+        coordinator.menuEditorModel.middle[0].label = "Edited Finder"
+        coordinator.menuEditorModel.hudCustomization.middle.layout.angularOffset = 77
+        coordinator.menuItemsDidChange()
+        let flushed = await coordinator.flush()
+        XCTAssertTrue(flushed)
+
+        let saved = await persistence.current
+        XCTAssertEqual(saved.middle, initial.middle)
+        XCTAssertEqual(saved.hudCustomization.middle.layout.angularOffset, 77)
+        XCTAssertEqual(
+            try XCTUnwrap(saved.appHUDProfile(forBundleIdentifier: "com.apple.finder")).middle[0].label,
+            "Edited Finder"
+        )
+        XCTAssertEqual(
+            try XCTUnwrap(saved.appHUDProfile(forBundleIdentifier: "com.apple.Safari")).middle[0].label,
+            "Safari"
+        )
+    }
+
+    func testDeleteSelectedAppFallsBackToGlobalAndSurvivesReload() async {
+        var initial = Configuration()
+        initial.middle[0].label = "Global survives"
+        _ = initial.setAppHUDProfile(
+            AppHUDProfile(layout: labeledLayout("Finder")),
+            forBundleIdentifier: "com.apple.finder"
+        )
+        let persistence = RecordingConfigurationPersistence(initial)
+        let coordinator = makeCoordinator(persistence)
+        await coordinator.load()
+        XCTAssertTrue(coordinator.selectHUDProfile(.app(bundleIdentifier: "com.apple.finder")))
+
+        XCTAssertTrue(coordinator.deleteAppHUD(forBundleIdentifier: "com.apple.finder"))
+        XCTAssertEqual(coordinator.selectedHUDProfile, .global)
+        XCTAssertEqual(coordinator.menuEditorModel.middle[0].label, "Global survives")
+        let flushed = await coordinator.flush()
+        XCTAssertTrue(flushed)
+        let current = await persistence.current
+        XCTAssertNil(current.appHUDProfile(forBundleIdentifier: "com.apple.finder"))
+
+        let relaunched = makeCoordinator(persistence)
+        await relaunched.load()
+        XCTAssertEqual(relaunched.editableHUDProfiles, [.global])
+        XCTAssertEqual(relaunched.configuration.middle[0].label, "Global survives")
+    }
+
+    func testMissingSelectedAppFallsBackToGlobalOnReloadAndRejectedSelectionIsSafe() async {
+        var initial = Configuration()
+        initial.middle[0].label = "Global"
+        _ = initial.setAppHUDProfile(
+            AppHUDProfile(layout: labeledLayout("Finder")),
+            forBundleIdentifier: "com.apple.finder"
+        )
+        let persistence = RecordingConfigurationPersistence(initial)
+        let coordinator = makeCoordinator(persistence)
+        await coordinator.load()
+        XCTAssertTrue(coordinator.selectHUDProfile(.app(bundleIdentifier: "com.apple.finder")))
+        await persistence.mutateCurrent {
+            _ = $0.removeAppHUDProfile(forBundleIdentifier: "com.apple.finder")
+        }
+
+        await coordinator.load()
+        XCTAssertEqual(coordinator.selectedHUDProfile, .global)
+        XCTAssertEqual(coordinator.menuEditorModel.middle[0].label, "Global")
+        XCTAssertFalse(coordinator.selectHUDProfile(.app(bundleIdentifier: "missing.app")))
+        XCTAssertEqual(coordinator.selectedHUDProfile, .global)
+        XCTAssertTrue(coordinator.dirtyFields.isEmpty)
+    }
+
+    func testAppProfileSaveFailureRetryAndCloseBarrierKeepRecoverableEdit() async {
+        var initial = Configuration()
+        _ = initial.setAppHUDProfile(
+            AppHUDProfile(layout: labeledLayout("Finder")),
+            forBundleIdentifier: "com.apple.finder"
+        )
+        let persistence = RecordingConfigurationPersistence(initial)
+        let recorder = LiveApplyRecorder()
+        let coordinator = makeCoordinator(persistence, recorder: recorder)
+        await coordinator.load()
+        XCTAssertTrue(coordinator.selectHUDProfile(.app(bundleIdentifier: "com.apple.finder")))
+        coordinator.menuEditorModel.middle[0].label = "Unsaved Finder"
+        coordinator.menuItemsDidChange()
+        await persistence.setSaveFailure(TestFailure.write)
+
+        let mayClose = await coordinator.requestClose()
+        XCTAssertFalse(mayClose)
+        XCTAssertEqual(coordinator.dirtyFields, [.menuItems])
+        XCTAssertEqual(coordinator.menuEditorModel.middle[0].label, "Unsaved Finder")
+        XCTAssertTrue(recorder.events.isEmpty)
+        guard case .blocked = coordinator.workspaceState.closeBarrier else {
+            return XCTFail("A failed app-profile write must block close")
+        }
+
+        await persistence.setSaveFailure(nil)
+        let resolved = await coordinator.resolveClose(.retry)
+        XCTAssertTrue(resolved)
+        let saved = await persistence.current
+        XCTAssertEqual(
+            saved.appHUDProfile(forBundleIdentifier: "com.apple.finder")?.middle[0].label,
+            "Unsaved Finder"
+        )
+        XCTAssertEqual(recorder.events.count, 1)
+    }
+
+    func testCorruptFreshBasePreventsAppProfileOverwrite() async {
+        var initial = Configuration()
+        _ = initial.setAppHUDProfile(
+            AppHUDProfile(layout: labeledLayout("Finder")),
+            forBundleIdentifier: "com.apple.finder"
+        )
+        let persistence = RecordingConfigurationPersistence(initial)
+        let coordinator = makeCoordinator(persistence)
+        await coordinator.load()
+        XCTAssertTrue(coordinator.selectHUDProfile(.app(bundleIdentifier: "com.apple.finder")))
+        coordinator.menuEditorModel.middle[0].label = "Must remain recoverable"
+        coordinator.menuItemsDidChange()
+        await persistence.setLoadFailure(makeDecodingError())
+
+        let flushed = await coordinator.flush()
+        XCTAssertFalse(flushed)
+        let saveCount = await persistence.saveCount
+        XCTAssertEqual(saveCount, 0)
+        XCTAssertEqual(coordinator.dirtyFields, [.menuItems])
+        XCTAssertEqual(coordinator.menuEditorModel.middle[0].label, "Must remain recoverable")
+        guard case .loadFailed = coordinator.status else {
+            return XCTFail("A corrupt fresh base must report Load Failed")
+        }
+    }
+
+    func testFreshBaseProfileDeltaPreservesExternalUntouchedProfileEditsAndAdditions() async throws {
+        var initial = Configuration()
+        _ = initial.setAppHUDProfile(
+            AppHUDProfile(layout: labeledLayout("Finder")),
+            forBundleIdentifier: "com.apple.finder"
+        )
+        _ = initial.setAppHUDProfile(
+            AppHUDProfile(layout: labeledLayout("Safari")),
+            forBundleIdentifier: "com.apple.Safari"
+        )
+        let persistence = RecordingConfigurationPersistence(initial)
+        let coordinator = makeCoordinator(persistence)
+        await coordinator.load()
+        XCTAssertTrue(coordinator.selectHUDProfile(.app(bundleIdentifier: "com.apple.finder")))
+        coordinator.menuEditorModel.middle[0].label = "Local Finder"
+        coordinator.menuItemsDidChange()
+        await persistence.mutateCurrent {
+            var safari = $0.appHUDProfile(forBundleIdentifier: "com.apple.Safari")!
+            safari.middle[0].label = "External Safari"
+            _ = $0.setAppHUDProfile(safari, forBundleIdentifier: "com.apple.Safari")
+            var notes = $0.makeAppHUDProfileFromGlobal()
+            notes.middle[0].label = "External Notes"
+            _ = $0.setAppHUDProfile(notes, forBundleIdentifier: "com.apple.Notes")
+        }
+
+        let flushed = await coordinator.flush()
+        XCTAssertTrue(flushed)
+        let saved = await persistence.current
+        XCTAssertEqual(try XCTUnwrap(saved.appHUDProfile(forBundleIdentifier: "com.apple.finder")).middle[0].label, "Local Finder")
+        XCTAssertEqual(try XCTUnwrap(saved.appHUDProfile(forBundleIdentifier: "com.apple.Safari")).middle[0].label, "External Safari")
+        XCTAssertEqual(try XCTUnwrap(saved.appHUDProfile(forBundleIdentifier: "com.apple.Notes")).middle[0].label, "External Notes")
+    }
+
+    func testFreshBaseOpaqueCollectionRejectsProfileEditWithoutFalseSuccess() async throws {
+        var initial = Configuration()
+        _ = initial.setAppHUDProfile(
+            AppHUDProfile(layout: labeledLayout("Finder")),
+            forBundleIdentifier: "com.apple.finder"
+        )
+        let persistence = RecordingConfigurationPersistence(initial)
+        let recorder = LiveApplyRecorder()
+        let coordinator = makeCoordinator(persistence, recorder: recorder)
+        await coordinator.load()
+        XCTAssertTrue(coordinator.selectHUDProfile(.app(bundleIdentifier: "com.apple.finder")))
+        coordinator.menuEditorModel.middle[0].label = "Local Finder"
+        coordinator.menuItemsDidChange()
+
+        let external = try configuration(initial) { object in
+            object["appHUDProfiles"] = ["future", ["version": 9]]
+        }
+        await persistence.mutateCurrent { $0 = external }
+
+        let flushed = await coordinator.flush()
+        XCTAssertFalse(flushed)
+        let saveCount = await persistence.saveCount
+        XCTAssertEqual(saveCount, 0)
+        XCTAssertEqual(coordinator.dirtyFields, [.menuItems])
+        XCTAssertTrue(recorder.events.isEmpty)
+        let saved = await persistence.current
+        XCTAssertTrue(saved.hasUnavailableAppHUDProfilesCollection)
+        guard case .saveFailed = coordinator.status else {
+            return XCTFail("An opaque fresh collection must fail closed")
+        }
+    }
+
+    func testFreshBaseOpaqueTouchedEntryRejectsProfileEditWithoutOverwrite() async throws {
+        var initial = Configuration()
+        _ = initial.setAppHUDProfile(
+            AppHUDProfile(layout: labeledLayout("Finder")),
+            forBundleIdentifier: "com.apple.finder"
+        )
+        let persistence = RecordingConfigurationPersistence(initial)
+        let coordinator = makeCoordinator(persistence)
+        await coordinator.load()
+        XCTAssertTrue(coordinator.selectHUDProfile(.app(bundleIdentifier: "com.apple.finder")))
+        coordinator.menuEditorModel.middle[0].label = "Local Finder"
+        coordinator.menuItemsDidChange()
+
+        let external = try configuration(initial) { object in
+            object["appHUDProfiles"] = [
+                "com.apple.finder": ["futurePayload": ["token": "keep-me"]],
+            ]
+        }
+        await persistence.mutateCurrent { $0 = external }
+
+        let flushed = await coordinator.flush()
+        XCTAssertFalse(flushed)
+        let saveCount = await persistence.saveCount
+        XCTAssertEqual(saveCount, 0)
+        XCTAssertEqual(coordinator.dirtyFields, [.menuItems])
+        let saved = await persistence.current
+        XCTAssertTrue(saved.hasUnavailableAppHUDProfile(forBundleIdentifier: "com.apple.finder"))
+        let object = try encodedObject(saved)
+        let profiles = try XCTUnwrap(object["appHUDProfiles"] as? [String: Any])
+        let finder = try XCTUnwrap(profiles["com.apple.finder"] as? [String: Any])
+        let payload = try XCTUnwrap(finder["futurePayload"] as? [String: Any])
+        XCTAssertEqual(payload["token"] as? String, "keep-me")
+    }
+
+    func testFreshBaseTouchedProfilePreservesNewFutureFields() async throws {
+        var initial = Configuration()
+        _ = initial.setAppHUDProfile(
+            AppHUDProfile(layout: labeledLayout("Finder")),
+            forBundleIdentifier: "com.apple.finder"
+        )
+        let persistence = RecordingConfigurationPersistence(initial)
+        let coordinator = makeCoordinator(persistence)
+        await coordinator.load()
+        XCTAssertTrue(coordinator.selectHUDProfile(.app(bundleIdentifier: "com.apple.finder")))
+        coordinator.menuEditorModel.middle[0].label = "Local Finder"
+        coordinator.menuItemsDidChange()
+
+        let external = try configuration(initial) { object in
+            var profiles = object["appHUDProfiles"] as! [String: Any]
+            var finder = profiles["com.apple.finder"] as! [String: Any]
+            finder["futureProfile"] = ["token": "profile-v2"]
+            var layout = finder["layout"] as! [String: Any]
+            layout["futureLayout"] = ["token": "layout-v2"]
+            var middle = layout["middle"] as! [[String: Any]]
+            middle[0]["futureItem"] = ["token": "item-v2"]
+            layout["middle"] = middle
+            finder["layout"] = layout
+            profiles["com.apple.finder"] = finder
+            object["appHUDProfiles"] = profiles
+        }
+        await persistence.mutateCurrent { $0 = external }
+
+        let flushed = await coordinator.flush()
+        XCTAssertTrue(flushed)
+        let saved = await persistence.current
+        XCTAssertEqual(
+            saved.appHUDProfile(forBundleIdentifier: "com.apple.finder")?.middle[0].label,
+            "Local Finder"
+        )
+        let object = try encodedObject(saved)
+        let profiles = try XCTUnwrap(object["appHUDProfiles"] as? [String: Any])
+        let finder = try XCTUnwrap(profiles["com.apple.finder"] as? [String: Any])
+        XCTAssertEqual(
+            ((finder["futureProfile"] as? [String: Any])?["token"] as? String),
+            "profile-v2"
+        )
+        let layout = try XCTUnwrap(finder["layout"] as? [String: Any])
+        XCTAssertEqual(
+            ((layout["futureLayout"] as? [String: Any])?["token"] as? String),
+            "layout-v2"
+        )
+        let middle = try XCTUnwrap(layout["middle"] as? [[String: Any]])
+        XCTAssertEqual(
+            ((middle[0]["futureItem"] as? [String: Any])?["token"] as? String),
+            "item-v2"
+        )
+    }
+
+    func testAppResetCopiesCurrentGlobalWithoutResettingCustomizationAndUndoRestoresProfiles() async throws {
+        var initial = Configuration()
+        initial.middle[0].label = "Current Global"
+        initial.hudCustomization.middle.layout.angularOffset = 63
+        _ = initial.setAppHUDProfile(
+            AppHUDProfile(layout: labeledLayout("Finder custom")),
+            forBundleIdentifier: "com.apple.finder"
+        )
+        _ = initial.setAppHUDProfile(
+            AppHUDProfile(layout: labeledLayout("Safari custom")),
+            forBundleIdentifier: "com.apple.Safari"
+        )
+        let persistence = RecordingConfigurationPersistence(initial)
+        let coordinator = makeCoordinator(persistence)
+        await coordinator.load()
+        XCTAssertTrue(coordinator.selectHUDProfile(.app(bundleIdentifier: "com.apple.finder")))
+
+        let reset = await coordinator.resetMenuItems()
+        XCTAssertTrue(reset)
+        var saved = await persistence.current
+        XCTAssertEqual(try XCTUnwrap(saved.appHUDProfile(forBundleIdentifier: "com.apple.finder")).middle, initial.middle)
+        XCTAssertEqual(try XCTUnwrap(saved.appHUDProfile(forBundleIdentifier: "com.apple.Safari")).middle[0].label, "Safari custom")
+        XCTAssertEqual(saved.middle[0].label, "Current Global")
+        XCTAssertEqual(saved.hudCustomization.middle.layout.angularOffset, 63)
+        XCTAssertEqual(coordinator.selectedHUDProfile, .app(bundleIdentifier: "com.apple.finder"))
+
+        let undone = await coordinator.undoMenuItemsReset()
+        XCTAssertTrue(undone)
+        saved = await persistence.current
+        XCTAssertEqual(try XCTUnwrap(saved.appHUDProfile(forBundleIdentifier: "com.apple.finder")).middle[0].label, "Finder custom")
+        XCTAssertEqual(try XCTUnwrap(saved.appHUDProfile(forBundleIdentifier: "com.apple.Safari")).middle[0].label, "Safari custom")
+        XCTAssertEqual(saved.hudCustomization.middle.layout.angularOffset, 63)
+    }
+
     func testNativeMotionEditsPersistReloadAndLiveApplyWithFreshUnrelatedFields() async throws {
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: directory) }
@@ -105,7 +564,11 @@ final class SettingsWorkspaceCoordinatorTests: XCTestCase {
     }
 
     func testResetAtomicallyDefaultsItemsLayoutAndAllColorOverridesOnly() async {
-        let initial = customizedHUDConfiguration()
+        var initial = customizedHUDConfiguration()
+        _ = initial.setAppHUDProfile(
+            AppHUDProfile(layout: labeledLayout("Finder preserved")),
+            forBundleIdentifier: "com.apple.finder"
+        )
         let persistence = RecordingConfigurationPersistence(initial)
         let coordinator = makeCoordinator(persistence)
         await coordinator.load()
@@ -120,6 +583,10 @@ final class SettingsWorkspaceCoordinatorTests: XCTestCase {
         XCTAssertEqual(saved.triggers, initial.triggers)
         XCTAssertEqual(saved.appearance, initial.appearance)
         XCTAssertEqual(saved.behavior, initial.behavior)
+        XCTAssertEqual(
+            saved.appHUDProfile(forBundleIdentifier: "com.apple.finder"),
+            initial.appHUDProfile(forBundleIdentifier: "com.apple.finder")
+        )
         XCTAssertEqual(coordinator.workspaceState.reset, .undoAvailable)
         XCTAssertTrue(coordinator.workspaceState.durableBackupAvailable)
     }
@@ -243,6 +710,10 @@ final class SettingsWorkspaceCoordinatorTests: XCTestCase {
         backup.hudCustomization.inner.appearance.labelVisible = true
         backup.hudCustomization.inner.appearance.labelOrientation = .radial
         backup.middle[0].wedgeColor = HUDColor(red: 0.1, green: 0.4, blue: 0.7)
+        _ = backup.setAppHUDProfile(
+            AppHUDProfile(layout: labeledLayout("Backed-up Finder")),
+            forBundleIdentifier: "com.apple.finder"
+        )
         let persistence = RecordingConfigurationPersistence(backup)
         let coordinator = makeCoordinator(persistence)
         await coordinator.load()
@@ -253,6 +724,11 @@ final class SettingsWorkspaceCoordinatorTests: XCTestCase {
         coordinator.menuEditorModel.hudCustomization.inner.appearance.labelOrientation = .tangential
         coordinator.menuEditorModel.middle[0].wedgeColor = nil
         coordinator.menuItemsDidChange()
+        XCTAssertTrue(coordinator.deleteAppHUD(forBundleIdentifier: "com.apple.finder"))
+        XCTAssertEqual(
+            coordinator.createAppHUD(forBundleIdentifier: "com.apple.Notes"),
+            .created
+        )
         let savedEdit = await coordinator.flush()
         XCTAssertTrue(savedEdit)
 
@@ -263,6 +739,11 @@ final class SettingsWorkspaceCoordinatorTests: XCTestCase {
         XCTAssertTrue(restored.hudCustomization.inner.appearance.labelVisible, "backup restore must bring back the backed-up label visibility, not the intervening edit")
         XCTAssertEqual(restored.hudCustomization.inner.appearance.labelOrientation, .radial, "backup restore must bring back the backed-up label orientation, not the intervening edit")
         XCTAssertEqual(restored.middle[0].wedgeColor, HUDColor(red: 0.1, green: 0.4, blue: 0.7))
+        XCTAssertEqual(
+            try XCTUnwrap(restored.appHUDProfile(forBundleIdentifier: "com.apple.finder")).middle[0].label,
+            "Backed-up Finder"
+        )
+        XCTAssertNil(restored.appHUDProfile(forBundleIdentifier: "com.apple.Notes"))
     }
 
     private func customizedHUDConfiguration() -> Configuration {
@@ -299,6 +780,12 @@ final class SettingsWorkspaceCoordinatorTests: XCTestCase {
         configuration.middle[0].iconColor = HUDColor(red: 0.8, green: 0.4, blue: 0.2)
         configuration.middle[0].subItems?[0].wedgeColor = HUDColor(red: 0.6, green: 0.2, blue: 0.4)
         return configuration
+    }
+
+    private func labeledLayout(_ label: String) -> HUDActionLayout {
+        var layout = Configuration().globalHUDActionLayout
+        layout.middle[0].label = label
+        return layout
     }
 
     private func assertHUDMenuState(
@@ -564,6 +1051,25 @@ final class SettingsWorkspaceCoordinatorTests: XCTestCase {
         } catch {
             return error
         }
+    }
+
+    private func configuration(
+        _ source: Configuration,
+        mutate: (inout [String: Any]) -> Void
+    ) throws -> Configuration {
+        var object = try encodedObject(source)
+        mutate(&object)
+        return try JSONDecoder().decode(
+            Configuration.self,
+            from: JSONSerialization.data(withJSONObject: object)
+        )
+    }
+
+    private func encodedObject(_ configuration: Configuration) throws -> [String: Any] {
+        try XCTUnwrap(
+            JSONSerialization.jsonObject(with: JSONEncoder().encode(configuration))
+                as? [String: Any]
+        )
     }
 }
 
