@@ -1,3 +1,4 @@
+import AppKit
 import SwiftUI
 
 /// Trigger recording and permission polling remain local UI concerns. Durable
@@ -8,6 +9,7 @@ struct TriggersSettingsView: View {
     @State private var recorder = TriggerRecorderService()
     @State private var recordingSlot: Slot?
     @State private var interceptionWarning = false
+    @State private var bindingCollision: HUDTriggerBindingCollision?
 
     @State private var permissions = PermissionsService()
     @State private var postEventPermissions: PostEventPermissionsState
@@ -25,13 +27,23 @@ struct TriggersSettingsView: View {
     }
 
     private enum Slot {
-        case keyboard, mouse, openSettings
+        case keyboard, mouse, globalHUDShortcut, openSettings
 
         var identifier: String {
             switch self {
             case .keyboard: "keyboard"
             case .mouse: "mouse"
+            case .globalHUDShortcut: "globalHUDShortcut"
             case .openSettings: "openSettings"
+            }
+        }
+
+        var accessibilityLabel: String {
+            switch self {
+            case .keyboard: "Contextual keyboard trigger"
+            case .mouse: "Contextual mouse trigger"
+            case .globalHUDShortcut: "Global HUD shortcut"
+            case .openSettings: "Open Settings shortcut"
             }
         }
     }
@@ -54,6 +66,16 @@ struct TriggersSettingsView: View {
                 bindingRow(slot: .mouse, binding: triggerBinding(\.mouseButton))
             }
 
+            Section("Global HUD Shortcut") {
+                bindingRow(
+                    slot: .globalHUDShortcut,
+                    binding: triggerBinding(\.globalHUDShortcut)
+                )
+                Text("Always opens the Global HUD, bypassing the frontmost app profile.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
             Section("Open Settings Shortcut") {
                 bindingRow(slot: .openSettings, binding: triggerBinding(\.openSettings))
                 Text("Opens this Settings window from anywhere — a reliable way in when the menu bar icon isn't showing. Defaults to ⌥⌘,.")
@@ -72,6 +94,12 @@ struct TriggersSettingsView: View {
                         Image(systemName: "exclamationmark.triangle.fill")
                             .foregroundStyle(.orange)
                     }
+                }
+            }
+
+            if let displayedBindingCollision {
+                Section {
+                    TriggerCollisionAppKitLabel(text: displayedBindingCollision.explanation)
                 }
             }
 
@@ -108,9 +136,12 @@ struct TriggersSettingsView: View {
                 Text(slot == .mouse ? "Press a button… (Esc to cancel)" : "Press a key… (Esc to cancel)")
                     .foregroundStyle(.secondary)
             } else {
-                Text(binding.wrappedValue.displayString)
-                    .font(.title3.weight(.medium))
-                    .foregroundStyle(binding.wrappedValue.isActive ? .primary : .secondary)
+                TriggerBindingAppKitLabel(
+                    value: binding.wrappedValue.displayString,
+                    isActive: binding.wrappedValue.isActive,
+                    accessibilityLabel: slot.accessibilityLabel,
+                    accessibilityIdentifier: "triggers.\(slot.identifier).binding"
+                )
             }
 
             Spacer()
@@ -124,6 +155,7 @@ struct TriggersSettingsView: View {
                     recorder.cancel()
                 } else {
                     interceptionWarning = false
+                    bindingCollision = nil
                     recordingSlot = slot
                     recorder.record(slot == .mouse ? .mouseButton : .keyboard)
                 }
@@ -148,7 +180,7 @@ struct TriggersSettingsView: View {
                     set: { binding.wrappedValue = binding.wrappedValue.withMode($0 == 0 ? .holdRelease : .tapToggle) }
                 ),
                 isEnabled: binding.wrappedValue.isActive && coordinator.isLoaded,
-                accessibilityLabel: "Trigger mode",
+                accessibilityLabel: "\(slot.accessibilityLabel) mode",
                 accessibilityIdentifier: "triggers.\(slot.identifier).mode"
             )
         }
@@ -202,6 +234,13 @@ struct TriggersSettingsView: View {
 
     // MARK: - Recorder plumbing
 
+    private var displayedBindingCollision: HUDTriggerBindingCollision? {
+        bindingCollision ?? HUDTriggerRouting.collision(
+            globalHUDShortcut: coordinator.configuration.triggers.globalHUDShortcut,
+            contextualKeyboard: coordinator.configuration.triggers.keyboard
+        )
+    }
+
     private func handleRecorderOutcome(_ outcome: TriggerRecorderService.Outcome?) {
         guard let outcome, let slot = recordingSlot else { return }
 
@@ -211,10 +250,19 @@ struct TriggersSettingsView: View {
             case .keyboard:
                 // Preserve the slot's mode; the recorder only knows the key/button.
                 let current = coordinator.configuration.triggers.keyboard
-                setTrigger(\.keyboard, captured.withMode(current.mode))
+                bindingCollision = Self.applyContextualKeyboard(
+                    captured.withMode(current.mode),
+                    coordinator: coordinator
+                )
             case .mouse:
                 let current = coordinator.configuration.triggers.mouseButton
                 setTrigger(\.mouseButton, captured.withMode(current.mode))
+            case .globalHUDShortcut:
+                let current = coordinator.configuration.triggers.globalHUDShortcut
+                bindingCollision = Self.applyGlobalHUDShortcut(
+                    captured.withMode(current.mode),
+                    coordinator: coordinator
+                )
             case .openSettings:
                 // Mode is irrelevant for the Settings hotkey — store the raw capture.
                 setTrigger(\.openSettings, captured)
@@ -241,5 +289,83 @@ struct TriggersSettingsView: View {
         _ value: TriggerBinding
     ) {
         coordinator.edit([.triggers]) { $0.triggers[keyPath: keyPath] = value }
+    }
+
+    /// Shared by the recorder path and focused tests. Only accepted candidates
+    /// enter the workspace's normal save/live-apply pipeline.
+    @discardableResult
+    static func applyGlobalHUDShortcut(
+        _ candidate: TriggerBinding,
+        coordinator: SettingsWorkspaceCoordinator
+    ) -> HUDTriggerBindingCollision? {
+        let triggers = coordinator.configuration.triggers
+        switch HUDTriggerRouting.validateGlobalHUDShortcut(
+            candidate,
+            previous: triggers.globalHUDShortcut,
+            contextualKeyboard: triggers.keyboard
+        ) {
+        case .accepted(let binding):
+            coordinator.edit([.triggers]) { $0.triggers.globalHUDShortcut = binding }
+            return nil
+        case .rejected(let collision, _):
+            return collision
+        }
+    }
+
+    @discardableResult
+    static func applyContextualKeyboard(
+        _ candidate: TriggerBinding,
+        coordinator: SettingsWorkspaceCoordinator
+    ) -> HUDTriggerBindingCollision? {
+        let triggers = coordinator.configuration.triggers
+        switch HUDTriggerRouting.validateContextualKeyboard(
+            candidate,
+            previous: triggers.keyboard,
+            globalHUDShortcut: triggers.globalHUDShortcut
+        ) {
+        case .accepted(let binding):
+            coordinator.edit([.triggers]) { $0.triggers.keyboard = binding }
+            return nil
+        case .rejected(let collision, _):
+            return collision
+        }
+    }
+}
+
+/// The binding value is an AppKit text field so the new row exposes stable
+/// native accessibility metadata just like its buttons and mode control.
+private struct TriggerBindingAppKitLabel: NSViewRepresentable {
+    let value: String
+    let isActive: Bool
+    let accessibilityLabel: String
+    let accessibilityIdentifier: String
+
+    func makeNSView(context: Context) -> NSTextField {
+        NSTextField(labelWithString: value)
+    }
+
+    func updateNSView(_ label: NSTextField, context: Context) {
+        label.stringValue = value
+        label.font = .systemFont(ofSize: NSFont.systemFontSize, weight: .medium)
+        label.textColor = isActive ? .labelColor : .secondaryLabelColor
+        label.setAccessibilityLabel(accessibilityLabel)
+        label.setAccessibilityValue(value)
+        label.setAccessibilityIdentifier(accessibilityIdentifier)
+    }
+}
+
+private struct TriggerCollisionAppKitLabel: NSViewRepresentable {
+    let text: String
+
+    func makeNSView(context: Context) -> NSTextField {
+        NSTextField(wrappingLabelWithString: text)
+    }
+
+    func updateNSView(_ label: NSTextField, context: Context) {
+        label.stringValue = text
+        label.font = .systemFont(ofSize: NSFont.smallSystemFontSize)
+        label.textColor = .systemOrange
+        label.setAccessibilityLabel(text)
+        label.setAccessibilityIdentifier("triggers.globalHUDShortcut.conflict")
     }
 }

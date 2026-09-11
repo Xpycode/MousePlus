@@ -1,9 +1,9 @@
 import AppKit
 
 /// Watches global + local keyboard events for one keyboard trigger binding.
-/// Calls `onDown` when the configured keyCode + modifier set is pressed,
-/// `onUp` when the keyCode is released (modifiers ignored on release so that
-/// pressing & releasing in any modifier order still cleanly closes the ring).
+/// Calls `onDown` when the configured keyCode + normalized chord modifiers are
+/// pressed exactly. `onUp` is emitted only for a press this monitor actually
+/// accepted; modifiers are ignored on release so any release order closes it.
 @MainActor
 final class KeyboardTriggerMonitor {
     private var globalMonitor: Any?
@@ -12,6 +12,7 @@ final class KeyboardTriggerMonitor {
     private var modifiers: UInt = 0
     private var onDown: (() -> Void)?
     private var onUp: (() -> Void)?
+    private var isPressed = false
 
     func start(
         keyCode: UInt16,
@@ -24,6 +25,7 @@ final class KeyboardTriggerMonitor {
         self.modifiers = modifiers
         self.onDown = onDown
         self.onUp = onUp
+        isPressed = false
 
         let mask: NSEvent.EventTypeMask = [.keyDown, .keyUp, .flagsChanged]
 
@@ -41,15 +43,21 @@ final class KeyboardTriggerMonitor {
         if let m = localMonitor { NSEvent.removeMonitor(m); localMonitor = nil }
         onDown = nil
         onUp = nil
+        isPressed = false
     }
 
-    private func handle(_ event: NSEvent) {
-        let modsMatch = (event.modifierFlags.rawValue & modifiers) == modifiers
-
+    func handle(_ event: NSEvent) {
         switch event.type {
-        case .keyDown where event.keyCode == keyCode && modsMatch:
+        case .keyDown where !isPressed && HUDTriggerRouting.keyboardEventMatches(
+            keyCode: event.keyCode,
+            modifiers: event.modifierFlags.rawValue,
+            bindingKeyCode: keyCode,
+            bindingModifiers: modifiers
+        ):
+            isPressed = true
             onDown?()
-        case .keyUp where event.keyCode == keyCode:
+        case .keyUp where event.keyCode == keyCode && isPressed:
+            isPressed = false
             onUp?()
         default:
             break

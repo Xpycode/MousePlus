@@ -203,6 +203,63 @@ final class WorkspaceAccessibilityTests: XCTestCase {
         XCTAssertEqual(control.label(forSegment: selection), "Reveal")
     }
 
+    func testGlobalHUDShortcutRowUsesNativeAccessibleControls() async throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let persistence = ConfigurationService(store: ConfigurationStore(directoryURL: directory))
+        var configuration = Configuration()
+        configuration.triggers.globalHUDShortcut = .keyboard(
+            keyCode: 97, modifiers: NSEvent.ModifierFlags.option.rawValue, mode: .tapToggle
+        )
+        try await persistence.save(configuration)
+        let coordinator = SettingsWorkspaceCoordinator(persistence: persistence)
+        await coordinator.load()
+        let host = TriggersSettingsTestHost(coordinator)
+
+        let binding: NSTextField = try host.control("triggers.globalHUDShortcut.binding")
+        XCTAssertEqual(binding.accessibilityLabel(), "Global HUD shortcut")
+        XCTAssertEqual(binding.accessibilityValue(), "Opt+F6")
+
+        let record: NSButton = try host.control("triggers.globalHUDShortcut.record")
+        let clear: NSButton = try host.control("triggers.globalHUDShortcut.clear")
+        let mode: NSSegmentedControl = try host.control("triggers.globalHUDShortcut.mode")
+        XCTAssertEqual(record.accessibilityLabel(), "Record")
+        XCTAssertEqual(clear.accessibilityLabel(), "Clear")
+        XCTAssertEqual(mode.accessibilityLabel(), "Global HUD shortcut mode")
+        XCTAssertEqual(mode.accessibilityValue() as? String, "Tap-toggle")
+        XCTAssertTrue(record.isEnabled)
+        XCTAssertTrue(clear.isEnabled)
+        XCTAssertTrue(mode.isEnabled)
+
+        mode.selectedSegment = 0
+        XCTAssertTrue(mode.sendAction(mode.action, to: mode.target))
+        XCTAssertEqual(coordinator.configuration.triggers.globalHUDShortcut.mode, .holdRelease)
+        XCTAssertEqual(coordinator.dirtyFields, [.triggers])
+    }
+
+    func testLoadedGlobalHUDShortcutCollisionIsVisible() async throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let persistence = ConfigurationService(store: ConfigurationStore(directoryURL: directory))
+        var configuration = Configuration()
+        let collision = TriggerBinding.keyboard(
+            keyCode: 97,
+            modifiers: NSEvent.ModifierFlags.option.rawValue,
+            mode: .holdRelease
+        )
+        configuration.triggers.keyboard = collision
+        configuration.triggers.globalHUDShortcut = collision.withMode(.tapToggle)
+        try await persistence.save(configuration)
+        let coordinator = SettingsWorkspaceCoordinator(persistence: persistence)
+        await coordinator.load()
+        let host = TriggersSettingsTestHost(coordinator)
+
+        let warning = try host.view("triggers.globalHUDShortcut.conflict")
+        XCTAssertTrue(
+            (warning.accessibilityLabel() ?? "").contains("must use different key combinations")
+        )
+    }
+
     func testPersistenceStatesNeverDependOnColorForMeaning() {
         let states: [SettingsWorkspaceCoordinator.Status] = [
             .idle,
@@ -264,5 +321,41 @@ final class MotionSettingsTestHost {
             try? await Task.sleep(for: .milliseconds(10))
         }
         XCTAssertTrue(predicate(), "Settings did not update its native controls")
+    }
+}
+
+@MainActor
+private final class TriggersSettingsTestHost {
+    private let host: NSHostingView<TriggersSettingsView>
+    private let window: NSWindow
+
+    init(_ coordinator: SettingsWorkspaceCoordinator) {
+        host = NSHostingView(rootView: TriggersSettingsView(coordinator: coordinator))
+        window = NSWindow(
+            contentRect: NSRect(x: 0, y: 0, width: 850, height: 1000),
+            styleMask: .borderless,
+            backing: .buffered,
+            defer: false
+        )
+        window.contentView = host
+        host.layoutSubtreeIfNeeded()
+    }
+
+    func control<T: NSControl>(_ identifier: String) throws -> T {
+        host.layoutSubtreeIfNeeded()
+        func find(_ view: NSView) -> T? {
+            if view.accessibilityIdentifier() == identifier, let control = view as? T { return control }
+            return view.subviews.lazy.compactMap { find($0) }.first
+        }
+        return try XCTUnwrap(find(host), "Missing native control: \(identifier)")
+    }
+
+    func view(_ identifier: String) throws -> NSView {
+        host.layoutSubtreeIfNeeded()
+        func find(_ candidate: NSView) -> NSView? {
+            if candidate.accessibilityIdentifier() == identifier { return candidate }
+            return candidate.subviews.lazy.compactMap { find($0) }.first
+        }
+        return try XCTUnwrap(find(host), "Missing native view: \(identifier)")
     }
 }
