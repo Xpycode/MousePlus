@@ -33,6 +33,58 @@ final class ConfigurationServiceTests: XCTestCase {
         }
     }
 
+    func testServicePersistsAppProfilesAndGlobalHUDShortcut() async throws {
+        let service = makeService()
+        let profile = AppHUDProfile(layout: HUDActionLayout(
+            inner: [RingMenuItem(label: "Finder inner", icon: "circle", actionType: .custom)],
+            middle: [RingMenuItem(label: "Finder middle", icon: "square", actionType: .custom)]
+        ))
+        let shortcut = TriggerBinding.keyboard(
+            keyCode: 122,
+            modifiers: 1 << 20,
+            mode: .tapToggle
+        )
+        let configuration = Configuration(
+            triggers: TriggersConfig(globalHUDShortcut: shortcut),
+            appHUDProfiles: ["com.apple.finder": profile]
+        )
+
+        try await service.save(configuration)
+        let reloaded = try await service.loadResult().configuration
+
+        XCTAssertEqual(reloaded.triggers.globalHUDShortcut, shortcut)
+        XCTAssertEqual(reloaded.appHUDProfile(forBundleIdentifier: "com.apple.finder"), profile)
+        XCTAssertEqual(reloaded.validAppHUDProfiles, ["com.apple.finder": profile])
+    }
+
+    func testServicePreservesUnreadableProfileDuringUnrelatedSave() async throws {
+        let service = makeService()
+        let store = await service.store
+        try FileManager.default.createDirectory(
+            at: store.configurationURL.deletingLastPathComponent(),
+            withIntermediateDirectories: true
+        )
+        var source = try XCTUnwrap(
+            JSONSerialization.jsonObject(with: JSONEncoder().encode(Configuration())) as? [String: Any]
+        )
+        let unreadable: [String: Any] = [
+            "layout": ["inner": "invalid", "middle": []],
+            "futurePayload": ["revision": 9, "enabled": true],
+        ]
+        source["appHUDProfiles"] = ["com.apple.finder": unreadable]
+        try JSONSerialization.data(withJSONObject: source).write(to: store.configurationURL)
+
+        var loaded = try await service.loadResult().configuration
+        loaded.behavior.dismissOnClickOutside.toggle()
+        try await service.save(loaded)
+
+        let saved = try XCTUnwrap(
+            JSONSerialization.jsonObject(with: Data(contentsOf: store.configurationURL)) as? [String: Any]
+        )
+        let profiles = try XCTUnwrap(saved["appHUDProfiles"] as? [String: Any])
+        XCTAssertEqual(profiles["com.apple.finder"] as? NSDictionary, unreadable as NSDictionary)
+    }
+
     func testLegacySampleAppsGroupMigratesToRunningAppsWithoutDroppingPinnedChildren() throws {
         let child = RingMenuItem(
             label: "Pinned App", icon: "app.fill", actionType: .appSwitch,
@@ -557,7 +609,10 @@ final class ConfigurationServiceTests: XCTestCase {
         )
         XCTAssertEqual(
             Set(object.keys),
-            Set(["schemaVersion", "inner", "middle", "triggers", "appearance", "behavior", "hudCustomization"]),
+            Set([
+                "schemaVersion", "inner", "middle", "triggers", "appearance", "behavior",
+                "hudCustomization", "appHUDProfiles",
+            ]),
             "\(fixtureName) must encode only the canonical top-level shape",
             file: file,
             line: line

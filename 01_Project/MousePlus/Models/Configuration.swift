@@ -12,6 +12,27 @@ struct Configuration: Codable {
     var appearance: AppearanceConfig
     var behavior: BehaviorConfig
     var hudCustomization: HUDCustomization
+    private var storedAppHUDProfiles: [String: StoredAppHUDProfile]
+    private var unavailableAppHUDProfilesCollection: JSONValue?
+    private var unknownFields: [String: JSONValue]
+
+    var globalHUDActionLayout: HUDActionLayout {
+        get { HUDActionLayout(inner: inner, middle: middle) }
+        set {
+            inner = newValue.inner
+            middle = newValue.middle
+        }
+    }
+
+    /// Only profiles this version can decode are exposed to runtime and editors.
+    /// Opaque entries remain in `storedAppHUDProfiles` for lossless persistence.
+    var validAppHUDProfiles: [String: AppHUDProfile] {
+        storedAppHUDProfiles.reduce(into: [:]) { result, entry in
+            guard Self.isValidBundleIdentifier(entry.key),
+                  case .available(let profile) = entry.value else { return }
+            result[entry.key] = profile
+        }
+    }
 
     /// Temporary source-compat bridge (T3): pre-split code still reads `config.items`.
     /// Maps to `middle`, the band that absorbs old flat `items` on migration.
@@ -27,7 +48,8 @@ struct Configuration: Codable {
         triggers: TriggersConfig = .default,
         appearance: AppearanceConfig = .default,
         behavior: BehaviorConfig = .default,
-        hudCustomization: HUDCustomization = .default
+        hudCustomization: HUDCustomization = .default,
+        appHUDProfiles: [String: AppHUDProfile] = [:]
     ) {
         self.inner = inner
         self.middle = middle
@@ -35,10 +57,16 @@ struct Configuration: Codable {
         self.appearance = appearance
         self.behavior = behavior
         self.hudCustomization = hudCustomization
+        storedAppHUDProfiles = appHUDProfiles.reduce(into: [:]) { result, entry in
+            guard Self.isValidBundleIdentifier(entry.key) else { return }
+            result[entry.key] = .available(entry.value)
+        }
+        unavailableAppHUDProfilesCollection = nil
+        unknownFields = [:]
     }
 
-    private enum CodingKeys: String, CodingKey {
-        case inner, middle, triggers, appearance, behavior, hudCustomization
+    private enum CodingKeys: String, CodingKey, CaseIterable {
+        case inner, middle, triggers, appearance, behavior, hudCustomization, appHUDProfiles
         case schemaVersion
         case items    // legacy, pre-split; flat array migrated into `middle`
         case hotkey   // legacy, pre-2026-04-29; migrated into `triggers.keyboard`
@@ -71,6 +99,27 @@ struct Configuration: Codable {
         appearance = try c.decodeIfPresent(AppearanceConfig.self, forKey: .appearance) ?? .default
         behavior = try c.decodeIfPresent(BehaviorConfig.self, forKey: .behavior) ?? .default
         hudCustomization = (try? c.decode(HUDCustomization.self, forKey: .hudCustomization)) ?? .default
+        if !c.contains(.appHUDProfiles) {
+            storedAppHUDProfiles = [:]
+            unavailableAppHUDProfilesCollection = nil
+        } else if let profiles = try? c.decode(
+            [String: StoredAppHUDProfile].self,
+            forKey: .appHUDProfiles
+        ) {
+            storedAppHUDProfiles = profiles
+            unavailableAppHUDProfilesCollection = nil
+        } else {
+            storedAppHUDProfiles = [:]
+            unavailableAppHUDProfilesCollection = try c.decode(
+                JSONValue.self,
+                forKey: .appHUDProfiles
+            )
+        }
+
+        let allFields = try decoder.container(keyedBy: DynamicCodingKey.self)
+        unknownFields = try allFields.unknownJSONValues(
+            excluding: Set(CodingKeys.allCases.map(\.stringValue))
+        )
 
         if let t = try c.decodeIfPresent(TriggersConfig.self, forKey: .triggers) {
             triggers = t
@@ -97,6 +146,123 @@ struct Configuration: Codable {
         try c.encode(appearance, forKey: .appearance)
         try c.encode(behavior, forKey: .behavior)
         try c.encode(hudCustomization, forKey: .hudCustomization)
+        if let unavailableAppHUDProfilesCollection {
+            try c.encode(unavailableAppHUDProfilesCollection, forKey: .appHUDProfiles)
+        } else {
+            try c.encode(storedAppHUDProfiles, forKey: .appHUDProfiles)
+        }
+
+        var allFields = encoder.container(keyedBy: DynamicCodingKey.self)
+        try allFields.encode(
+            unknownFields,
+            excluding: Set(CodingKeys.allCases.map(\.stringValue))
+        )
+    }
+
+    func appHUDProfile(forBundleIdentifier bundleIdentifier: String) -> AppHUDProfile? {
+        guard Self.isValidBundleIdentifier(bundleIdentifier),
+              case .available(let profile) = storedAppHUDProfiles[bundleIdentifier] else { return nil }
+        return profile
+    }
+
+    func hasUnavailableAppHUDProfile(forBundleIdentifier bundleIdentifier: String) -> Bool {
+        guard case .unavailable = storedAppHUDProfiles[bundleIdentifier] else { return false }
+        return true
+    }
+
+    var hasUnavailableAppHUDProfilesCollection: Bool {
+        unavailableAppHUDProfilesCollection != nil
+    }
+
+    func makeAppHUDProfileFromGlobal() -> AppHUDProfile {
+        AppHUDProfile(layout: globalHUDActionLayout)
+    }
+
+    @discardableResult
+    mutating func setAppHUDProfile(
+        _ profile: AppHUDProfile,
+        forBundleIdentifier bundleIdentifier: String
+    ) -> Bool {
+        guard unavailableAppHUDProfilesCollection == nil,
+              Self.isValidBundleIdentifier(bundleIdentifier) else { return false }
+        storedAppHUDProfiles[bundleIdentifier] = .available(profile)
+        return true
+    }
+
+    @discardableResult
+    mutating func removeAppHUDProfile(forBundleIdentifier bundleIdentifier: String) -> Bool {
+        guard unavailableAppHUDProfilesCollection == nil,
+              Self.isValidBundleIdentifier(bundleIdentifier) else { return false }
+        return storedAppHUDProfiles.removeValue(forKey: bundleIdentifier) != nil
+    }
+
+    func resolveHUD(
+        route: HUDInvocationRoute,
+        frontmostApp: FrontmostAppSnapshot,
+        mousePlusBundleIdentifier: String
+    ) -> ResolvedHUDProfile {
+        guard route == .contextual else {
+            return resolvedGlobal(
+                route: route,
+                targetApplication: frontmostApp,
+                resolution: .globalRoute
+            )
+        }
+        guard let bundleIdentifier = frontmostApp.bundleIdentifier,
+              Self.isValidBundleIdentifier(bundleIdentifier) else {
+            return resolvedGlobal(
+                route: route,
+                targetApplication: frontmostApp,
+                resolution: .missingBundleIdentifier
+            )
+        }
+        if bundleIdentifier == mousePlusBundleIdentifier {
+            return resolvedGlobal(
+                route: route,
+                targetApplication: frontmostApp,
+                resolution: .mousePlusFrontmost
+            )
+        }
+        switch storedAppHUDProfiles[bundleIdentifier] {
+        case .available(let profile):
+            return ResolvedHUDProfile(
+                route: route,
+                profileReference: .app(bundleIdentifier: bundleIdentifier),
+                actionLayout: profile.layout,
+                targetApplication: frontmostApp,
+                resolution: .exactAppMatch
+            )
+        case .unavailable:
+            return resolvedGlobal(
+                route: route,
+                targetApplication: frontmostApp,
+                resolution: .unavailableProfile
+            )
+        case nil:
+            return resolvedGlobal(
+                route: route,
+                targetApplication: frontmostApp,
+                resolution: .noMatchingProfile
+            )
+        }
+    }
+
+    private func resolvedGlobal(
+        route: HUDInvocationRoute,
+        targetApplication: FrontmostAppSnapshot,
+        resolution: HUDProfileResolution
+    ) -> ResolvedHUDProfile {
+        ResolvedHUDProfile(
+            route: route,
+            profileReference: .global,
+            actionLayout: globalHUDActionLayout,
+            targetApplication: targetApplication,
+            resolution: resolution
+        )
+    }
+
+    private static func isValidBundleIdentifier(_ value: String) -> Bool {
+        !value.isEmpty && value == value.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
     /// The app switcher originally shipped as a recognizable sample parent with
@@ -134,11 +300,12 @@ enum TriggerBinding: Codable, Equatable, Sendable {
     }
 }
 
-/// Trigger slots — the ring's keyboard + mouse-button triggers, plus a global
-/// "open Settings" hotkey — each independently configurable.
+/// Trigger slots — contextual keyboard/mouse routes, a Global HUD keyboard
+/// route, and the global "open Settings" hotkey — each independently configurable.
 struct TriggersConfig: Codable, Sendable, Equatable {
     var keyboard: TriggerBinding
     var mouseButton: TriggerBinding
+    var globalHUDShortcut: TriggerBinding
 
     /// Global shortcut that opens Settings/Preferences from anywhere. Unlike the ring
     /// triggers (which ship **unbound** and are set via onboarding / the Triggers tab),
@@ -150,10 +317,12 @@ struct TriggersConfig: Codable, Sendable, Equatable {
     init(
         keyboard: TriggerBinding = .none,
         mouseButton: TriggerBinding = .none,
+        globalHUDShortcut: TriggerBinding = .none,
         openSettings: TriggerBinding = TriggersConfig.defaultOpenSettings
     ) {
         self.keyboard = keyboard
         self.mouseButton = mouseButton
+        self.globalHUDShortcut = globalHUDShortcut
         self.openSettings = openSettings
     }
 
@@ -162,12 +331,15 @@ struct TriggersConfig: Codable, Sendable, Equatable {
     /// existing `config.json` (no such key) fail to decode and take the whole
     /// configuration down with it. Each field is `decodeIfPresent`-ed with a default
     /// instead, so old configs still load AND existing users inherit the ⌥⌘, hotkey.
-    private enum CodingKeys: String, CodingKey { case keyboard, mouseButton, openSettings }
+    private enum CodingKeys: String, CodingKey {
+        case keyboard, mouseButton, globalHUDShortcut, openSettings
+    }
 
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         keyboard = try c.decodeIfPresent(TriggerBinding.self, forKey: .keyboard) ?? .none
         mouseButton = try c.decodeIfPresent(TriggerBinding.self, forKey: .mouseButton) ?? .none
+        globalHUDShortcut = (try? c.decode(TriggerBinding.self, forKey: .globalHUDShortcut)) ?? .none
         openSettings = try c.decodeIfPresent(TriggerBinding.self, forKey: .openSettings) ?? TriggersConfig.defaultOpenSettings
     }
 
@@ -175,6 +347,7 @@ struct TriggersConfig: Codable, Sendable, Equatable {
         var c = encoder.container(keyedBy: CodingKeys.self)
         try c.encode(keyboard, forKey: .keyboard)
         try c.encode(mouseButton, forKey: .mouseButton)
+        try c.encode(globalHUDShortcut, forKey: .globalHUDShortcut)
         try c.encode(openSettings, forKey: .openSettings)
     }
 
