@@ -174,6 +174,14 @@ struct Configuration: Codable {
         unavailableAppHUDProfilesCollection != nil
     }
 
+    /// Recovery-only replacement of the complete profile storage boundary,
+    /// including opaque entries or a future whole-collection representation.
+    /// Ordinary editor saves must continue to use the typed three-way merge.
+    mutating func replaceAppHUDProfileStorage(with source: Configuration) {
+        storedAppHUDProfiles = source.storedAppHUDProfiles
+        unavailableAppHUDProfilesCollection = source.unavailableAppHUDProfilesCollection
+    }
+
     func makeAppHUDProfileFromGlobal() -> AppHUDProfile {
         AppHUDProfile(layout: globalHUDActionLayout)
     }

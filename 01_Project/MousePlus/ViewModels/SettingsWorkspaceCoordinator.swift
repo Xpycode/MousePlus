@@ -56,6 +56,7 @@ final class SettingsWorkspaceCoordinator {
     private var generations: [Field: UInt] = [:]
     private var menuItemsBaseline = Configuration()
     private var sessionUndoMenuItems: (configuration: Configuration, selection: HUDProfileReference)?
+    private var pendingAppHUDProfileRecovery: Configuration?
 
     private(set) var configuration = Configuration()
     private(set) var status: Status = .idle
@@ -103,6 +104,7 @@ final class SettingsWorkspaceCoordinator {
             dirtyFields.removeAll()
             generations.removeAll()
             sessionUndoMenuItems = nil
+            pendingAppHUDProfileRecovery = nil
             isLoaded = true
             status = .saved
             workspaceState.reset = .idle
@@ -310,6 +312,7 @@ final class SettingsWorkspaceCoordinator {
         }
 
         replaceMenuItemsState(in: &configuration, with: backup)
+        pendingAppHUDProfileRecovery = backup
         normalizeProfileSelection()
         loadSelectedProfileIntoEditor()
         markDirty([.menuItems])
@@ -434,6 +437,10 @@ final class SettingsWorkspaceCoordinator {
             for field in fields where generations[field] == savedGenerations[field] {
                 dirtyFields.remove(field)
             }
+            if fields.contains(.menuItems),
+               generations[.menuItems] == savedGenerations[.menuItems] {
+                pendingAppHUDProfileRecovery = nil
+            }
             menuItemsBaseline = merged
             configuration = try mergingUnsavedFields(from: configuration, into: merged)
             normalizeProfileSelection()
@@ -474,8 +481,15 @@ final class SettingsWorkspaceCoordinator {
             base.inner = edited.inner
             base.middle = edited.middle
             base.hudCustomization = edited.hudCustomization
+            let profileBaseline: Configuration
+            if let recovery = pendingAppHUDProfileRecovery {
+                base.replaceAppHUDProfileStorage(with: recovery)
+                profileBaseline = recovery
+            } else {
+                profileBaseline = menuItemsBaseline
+            }
             try reconcileAppHUDProfileChanges(
-                from: menuItemsBaseline,
+                from: profileBaseline,
                 to: edited,
                 into: &base
             )
@@ -554,19 +568,7 @@ final class SettingsWorkspaceCoordinator {
         target.inner = source.inner
         target.middle = source.middle
         target.hudCustomization = source.hudCustomization
-        reconcileAppHUDProfiles(from: source, into: &target)
-    }
-
-    /// Reconciles all editable profiles while deliberately leaving quarantined
-    /// payloads in the fresh target untouched.
-    private func reconcileAppHUDProfiles(from source: Configuration, into target: inout Configuration) {
-        let desired = source.validAppHUDProfiles
-        for bundleIdentifier in target.validAppHUDProfiles.keys where desired[bundleIdentifier] == nil {
-            _ = target.removeAppHUDProfile(forBundleIdentifier: bundleIdentifier)
-        }
-        for (bundleIdentifier, profile) in desired {
-            _ = target.setAppHUDProfile(profile, forBundleIdentifier: bundleIdentifier)
-        }
+        target.replaceAppHUDProfileStorage(with: source)
     }
 
     /// Applies only this workspace's app-profile differences to a fresh disk

@@ -746,6 +746,69 @@ final class SettingsWorkspaceCoordinatorTests: XCTestCase {
         XCTAssertNil(restored.appHUDProfile(forBundleIdentifier: "com.apple.Notes"))
     }
 
+    func testBackupRestorePreservesOpaqueFutureProfileCollectionExactly() async throws {
+        var current = Configuration()
+        _ = current.setAppHUDProfile(
+            AppHUDProfile(layout: labeledLayout("Current Finder")),
+            forBundleIdentifier: "com.apple.finder"
+        )
+        let backup = try configuration(Configuration()) { object in
+            object["appHUDProfiles"] = ["future-collection", ["version": 9]]
+        }
+        let persistence = RecordingConfigurationPersistence(current)
+        await persistence.setBackup(backup)
+        let coordinator = makeCoordinator(persistence)
+        await coordinator.load()
+
+        let restoredBackup = await coordinator.restoreMenuItemsFromBackup()
+        XCTAssertTrue(restoredBackup)
+
+        let restored = await persistence.current
+        XCTAssertTrue(restored.hasUnavailableAppHUDProfilesCollection)
+        XCTAssertNil(restored.appHUDProfile(forBundleIdentifier: "com.apple.finder"))
+        let restoredProfiles = try XCTUnwrap(try encodedObject(restored)["appHUDProfiles"])
+        let backupProfiles = try XCTUnwrap(try encodedObject(backup)["appHUDProfiles"])
+        XCTAssertEqual(
+            try JSONSerialization.data(withJSONObject: restoredProfiles, options: .sortedKeys),
+            try JSONSerialization.data(withJSONObject: backupProfiles, options: .sortedKeys)
+        )
+        XCTAssertEqual(coordinator.status, .saved)
+        XCTAssertTrue(coordinator.dirtyFields.isEmpty)
+    }
+
+    func testBackupRestorePreservesOpaqueFutureProfileEntryExactly() async throws {
+        var backupSource = Configuration()
+        _ = backupSource.setAppHUDProfile(
+            AppHUDProfile(layout: labeledLayout("Backed-up Safari")),
+            forBundleIdentifier: "com.apple.Safari"
+        )
+        let backup = try configuration(backupSource) { object in
+            var profiles = object["appHUDProfiles"] as? [String: Any] ?? [:]
+            profiles["com.apple.finder"] = ["futurePayload": ["token": "recover-me"]]
+            object["appHUDProfiles"] = profiles
+        }
+        let persistence = RecordingConfigurationPersistence(Configuration())
+        await persistence.setBackup(backup)
+        let coordinator = makeCoordinator(persistence)
+        await coordinator.load()
+
+        let restoredBackup = await coordinator.restoreMenuItemsFromBackup()
+        XCTAssertTrue(restoredBackup)
+
+        let restored = await persistence.current
+        XCTAssertTrue(restored.hasUnavailableAppHUDProfile(forBundleIdentifier: "com.apple.finder"))
+        XCTAssertEqual(
+            restored.appHUDProfile(forBundleIdentifier: "com.apple.Safari")?.middle[0].label,
+            "Backed-up Safari"
+        )
+        let profiles = try XCTUnwrap(try encodedObject(restored)["appHUDProfiles"] as? [String: Any])
+        let finder = try XCTUnwrap(profiles["com.apple.finder"] as? [String: Any])
+        let payload = try XCTUnwrap(finder["futurePayload"] as? [String: Any])
+        XCTAssertEqual(payload["token"] as? String, "recover-me")
+        XCTAssertEqual(coordinator.status, .saved)
+        XCTAssertTrue(coordinator.dirtyFields.isEmpty)
+    }
+
     private func customizedHUDConfiguration() -> Configuration {
         var configuration = Configuration()
         configuration.triggers.mouseButton = .mouseButton(buttonNumber: 7, mode: .tapToggle)
@@ -1151,6 +1214,10 @@ private actor RecordingConfigurationPersistence: ConfigurationPersisting {
 
     func setBackupFailure(_ error: Error?) {
         backupFailure = error
+    }
+
+    func setBackup(_ configuration: Configuration) {
+        backup = configuration
     }
 
     func gateNextSaveWithFailure(_ error: Error) {
