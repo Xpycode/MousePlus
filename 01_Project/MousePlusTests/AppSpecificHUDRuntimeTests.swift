@@ -273,6 +273,77 @@ final class AppSpecificHUDRuntimeTests: XCTestCase {
         XCTAssertEqual(replacementDragCalls, 1)
     }
 
+    func testProductionReplacementUpdatesCenterContextWithoutMovingItsHitTarget() async throws {
+        let previousWindows = Set(NSApp.windows.map(\.windowNumber))
+        let controller = RingWindowController()
+        let model = RingViewModel()
+        model.load(
+            resolved: resolved(layout: HUDActionLayout(inner: [], middle: []), pid: 11),
+            presentation: Configuration()
+        )
+        var iconRequests: [String] = []
+        let iconProvider: @MainActor (String) -> NSImage? = { bundleIdentifier in
+            iconRequests.append(bundleIdentifier)
+            return NSImage(size: NSSize(width: 16, height: 16))
+        }
+        let visible = try XCTUnwrap(NSScreen.main?.visibleFrame)
+        controller.show(
+            at: CGPoint(x: visible.midX, y: visible.midY),
+            outerRadius: model.radii.r3,
+            content: RingMenuView(
+                viewModel: model,
+                interactionEnabled: false,
+                openingPlaybackEnabled: false,
+                centerApplicationIcon: iconProvider
+            ),
+            onPrimaryMouseUp: nil,
+            onOtherMouseDragged: nil
+        )
+        defer { controller.hide() }
+        let panel = try XCTUnwrap(NSApp.windows.first {
+            !previousWindows.contains($0.windowNumber) && $0 is NSPanel
+        })
+        try await Task.sleep(for: .milliseconds(50))
+        panel.contentView?.layoutSubtreeIfNeeded()
+        let originalPanelFrame = panel.frame
+        let originalButton = try XCTUnwrap(centerButton(in: try XCTUnwrap(panel.contentView)))
+        let originalCenterFrame = originalButton.accessibilityFrame()
+
+        XCTAssertEqual(originalCenterFrame.size, NSSize(width: 40, height: 40))
+        XCTAssertEqual(originalButton.accessibilityLabel(),
+                       "Open MousePlus Settings — Test HUD active")
+        XCTAssertEqual(iconRequests, ["com.test.app"])
+
+        model.load(
+            resolved: resolved(
+                route: .global,
+                layout: HUDActionLayout(inner: [], middle: []),
+                pid: 22
+            ),
+            presentation: Configuration()
+        )
+        controller.replaceContent(
+            outerRadius: model.radii.r3,
+            content: RingMenuView(
+                viewModel: model,
+                interactionEnabled: false,
+                openingPlaybackEnabled: false,
+                centerApplicationIcon: iconProvider
+            ),
+            onPrimaryMouseUp: nil,
+            onOtherMouseDragged: nil
+        )
+        try await Task.sleep(for: .milliseconds(50))
+        panel.contentView?.layoutSubtreeIfNeeded()
+
+        let replacementButton = try XCTUnwrap(centerButton(in: try XCTUnwrap(panel.contentView)))
+        XCTAssertEqual(panel.frame, originalPanelFrame)
+        XCTAssertEqual(replacementButton.accessibilityFrame(), originalCenterFrame)
+        XCTAssertEqual(replacementButton.accessibilityLabel(),
+                       "Open MousePlus Settings — Global HUD active")
+        XCTAssertEqual(iconRequests, ["com.test.app"])
+    }
+
     func testNativeInputSequencesCannotCrossAnInPlaceReplacement() {
         var ownership = HUDNativeInputOwnership()
         ownership.primaryDown()
@@ -337,5 +408,13 @@ final class AppSpecificHUDRuntimeTests: XCTestCase {
         _ mode: TriggerMode
     ) -> TriggerEvent {
         .up(source: source, mode: mode, pointerLocation: .zero)
+    }
+
+    private func centerButton(in view: NSView) -> NSButton? {
+        if let button = view as? NSButton,
+           button.accessibilityIdentifier() == HUDCenterSettingsControl.accessibilityIdentifier {
+            return button
+        }
+        return view.subviews.lazy.compactMap { self.centerButton(in: $0) }.first
     }
 }

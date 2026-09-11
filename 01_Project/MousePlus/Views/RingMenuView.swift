@@ -1,3 +1,4 @@
+import AppKit
 import SwiftUI
 
 /// The concentric wedge ("pie") menu.
@@ -74,6 +75,10 @@ struct RingMenuView: View {
     /// a selection callback so VoiceOver activation edits without executing.
     var accessibilityIdentifierPrefix = "hud.wedge"
     var exposesCenterSettings = true
+    /// Injectable only so hosted regressions can prove suppressed previews do
+    /// not consult NSWorkspace for live application icons.
+    var centerApplicationIcon: @MainActor (String) -> NSImage? =
+        HUDCenterSettingsControl.workspaceApplicationIcon
     var exposesWedgeAccessibility = true
     var onAccessibilitySelection: ((ActiveSelection) -> Void)?
     /// Preview-only editor selection, drawn as a neutral marker. Runtime leaves
@@ -175,23 +180,28 @@ struct RingMenuView: View {
 
                 // This native control remains at final geometry. Fade retains
                 // its original opacity behavior; spatial effects show it now.
-                HUDCenterSettingsControl(
-                    action: {
-                        settleOpening("center action")
-                        viewModel.activateCenterSettings()
-                    },
-                    draggingEnabled: onCenterDrag != nil,
-                    onDrag: { delta in
-                        // A center drag is panel manipulation, never wedge selection.
-                        settleOpening("center drag")
-                        viewModel.activeSelection = nil
-                        onCenterDrag?(delta)
-                    }
-                )
-                .frame(width: radii.r0 * 1.6, height: radii.r0 * 1.6)
-                .opacity(openingFrame.centerOpacity)
-                .allowsHitTesting(interactionEnabled)
-                .accessibilityHidden(!exposesCenterSettings)
+                if exposesCenterSettings {
+                    HUDCenterSettingsControl(
+                        presentation: HUDCenterContextPresentation(
+                            resolved: viewModel.resolvedHUDProfile
+                        ),
+                        applicationIcon: centerApplicationIcon,
+                        action: {
+                            settleOpening("center action")
+                            viewModel.activateCenterSettings()
+                        },
+                        draggingEnabled: onCenterDrag != nil,
+                        onDrag: { delta in
+                            // A center drag is panel manipulation, never wedge selection.
+                            settleOpening("center drag")
+                            viewModel.activeSelection = nil
+                            onCenterDrag?(delta)
+                        }
+                    )
+                    .frame(width: radii.r0 * 1.6, height: radii.r0 * 1.6)
+                    .opacity(openingFrame.centerOpacity)
+                    .allowsHitTesting(interactionEnabled)
+                }
 
                 // Accessibility actions use final wedge geometry and never sit
                 // inside opening masks or Bloom's artwork transform.
