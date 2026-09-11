@@ -292,6 +292,7 @@ final class SettingsWorkspaceCoordinator {
     func undoMenuItemsReset() async -> Bool {
         guard let previous = sessionUndoMenuItems, isLoaded else { return false }
         replaceMenuItemsState(in: &configuration, with: previous.configuration)
+        pendingAppHUDProfileRecovery = previous.configuration
         selectedHUDProfile = profileExists(previous.selection) ? previous.selection : .global
         loadSelectedProfileIntoEditor()
         markDirty([.menuItems])
@@ -484,8 +485,15 @@ final class SettingsWorkspaceCoordinator {
         into base: inout Configuration
     ) throws {
         if fields.contains(.menuItems) {
-            base.inner = edited.inner
-            base.middle = edited.middle
+            if pendingAppHUDProfileRecovery != nil {
+                // Recovery owns the complete saved menu snapshot, including
+                // forward-compatible raw fields attached to Global items.
+                base.globalHUDActionLayout = edited.globalHUDActionLayout
+            } else {
+                // Ordinary edits retain raw fields from the fresh disk base.
+                base.inner = edited.inner
+                base.middle = edited.middle
+            }
             base.hudCustomization = edited.hudCustomization
             let profileBaseline: Configuration
             if let recovery = pendingAppHUDProfileRecovery {
@@ -552,7 +560,8 @@ final class SettingsWorkspaceCoordinator {
         menuEditorModel.load(
             actionLayout: selectedActionLayout,
             hudCustomization: configuration.hudCustomization,
-            preservingSelection: preservingItemSelection
+            preservingSelection: preservingItemSelection,
+            normalizeStoredValues: false
         )
     }
 
@@ -571,8 +580,7 @@ final class SettingsWorkspaceCoordinator {
     }
 
     private func replaceMenuItemsState(in target: inout Configuration, with source: Configuration) {
-        target.inner = source.inner
-        target.middle = source.middle
+        target.globalHUDActionLayout = source.globalHUDActionLayout
         target.hudCustomization = source.hudCustomization
         target.replaceAppHUDProfileStorage(with: source)
     }
@@ -637,10 +645,17 @@ final class SettingsWorkspaceCoordinator {
                     }
                 }
 
-            case (.some, .some(let desiredProfile)):
+            case (.some(let originalProfile), .some(let desiredProfile)):
                 guard var freshProfile = target.appHUDProfile(
                     forBundleIdentifier: bundleIdentifier
                 ) else {
+                    throw MenuItemsMergeError.appProfilesChangedExternally
+                }
+                let freshMatchesOriginal = freshProfile.inner == originalProfile.inner
+                    && freshProfile.middle == originalProfile.middle
+                let freshMatchesDesired = freshProfile.inner == desiredProfile.inner
+                    && freshProfile.middle == desiredProfile.middle
+                guard freshMatchesOriginal || freshMatchesDesired else {
                     throw MenuItemsMergeError.appProfilesChangedExternally
                 }
                 // Apply only the action arrays to the fresh typed profile. Its

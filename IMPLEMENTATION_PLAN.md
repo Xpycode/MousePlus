@@ -1,100 +1,111 @@
-# Implementation Plan — HUD Opening Styles
+# Implementation Plan — App-Specific HUDs
 
-**Created:** 2026-09-05 · **Status:** Wave 5 open: keyboard and BetterMouse-to-keyboard opening work; direct native mouse-trigger failure and remaining acceptance are open.
+**Created:** 2026-09-11 · **Status:** Automated implementation complete — E1 signed-live acceptance pending
 
 ## Goal
 
-Add Circular Sweep, Iris Reveal, Bloom, and Staggered Segments to Opening, with a safe
-replayable Settings preview, preserving immediate interaction and existing motion behavior.
+Add complete per-application action layouts with deterministic Global fallback, independent
+Contextual/Global invocation routes, safe in-place switching, profile editing in the existing
+Settings workspace, and signed-live Finder acceptance.
 
-## Acceptance criteria
+## Acceptance Criteria
 
-The detailed contracts and AC1–AC9 live in the specification linked below.
+The authoritative behavior and AC1–AC19 live in the linked specification.
 
-- [x] Six persisted Opening choices, compatible decoding, unchanged Fade default (AC1–AC2).
-- [ ] All four effects meet their visual and duration contracts (AC3).
-- [x] Fixed targets, immediate actions/dismissal, safe branch composition and cancellation (AC4–AC6).
-- [x] Native Settings controls and shared, isolated, replayable preview (AC7).
-- [ ] Automated, signed live, accessibility, and performance evidence recorded (AC8–AC9).
+- [x] Existing configurations remain the Global HUD; app profiles copy, persist, edit, delete,
+  recover, and fall back without damaging unrelated configuration (AC1–AC5).
+- [x] Contextual resolution uses a stable frontmost-app snapshot, exact bundle-ID matching,
+  in-memory lookup, Global fallback, and an invocation-frozen layout/target (AC6–AC9).
+- [x] The independent Global route bypasses app resolution and switches safely in either direction,
+  preserving panel position and preventing stale release commits or ambiguous bindings (AC10–AC15).
+- [x] The center and Settings surfaces expose the active/editing profile through native,
+  accessible controls and preserve Reduce Motion and existing interaction contracts (AC16–AC18).
+- [ ] A signed fresh build passes the Finder/unconfigured-app end-to-end acceptance flow, including
+  save/relaunch and both invocation routes (AC19).
 
-## Specs and code evidence
+## Specs and Current Code Evidence
 
-- [HUD opening styles specification](specs/hud-opening-styles.md) — authoritative behavior,
-  proposed placement, defaults, interruption, preview, and acceptance criteria.
-- `01_Project/MousePlus/Models/HUDMotionConfiguration.swift`: summon currently `off`/`fade`;
-  decoding falls back per field, and default duration is 0.15 seconds.
-- `01_Project/MousePlus/Utilities/HUDMotionPolicy.swift`: role resolver, duration clamp,
-  and spatial-to-fade Reduce Motion policy already exist.
-- `01_Project/MousePlus/Views/RingMenuView.swift`: `hasAppeared` currently drives whole-content
-  opacity; `motion(for:)` uses `interactionEnabled` to suppress editor motion. Input uses
-  fixed geometry; native release handling additionally lives in `RingWindowController`.
-- `Views/Components/HUDOuterBandMotion.swift` and `HUDOuterBranchMotion.swift` already own
-  independent outer progress and frozen branch snapshots. Preserve those responsibilities.
-- `Views/MenuEditor/RingPreviewSelector.swift`: real renderer with editor-only input and
-  disabled animation. It is not the new playback surface.
-- `Views/RingAppearanceSettingsPane.swift`: the existing native Opening popup uses
-  `appearanceBinding` → `SettingsWorkspaceCoordinator.edit([.appearance])` → persisted/live
-  application. `MotionSettingsTestHost` already exercises this real control path.
+- [App-specific HUD specification](specs/app-specific-huds.md) — authoritative scope, behavior,
+  edge cases, UI placement, and acceptance criteria.
+- `Models/Configuration.swift` — existing `inner`/`middle` are the backward-compatible Global
+  layout; `TriggersConfig` already has tolerant per-field decoding but no Global HUD binding.
+- `MousePlusApp.swift` — captures only the frontmost PID before showing the panel and currently
+  reloads one global configuration directly into `RingViewModel`.
+- `ViewModels/RingViewModel.swift` — already resets selection/outer expansion, snapshots the PID for
+  actions, protects asynchronous App Switcher expansion, and loads one pair of action rings.
+- `Services/TriggerService.swift` — one keyboard and one mouse monitor currently emit source/mode
+  events without an invocation route or release owner.
+- `ViewModels/SettingsWorkspaceCoordinator.swift` and `MenuEditorModel.swift` — one safe writer and
+  one working action-layout editor already provide load gates, fresh-base merge, backup, reset,
+  save status, and live apply; they currently edit only Global.
+- `Views/MenuEditor/MenuItemsPane.swift` and `AppPickerSheet.swift` — existing Menu Items workspace
+  and installed-app picker are the intended profile-management surface.
+- `Views/Components/HUDCenterSettingsControl.swift` — the native center button owns one Settings
+  action and drag arbitration; context presentation must preserve both.
 
-Paths in the tasks are relative to `01_Project/MousePlus/`, unless prefixed otherwise.
-New filenames are proposed. Check actual target membership when adding files.
+Paths in tasks are relative to `01_Project/MousePlus/`, unless prefixed otherwise. The Xcode project
+uses filesystem-synchronized groups, so new source/test files should receive target membership
+automatically; verify test discovery instead of editing the project file preemptively.
 
-## Resume / execution boundary
+## Execution Schedule and Ownership
 
-1. Read this plan, its spec, current `docs/PROJECT_STATE.md`, and applicable Directions
-   `/execute` procedure when the user asks to implement. Start at Task 1.1.
-2. Scope is supplied by the conversation: implement all four styles and the preview,
-   not only the first two suggested effects. Detailed defaults are in the spec.
-3. Review the proposed placement in the existing Animation section as part of accepting
-   execution scope. Current authorization is planning only; do not launch implementation
-   merely because this file exists.
-4. Preserve the pre-existing dirty documentation: Motion v1 closure changed project state,
-   task/archive/index files and session logs, and deleted its completed plan. This new
-   root plan deliberately replaces that completed plan, rather than restoring its tasks.
-   No application source changes existed at planning time. No fetch/merge/commit/push was
-   performed here; do not infer cross-Mac synchronization from this plan.
-5. Planning validation is documentation/source inspection only. The prior 91 focused / 272
-   full-suite results belong to Motion v1, not these proposed effects.
-6. Model fit for lifecycle, rendering/AX separation, and integration review: deep capability
-   with high reasoning. Current host setting is not reliably visible. Routine enum/control
-   changes can use balanced capability; use the deeper setting for Tasks 2.1 and 5.1.
+- **Execution scope/limits:** this plan covers the approved v1 specification. Creating the plan does
+  not authorize implementation; `/execute` starts work. Sparse overrides, app-command search, per-app
+  presentation, and a second native Global mouse slot remain out of scope.
+- **Existing dirty work:** preserve the retained Opening Styles regression and documentation edits
+  listed by `git status`. The prior completed root plan was intentionally moved under `docs/plans/`;
+  this new root plan becomes the active plan and must not restore or overwrite the archived plan.
+- **Coordinator-owned shared resources:** `MousePlusApp.swift`, final integration fixes, root plan,
+  project state/task/session documents, Xcode invocations, derived-data paths, app termination/launch,
+  and Git operations. No commit, push, pull, branch switch, or worktree operation is authorized by
+  this planning request.
+- **Interfaces established by Task 1.1:** `HUDActionLayout`, a stable Global/app profile reference,
+  an invocation route (`contextual`/`global`), an immutable frontmost-app snapshot, resolved-profile
+  metadata, decode-tolerant/lossless profile storage, and `TriggersConfig.globalHUDShortcut`.
+- **Dependency audit:** Wave 2 tasks consume only Task 1.1 and have disjoint source/test ownership.
+  Wave 3 runtime and Settings tasks consume different Wave 2 interfaces and remain disjoint. Center
+  rendering waits for the runtime context contract. Final integration begins only after every
+  producer is integrated. There are no dependency cycles or same-wave write conflicts.
+- **Serial-wave reasons:** Wave 1 owns the central configuration schema used by every consumer;
+  Wave 4 owns the native center/RingMenuView seam; Wave 5 may touch any affected integration file
+  while resolving concrete review findings, so each runs under one coordinator.
 
-## Validation commands
+## Validation Commands
 
-Run from repository root. Use the project's configured signing identity and normal Xcode
-environment. If sandbox access blocks Xcode services, follow the established permission
-workflow; do not disable signing or edit identity settings to make a check pass.
+Run from the repository root. Use the configured signing identity and normal Xcode environment. Do
+not weaken signing or use the user's live Application Support configuration in automated tests.
 
 **B — authoritative build**
 
 ```bash
-xcodebuild -workspace 01_Project/MousePlus.xcworkspace -scheme MousePlus -configuration Debug build
+xcodebuild -workspace 01_Project/MousePlus.xcworkspace \
+  -scheme MousePlus -configuration Debug build
 ```
 
-**F — focused suite** (add the proposed new classes when created; before then omit them)
+**F — focused feature suite**
 
 ```bash
-xcodebuild -workspace 01_Project/MousePlus.xcworkspace -scheme MousePlus -configuration Debug -destination 'platform=macOS' test \
+xcodebuild -workspace 01_Project/MousePlus.xcworkspace \
+  -scheme MousePlus -configuration Debug -destination 'platform=macOS' test \
+  -only-testing:MousePlusTests/AppSpecificHUDModelTests \
+  -only-testing:MousePlusTests/AppSpecificHUDRuntimeTests \
+  -only-testing:MousePlusTests/HUDTriggerRoutingTests \
   -only-testing:MousePlusTests/ConfigurationServiceTests \
-  -only-testing:MousePlusTests/HUDMotionPolicyTests \
-  -only-testing:MousePlusTests/HUDOpeningMotionTests \
-  -only-testing:MousePlusTests/HUDOpeningPreviewTests \
-  -only-testing:MousePlusTests/HUDOuterBandMotionTests \
-  -only-testing:MousePlusTests/HUDOuterBranchMotionTests \
-  -only-testing:MousePlusTests/RingRuntimeInteractionTests \
-  -only-testing:MousePlusTests/RingViewModelHUDTests \
   -only-testing:MousePlusTests/SettingsWorkspaceCoordinatorTests \
-  -only-testing:MousePlusTests/WorkspaceAccessibilityTests
+  -only-testing:MousePlusTests/RingViewModelHUDTests \
+  -only-testing:MousePlusTests/HUDCenterSettingsTests \
+  -only-testing:MousePlusTests/WorkspaceAccessibilityTests \
+  -only-testing:MousePlusTests/DismissMonitorTests
 ```
 
-For a task, narrow F to the classes named in its Backpressure line. Check result-bundle
-counts and test discovery; a successful command selecting no tests is not evidence.
-Tests must use temporary stores / injected services, never the user's live configuration.
+Before a proposed class exists, omit it rather than treating a zero-test selection as evidence. For
+each task, narrow F to the named classes and inspect test discovery/result counts.
 
 **T — complete scheme test plan**
 
 ```bash
-xcodebuild -workspace 01_Project/MousePlus.xcworkspace -scheme MousePlus -configuration Debug -destination 'platform=macOS' test
+xcodebuild -workspace 01_Project/MousePlus.xcworkspace \
+  -scheme MousePlus -configuration Debug -destination 'platform=macOS' test
 ```
 
 **D — documentation and whitespace**
@@ -105,233 +116,230 @@ git diff --check
 
 ## Tasks
 
-### Wave 1 — Persisted styles and policy
+### Wave 1 — Durable contracts (serial foundation)
 
-- [x] **1.1: Extend opening choices and policy without changing defaults.**
-  - Targets: `Models/HUDMotionConfiguration.swift`, `Utilities/HUDMotionPolicy.swift`,
-    `Views/Components/HUDOuterBandMotion.swift` (exhaustive effect handling if needed),
-    `../MousePlusTests/ConfigurationServiceTests.swift`, `HUDMotionPolicyTests.swift`.
-  - Work: add the four stable raw values in the spec; resolve all style × master × Reduce
-    Motion combinations. Retain the per-field migration and existing role behavior. Audit
-    effect switches; new summon effects must not accidentally become outer reveal effects.
-  - Success: round-trip every opening choice; legacy/missing/unknown/malformed values retain
-    their specified fallbacks; duration clamp/NaN handling and Off/Reduce Motion work.
-  - Backpressure: F narrowed to configuration, policy and existing outer-band tests; B.
+- [x] **1.1: Add lossless app-profile, resolution, and Global-trigger configuration contracts.**
+  - Depends on / external gates: none.
+  - Owns: `Models/Configuration.swift`; new `Models/AppHUDProfile.swift` and
+    `Models/HUDInvocation.swift`; new `../MousePlusTests/AppSpecificHUDModelTests.swift`;
+    relevant additions to `../MousePlusTests/ConfigurationServiceTests.swift` and JSON fixtures.
+  - Work: retain `Configuration.inner`/`middle` as Global and add bundle-ID-keyed profiles whose
+    complete action layouts do not duplicate global presentation/behavior. Creating a typed profile
+    must support independent value semantics. Add the unbound, decode-tolerant Global HUD shortcut.
+  - Work: make malformed individual profile payloads unavailable to runtime resolution while
+    preserving their raw JSON losslessly through unrelated saves; a user-created replacement for
+    that exact bundle ID may intentionally replace the opaque payload. Unknown future data and all
+    unrelated Global fields must round-trip. Do not convert a corrupt present file into defaults.
+  - Work: define pure exact-match resolution for Contextual/Global routes, including MousePlus,
+    missing-bundle-ID, unavailable-profile, and no-profile fallbacks. The resolved result includes
+    action layout and context metadata but no disk I/O or mutable `NSRunningApplication` reference.
+  - Interface: supplies `HUDActionLayout`, `HUDProfileReference`, `HUDInvocationRoute`,
+    `FrontmostAppSnapshot`, `ResolvedHUDProfile`, `Configuration.resolveHUD(...)`, valid-profile
+    access/mutation, and `TriggersConfig.globalHUDShortcut` to Tasks 2.1–4.1.
+  - Success: AC1, model portions of AC2–AC7, AC9, and trigger migration decode/round-trip cases pass;
+    existing fixtures and unknown-action preservation remain green.
+  - Backpressure: F narrowed to `AppSpecificHUDModelTests` and `ConfigurationServiceTests`; B; D.
 
-### Wave 2 — Shared opening lifecycle and stable interaction
+### Wave 2 — Independent consumers (parallel after 1.1)
 
-- [x] **2.1: Extract the opening presentation owner, retaining Fade/Off behavior.**
-  - Depends on: 1.1.
-  - Targets: `Views/RingMenuView.swift`, new `Views/Components/HUDOpeningMotion.swift`, new
-    `Utilities/HUDOpeningMotionFrame.swift`, `Views/Components/WedgeView.swift` as needed;
-    `../MousePlusTests/HUDOpeningMotionTests.swift` (new), `MousePlusTests.swift`.
-    Inspect `Controllers/RingWindowController.swift` and `ViewModels/RingViewModel.swift`;
-    change them only if a minimal presentation invalidation bridge is necessary.
-  - Work: replace `hasAppeared` with one invocation-scoped normalized progress owner;
-    separate live/static-editor/opening-preview motion policy from interaction permission.
-    Establish pure frame helpers and explicit replay/reset identity. Keep native input,
-    center control and AX target geometry outside future masks/transforms.
-  - Work: finish on valid aiming/branch opening, settle on relevant preference/layout changes,
-    and discard on hide. No per-wedge tasks, global implicit animation, or completion-gated
-    action. Unimplemented choices may use Fade internally until Wave 3, but are not exposed
-    in Settings before their real renderer exists.
-  - Success: Fade/Off regressions pass; selection, native early mouse-up, rapid hide/reopen,
-    and live overrides cannot wait for or restart opening. Static editor stays static.
-  - Backpressure: F narrowed to opening, runtime interaction and HUD view-model tests; B.
-    Add hosted checks for stable native/AX geometry where pure tests cannot establish it.
+- [x] **2.1: Make the Settings coordinator edit one selected action profile safely.**
+  - Depends on: 1.1. External gates: none.
+  - Owns: `ViewModels/SettingsWorkspaceCoordinator.swift`, `ViewModels/MenuEditorModel.swift`, and
+    `../MousePlusTests/SettingsWorkspaceCoordinatorTests.swift`.
+  - Work: add non-persisted Global/app editor selection; load the selected action layout into the
+    existing editor while always using global HUD customization. Create App HUD by copying current
+    Global, reject/select duplicates, delete only app profiles, and preserve selection sensibly after
+    load/delete/missing-app states.
+  - Work: route editor changes into Global or the selected app profile without cross-profile writes.
+    Extend `.menuItems` fresh-base merge, dirty generations, live apply, backup/restore, close barrier,
+    reset, and session undo to preserve the complete profile collection. Global reset retains current
+    semantics; App HUD reset restores a fresh copy of current Global without resetting global HUD
+    customization.
+  - Interface: coordinator profile list/selection plus create/delete/select operations consumed by
+    Task 3.2; no view code and no second persistence writer.
+  - Success: AC2–AC5 and AC17 model behavior pass, including save failure/retry, mid-session
+    corruption, external edits, selection-only no-save, reset/undo, and relaunch simulations.
+  - Backpressure: F narrowed to `SettingsWorkspaceCoordinatorTests` and
+    `AppSpecificHUDModelTests`; B; D.
 
-### Wave 3 — Four renderers (share Wave 2 infrastructure)
+- [x] **2.2: Add an independent Global HUD keyboard route and unambiguous trigger events.**
+  - Depends on: 1.1. External gates: none.
+  - Owns: `Services/TriggerService.swift`, `Views/TriggersSettingsView.swift`; new
+    `Utilities/HUDTriggerRouting.swift` and `../MousePlusTests/HUDTriggerRoutingTests.swift`;
+    related trigger/accessibility assertions in `WorkspaceAccessibilityTests.swift` only.
+  - Work: retain existing keyboard/mouse bindings as Contextual, add a second keyboard monitor for
+    Global, and carry route plus stable physical-source identity on down/move/up events. Keep
+    Hold-release and Tap-toggle semantics. Stop/reconfigure every monitor deterministically.
+  - Work: add a native AppKit-backed “Global HUD Shortcut” row in the existing Triggers pane,
+    unbound by default with its own mode control. Reject an exact contextual-keyboard collision with
+    a visible reason and retain the previously saved Global binding; other established conflict
+    behavior remains unchanged.
+  - Interface: route/source-aware trigger event stream and pure binding-collision policy consumed by
+    Task 3.1. No AppDelegate edits in this task.
+  - Success: trigger configuration compatibility, event routing, monitor reconfiguration, duplicate
+    rejection, Settings save/live-apply, and accessible native control metadata satisfy AC10,
+    AC14–AC15, and the trigger portion of AC17.
+  - Backpressure: F narrowed to `HUDTriggerRoutingTests`, `ConfigurationServiceTests`, and
+    `WorkspaceAccessibilityTests`; B; D.
 
-- [x] **3.1: Implement Circular Sweep and Iris Reveal masks.**
-  - Depends on: 2.1.
-  - Targets: `Utilities/HUDOpeningMotionFrame.swift`, `Views/Components/HUDOpeningMotion.swift`,
-    `Views/RingMenuView.swift`, `../MousePlusTests/HUDOpeningMotionTests.swift`.
-  - Work: sweep clockwise from top in the existing +y-down convention; iris from r0 to r2.
-    Apply masks to artwork and backing, leaving semantic targets intact. Handle zero and
-    full progress explicitly so a full circle cannot collapse to an empty path at 360°.
-    At completion remove transient clipping, including at strokes/label edges.
-  - Success: endpoint and intermediate frames match the spec; independent rotations,
-    small/large radii and crossing the angular wrap do not rotate/reflow content or leak
-    hidden material. Branch expansion settles the opening rather than being double-masked.
-  - Backpressure: F narrowed to opening and outer-band/branch tests; B; record visual
-    inspection at progress 0, a middle frame, and 1 during development.
+### Wave 3 — Runtime and Settings integration (parallel on disjoint files)
 
-- [x] **3.2: Implement bounded Bloom on artwork only.**
-  - Depends on: 2.1; work sequentially with 3.1 because shared files overlap.
-  - Targets: opening frame/renderer files, `Views/RingMenuView.swift`,
-    `../MousePlusTests/HUDOpeningMotionTests.swift`, `MousePlusTests.swift`.
-  - Work: implement 0.92 → restrained overshoot ≤1.015 → exactly 1.00 and opacity 0 → 1
-    over one normalized duration. Use the final HUD center as the anchor, with no panel
-    resizing. Keep native center and accessibility action targets untransformed.
-  - Success: scale bounds and exact endpoint are tested; selection ends visual displacement;
-    native early release and AX activation still target the same final wedge exactly once.
-  - Backpressure: F narrowed to opening and runtime interaction tests; B; inspect actual
-    AX frames and screen-edge clipping in a hosted/live view, not only resolver output.
+- [x] **3.1: Resolve, show, and safely switch Contextual/Global HUD invocations.**
+  - Depends on: 1.1 and 2.2. External gates: none.
+  - Owns: `MousePlusApp.swift`, `ViewModels/RingViewModel.swift`,
+    `Controllers/RingWindowController.swift` only if a minimal anchored refresh seam is required;
+    new `../MousePlusTests/AppSpecificHUDRuntimeTests.swift`; relevant additions to
+    `RingViewModelHUDTests.swift` and `DismissMonitorTests.swift`.
+  - Work: capture one immutable PID/bundle-ID/name snapshot before panel display, resolve from the
+    already-loaded configuration, and load resolved actions with global presentation settings. Keep
+    the profile and action target frozen for an invocation; saved configuration updates affect the
+    next invocation without mutating an already-visible action layout.
+  - Work: introduce a pure/testable invocation-ownership state machine. The other route replaces the
+    layout in the visible panel at the same anchor, resets selection/outer state, transfers release
+    ownership, and does not replay full summon motion. An old release is ignored. Same-route
+    Tap-toggle dismissal and hold-release commit behavior remain intact; unavailable Contextual
+    profiles safely resolve to Global.
+  - Work: preserve App Switcher dynamic icons/full-circle geometry, expansion epochs, native mouse-up,
+    Settings-center callbacks, outside/Escape dismissal, and action-result routing.
+  - Interface: exposes stable resolved-context presentation to Task 4.1 and complete runtime routing
+    behavior to Wave 5.
+  - Success: AC6–AC14 and runtime portions of AC16/AC18 pass under exact match, fallback, rapid route
+    switching, stale release, app activation, configuration live-apply, and reopen tests.
+  - Backpressure: F narrowed to `AppSpecificHUDRuntimeTests`, `RingViewModelHUDTests`,
+    `DismissMonitorTests`, and existing runtime interaction tests discovered in `MousePlusTests`; B; D.
 
-- [x] **3.3: Implement staggered segment presentation with one shared clock.**
-  - Depends on: 2.1; integrate after 3.1–3.2 to avoid overlapping renderer edits.
-  - Targets: opening frame/renderer files, `Views/RingMenuView.swift`,
-    `Views/Components/WedgeView.swift` if needed, `../MousePlusTests/HUDOpeningMotionTests.swift`.
-  - Work: derive ranks per band from final slot geometry and implement the spec's total-
-    duration cadence. Animate artwork and matching backing coverage together. Preserve
-    empty slots, independent inner/middle counts and rotations; do not reorder model items.
-    One progress value drives all segments. Preserve final material rendering at progress 1.
-  - Success: deterministic ordering across angle wrap; zero/one/many-item cases and fixed
-    empty slots behave; last segment finishes by baseDuration; no layout/label reflow,
-    extra AX nodes, persistent seams, or per-segment scheduled callbacks.
-  - Backpressure: F narrowed to opening tests (cadence, endpoints, counts/rotations, backing
-    coverage); B; inspect the material/label result at intermediate and final frames.
+- [x] **3.2: Add profile management above the existing Menu Items editor.**
+  - Depends on: 2.1. External gates: none; placement was approved through the specification and must
+    still be checked in the rendered minimum-size Settings window.
+  - Owns: `Views/MenuEditor/MenuItemsPane.swift`, `Views/MenuEditor/AppPickerSheet.swift` only for
+    reusable exclusion/missing-app behavior, `Views/AppKitControls/AppKitControls.swift` only if the
+    existing popup wrapper lacks the required API, and profile UI additions to
+    `WorkspaceAccessibilityTests.swift` after Task 2.2's changes are integrated.
+  - Work: add one compact profile bar directly above `MenuEditorWorkspace`: native profile selector
+    with Global first, Add App HUD…, and app-only Delete. Reuse the installed-app picker, select an
+    existing duplicate instead of overwriting it, identify missing apps by stored bundle ID, and use
+    an AppKit-native destructive confirmation. Clearly state that a new profile is copied once and
+    then edited independently.
+  - Work: ensure switching selection alone neither dirties configuration nor loses an in-progress
+    serialized edit. Preview, selected-item routing, Test Action, reset/recovery, and visible save
+    status operate on the named profile. Global cannot be deleted. Update the existing restore
+    warning so it accurately states that recovery also replaces app profiles and customization.
+  - Interface: completes Settings profile management without adding a destination, writer, split
+    view, or raw SwiftUI interactive control.
+  - Success: AC2–AC5 and AC17 pass through the actual native controls; minimum-size layout, keyboard
+    traversal, identifiers, labels, duplicate choice, deletion, missing app, and save/relaunch state
+    are verified.
+  - Backpressure: F narrowed to `SettingsWorkspaceCoordinatorTests`,
+    `WorkspaceAccessibilityTests`, and `AppKitControlsTests`; B; inspect the real Settings pane.
 
-### Wave 4 — Native Settings and dedicated preview
+### Wave 4 — Native context presentation (serial shared view seam)
 
-- [x] **4.1: Expose all styles and add safe shared-renderer replay.**
-  - Depends on: 3.1, 3.2, 3.3.
-  - Targets: `Views/RingAppearanceSettingsPane.swift`, new `Views/Components/HUDOpeningPreview.swift`,
-    `Views/RingMenuView.swift`; `../MousePlusTests/SettingsWorkspaceCoordinatorTests.swift`,
-    `WorkspaceAccessibilityTests.swift`, new `HUDOpeningPreviewTests.swift`.
-  - Work: extend existing Opening popup in the spec's order; add the fixed preview and
-    existing `AppKitButton` wrapper immediately below it. Reuse current bindings and
-    disabled/accessibility conventions; do not create a new Settings destination.
-  - Work: isolated current-layout model, explicit replay token, initial static display,
-    one replay per style selection, speed applied on next replay, cancel on pane exit,
-    effective Reduce Motion caption, and no command/AX activation path. Existing menu
-    editor preview continues to suppress all motion and retain editing selection.
-  - Success: exercise actual native popup/replay actions; every style persists/reloads and
-    live-applies while preserving an unrelated external edit. Replay adds no dirty fields,
-    save/live-apply events, service queries or actions. Rapid replay replaces previous work;
-    Off and unloaded states disable controls correctly. Keyboard/AX metadata is correct.
-  - Backpressure: F narrowed to coordinator, accessibility, opening preview and opening
-    tests; B. Review control placement in running Settings at its minimum window size.
+- [x] **4.1: Present the resolved context in the native center Settings control.**
+  - Depends on: 3.1. External gates: none.
+  - Owns: `Views/Components/HUDCenterSettingsControl.swift`, `Views/RingMenuView.swift`,
+    `../MousePlusTests/HUDCenterSettingsTests.swift`, and center-specific additions to
+    `AppSpecificHUDRuntimeTests.swift` after Task 3.1 is integrated.
+  - Work: show the resolved app icon/name or Global identity while retaining one native Settings
+    action, its current frame/hit target, drag arbitration, and stable accessibility identifier. Use
+    a small gear affordance without adding a second action/node. Editor/opening previews that suppress
+    the center remain isolated and query no live app icons.
+  - Work: update the accessible label with the active context. Context replacement is immediate and
+    does not replay the full opening style; under Reduce Motion it introduces no spatial animation.
+    Tune only the compact icon/gear composition during live review, not its semantics or target size.
+  - Interface: completes the user-visible `ResolvedHUDProfile` presentation consumed by Wave 5.
+  - Success: AC16 and AC18 pass; center click/drag, early AXPress, opening concealment, stable AX frame,
+    and preview isolation regressions remain green.
+  - Backpressure: F narrowed to `HUDCenterSettingsTests`, `AppSpecificHUDRuntimeTests`,
+    `HUDOpeningMotionTests`, and `HUDOpeningPreviewTests`; B; hosted native AX/frame inspection.
 
-### Wave 5 — Integration and live acceptance
+### Wave 5 — Integration and adversarial verification
 
-- [ ] **5.1: Verify all contracts and record an accurate handoff.**
-  - Depends on: 4.1.
-  - Targets: all changed source/tests, this plan, specification, `docs/PROJECT_STATE.md`,
-    `docs/TASKS.md`, and a new session log when closing implementation.
-  - Work: run F, T, B and D; inspect actual result bundles. Review lifecycle cancellation,
-    cross-role transactions, material masks, stable hit/AX geometry, native control wiring,
-    preview isolation, and idle work. Fix concrete issues before the live handoff.
-  - Live matrix: all four new styles plus Fade/Off; 0.05/0.15/0.5 seconds; both trigger modes;
-    early release, repeated reopen, center drag/action, Escape/outside/direct dismissal;
-    static branches and twelve-app Apps → Snap → Apps; independent counts/rotations and
-    empty slots; labels on/off; maximum supported geometry at screen edges; master Off,
-    live preference changes, Reduce Motion; preview replay/pane navigation; VoiceOver and
-    keyboard control traversal. Observe smoothness and any clipping/seams on supported Macs.
-  - Success: launch the exact signed build and identify its path; signature verification
-    passes; test results and actual live observations are recorded separately. Visual
-    acceptance covers each new effect, not just an app-launch smoke. Record any untested
-    OS/device cases or missing VoiceOver/performance observations explicitly.
-  - Backpressure: F + T + B + D; `codesign --verify --deep --strict` with the exact built app
-    path; signed live matrix and user acceptance. No invented measurements or inherited
-    Motion v1 results. If live review is pending, keep this task open.
-  - Live remediation: user verification found that Settings replayed the selected style but a
-    fresh runtime HUD did not, and that a HUD opened over the active Settings window ignored
-    clicks in Settings and did not reliably close on a repeated trigger. These are blocking
-    lifecycle defects. Same-app Settings dismissal is now live-confirmed. The apparent remaining
-    runtime-animation failure was first observed while three different MousePlus binaries were
-    running concurrently. A subsequent clean single-process check still showed only the panel's
-    quick fade, confirming initial insertion settles before the selected renderer is visible. The
-    live panel now performs the preview's reliable replay-identity transition one frame after mount,
-    guarded against stale invocations. The expanded 31-test focused suite passes. User verification
-    confirms that the selected animation now runs in the actual HUD, but the entire settled HUD is
-    briefly visible before that animation begins. Acceptance remains blocked. The next remediation
-    must mount animated runtime content concealed and non-playing, then arm exactly one guarded
-    post-mount replay; Off and accessibility-resolved instant presentation must remain immediately
-    visible.
-  - Concealed-mount remediation implemented: runtime requests explicitly await mount, with hidden
-    artwork/center and no playback task armed. The existing guarded callback starts one replay;
-    early interaction or preference changes settle immediately and suppress that delayed replay.
-    Off/disabled motion remain visible; Reduce Motion retains its Fade fallback. The failing
-    playback-arming regression is now green, and 51 focused tests pass, including real-panel
-    concealment/replay/interruption checks. Fresh Debug build and strict Developer ID verification
-    pass at `/tmp/MousePlus-ConcealedMount-Live.mCxNaw/Build/Products/Debug/MousePlus.app`
-    (2026-09-05 12:35:47 CEST). Actual material pixels, user flash confirmation, tap-toggle, and
-    remaining visual/accessibility acceptance still require user review. Task 5.1 stays open.
-  - Latest user review supersedes the acceptance expectation above: the flash is gone, but runtime
-    opening is back to a fade and the selected effect is not visible. The exact cause is not yet
-    established. The 51-test pass is valid automated evidence, not proof of the actual visual result:
-    hosted opening tests record frames with clear placeholder content, bypassing the full ring's
-    material composition and interaction-driven settle callbacks. Next: trace the selected request,
-    awaiting-mount flag, guarded replay, settle causes, and displayed progress through the actual
-    runtime renderer; restore the effect while keeping the initial frame concealed. No new fix or
-    rollback was made during pre-clear logging. App-control preference superseded by the later standing quit/relaunch authorization (see latest session entry).
+- [x] **5.1: Close automated, compatibility, review, and fresh-build gates.**
+  - Depends on: 3.1, 3.2, and 4.1. External gates: none for automated work; E1 remains separate.
+  - Owns: all affected source/tests for concrete integration fixes; this plan, spec status/evidence,
+    project state/tasks, and the eventual session record. Shared writes and Xcode resources are
+    serialized by the coordinator.
+  - Work: map every AC1–AC18 claim to a focused or existing regression; inspect actual test discovery
+    and result counts. Review tolerant/raw profile preservation, fresh-base merges, reset/restore,
+    same-binding rejection, event ownership, rapid switching, live-apply freezing, App Switcher
+    state, panel anchoring, action target PID, center AX semantics, opening-motion isolation, and idle
+    task/observer cleanup. Fix findings and rerun affected checks.
+  - Work: run F, T, B, and D. Treat Xcode as authoritative over isolated SourceKit diagnostics. Do
+    not claim visuals, BetterMouse delivery, or user acceptance from unit tests.
+  - Success: all automated AC1–AC18 coverage and existing scheme tests pass with no unexpected skips;
+    Debug build succeeds; documentation matches evidence; no unresolved review finding remains.
+  - Backpressure: F + T + B + D; record exact counts/artifact path only after the commands run.
 
+### Wave 5 automated evidence map
 
-  - Runtime diagnosis follow-up (2026-09-05): full RingMenuView, centered on the pointer with
-    interactions enabled and the production 16 ms replay delay, produces intermediate frames for
-    every animated style. Isolated AppKit bitmap captures show a concealed mount and progressive
-    Staggered Segments using six/eight slots and independent rotations. An initial test at a fixed
-    screen point failed because it put a wedge under the physical pointer; tracing confirmed
-    legitimate hover settlement. That is not proof of a controller-placement defect or the user's
-    root cause. No speculative playback/placement fix was applied.
-  - Added two repeatable full-renderer regression tests: selected effect/intermediate frames and
-    actual RingMenuView selection-driven interruption before replay. Physical hover is disabled
-    in these retained automated tests; native interaction still has its existing coverage. Added
-    bounded Debug-only per-panel logging of selected style, effective frame effect, replay,
-    intermediate frame, and first settle reason. 53 focused tests pass; stronger selected-effect and center-concealment assertions passed in a
-    targeted rerun. Fresh Debug build and strict Developer ID verification pass at
-    `/tmp/MousePlus-OpeningDiagnostic-Live/Build/Products/Debug/MousePlus.app`
-    (2026-09-05 13:17:04 CEST). Next is a user-controlled reproduction and HUDOpening log
-    inspection with that diagnostic app; Task 5.1 remains open.
+| Criteria | Regression evidence |
+|---|---|
+| AC1 | `AppSpecificHUDModelTests.testLegacyConfigurationKeepsGlobalLayoutAndAddsNoProfile`, `testExplicitNullMiddleRetainsLegacySampleFallback` |
+| AC2 | `SettingsWorkspaceCoordinatorTests.testCreateCopiesCurrentGlobalThenProfilesEditIndependentlyAcrossReload`, `testGlobalUnknownItemFieldsSurviveSaveAndCreateByCopy` |
+| AC3 | `SettingsWorkspaceCoordinatorTests.testAppEditUsesGlobalCustomizationWithoutWritingOtherActionProfiles`, `testFreshBaseRejectsConcurrentTypedEditToLocallyEditedProfile` |
+| AC4 | Save-failure/close-barrier, raw recovery snapshot, and opaque collection/entry recovery regressions in `SettingsWorkspaceCoordinatorTests` |
+| AC5 | `SettingsWorkspaceCoordinatorTests.testDeleteSelectedAppFallsBackToGlobalAndSurvivesReload` |
+| AC6 | Exact-match/frozen-value model regression and `AppSpecificHUDRuntimeTests.testCommittedActionsUseFrozenInvocationPIDAndReplacementOwnerPID` |
+| AC7 | Deterministic fallback-reason model regression and complete Global runtime fallback regression |
+| AC8 | `AppSpecificHUDRuntimeTests.testConfigurationChangesDoNotMutateLoadedInvocationButNextLoadUsesThem` and frozen action-PID regression |
+| AC9 | Pure `Configuration.resolveHUD` model tests plus runtime loading from an injected resolved snapshot; no persistence dependency exists on the summon path |
+| AC10 | Global-route bypass model and runtime regressions |
+| AC11–AC12 | Other-route ownership transfer, interaction-state clearing, and production panel replacement regressions |
+| AC13 | Runtime ownership, native generation, cancellation-owner, and held-monitor reconfiguration regressions |
+| AC14 | `AppSpecificHUDRuntimeTests.testSameRouteTapToggleDismissesWhileOtherRouteTapReplaces` |
+| AC15 | `HUDTriggerRoutingTests` exact/symmetric collision, visible warning, retained save, effective-monitor, and held-cancellation regressions |
+| AC16 | `HUDCenterSettingsTests` native action/frame/drag suite and production replacement center regression |
+| AC17 | Coordinator profile-selection/non-dirty/recovery suite and native profile-bar accessibility regression |
+| AC18 | Reduce Motion policy matrix plus replacement opening-isolation and immediate native center interaction regressions |
 
-  - Follow-up correction: the first diagnostic artifact compiled out the owner because custom
-    Debug.xcconfig did not define Swift DEBUG. Added the inherited DEBUG compilation condition;
-    fresh build and strict signature pass, and diagnostic format strings are verified in the
-    executable. Quit prior PID 97681 gracefully and launched PID 1506 from
-    `/tmp/MousePlus-OpeningDiagnostic-Enabled/Build/Products/Debug/MousePlus.app`.
-    The user's global preference now explicitly authorizes this quit/relaunch for every fresh
-    runnable desktop-app build. Await a new opening trace; the fade-only cause is still unverified.
+## External Checks
 
-  - User confirmation: the keyboard shortcut animates correctly, and mapping the mouse button to
-    that shortcut in BetterMouse works too. Keep MousePlus's direct mouse binding disabled to
-    avoid duplicate triggers in that setup. Live logs from the corrected diagnostic build show
-    both full 0.5-second stagger playback and failing invocations settled by pointer hover at
-    progress zero before replay. Trigger coordinates, mounted local pointer/center, and first
-    settle pointer are now logged. No native-trigger fix or coordinate root cause is established;
-    Task 5.1 remains open for that path and the rest of the acceptance matrix.
+- [ ] **E1: Signed-live Finder and Global HUD acceptance.**
+  - Depends on: 5.1.
+  - Requires: user availability, configured Accessibility/keystroke permissions, Finder, one
+    unconfigured app such as TextEdit, and distinct Contextual/Global shortcuts. Continue using the
+    supported BetterMouse-to-keyboard route; direct MousePlus mouse acceptance remains separately
+    deferred and cannot be claimed here.
+  - Owns: signed artifact and signature evidence, exact launch/process-path evidence, user-observed
+    acceptance results, and documentation updates. Use an isolated DerivedData path; never alter the
+    user's live configuration outside the requested Settings actions.
+  - Gates: AC19, the live portions of AC11–AC18, and overall feature completion. While unavailable,
+    automated implementation may be complete but the plan and feature remain acceptance-pending.
+  - Flow: create a Finder HUD from Global; change at least one inner and middle action; confirm visible
+    save; exercise Finder Contextual, Finder Global, visible in-place switching both directions,
+    stale Hold-release isolation, same-route Tap-toggle dismissal, center context/Settings/drag,
+    Reduce Motion, unconfigured-app fallback, action targeting, quit/relaunch persistence, deletion,
+    and post-delete fallback. Confirm a duplicate Global shortcut is rejected before restoring the
+    chosen distinct binding.
+  - Success / verification: fresh Debug build and strict deep signature verification pass; all old
+    MousePlus instances exit gracefully; launch the exact fresh artifact and verify its running
+    executable path; the user confirms the flow without stale commits, mixed profiles, target drift,
+    lost settings, or accessibility/control regressions.
 
-  - Coordinate remediation (2026-09-05): source-tagged first-hover diagnostics exposed a stationary
-    keyboard pointer moving from the HUD center to roughly 24 points below it after mount. A new
-    real-renderer/controller regression reproduced changing host bounds and center before replay.
-    Disabling hosting sizing constraints alone did not fix it; explicitly framing the hosted root
-    to the controller's padded square did. The regression fails before and passes after the fix;
-    all 303 scheme tests pass with zero skips/failures. Fresh Debug build and strict signature pass;
-    `/tmp/MousePlus-OpeningCoordinate-Live/Build/Products/Debug/MousePlus.app` was relaunched as
-    PID 59912. Live keyboard traces show matching native/SwiftUI deltas and intermediate stagger
-    frames; physical movement and edge clamping remain legitimate interruptions. Playback and
-    trigger delivery are unchanged.
-    The user explicitly requires BetterMouse to continue suppressing button-5 Forward/next-tab in
-    Warp. Preserve the mapping and disabled MousePlus direct binding. Native physical-trigger
-    acceptance remains open and must use an isolated setup that cannot send Forward to Warp.
+## Operational Learnings
 
-## Operational learnings / risks
+- Existing Global `inner`/`middle` fields are compatibility-critical; profile support extends rather
+  than renames or nests them.
+- App-profile identity must be a bundle identifier, while PID remains invocation-local action context.
+- Trigger route and physical source are different concepts; release ownership must survive two
+  independently configured routes.
+- A complete app action layout does not imply complete per-app presentation. Item-level overrides
+  travel with their items; menu/ring presentation and behavior remain Global.
 
-- Static editor preview currently suppresses motion twice (`interactionEnabled` policy and
-  its own disabled motion config/transaction). Animate only the dedicated new preview.
-- Masks and scale can affect AppKit material compositing and accessibility frames; pure
-  geometry tests cannot close those risks. Require hosted/live evidence.
-- Opening effects must not make hidden wedges await visibility before accepting input.
-  Conversely, first valid aiming should reveal the final layout immediately.
-- The existing native release bridge is authoritative; do not replace it with only a
-  SwiftUI gesture because hosted gesture delivery was previously unreliable.
-- Configurable ring radii plus Bloom's overshoot require checking the existing panel
-  padding at maximum settings. Prefer bounded artwork/tuning over changing panel geometry.
+## Blocked Tasks
 
-## Blocked tasks
+None at planning time. E1 is an explicit external acceptance gate, not an implementation blocker.
 
-None at planning time. Implementation awaits a future execution request. Existing Logitech
-capture and tip-jar URL blockers do not affect this feature.
+## Execution Log
 
-## Execution log
+| Wave / task IDs | Assignments or serial reason | Validation / evidence | Commits or exception | Remaining gates / next action or stop reason |
+|---|---|---|---|---|
+| Wave 1 / 1.1 | Serial foundation under the coordinator; independent data-integrity review after implementation. | 34 focused model/service tests pass; authoritative Debug build succeeds; `git diff --check` and changed-file security scan pass. Review findings covering opaque collection loss, nested future fields, self resolution, and duplicate IDs were fixed; final re-review found no remaining issue. | `54ce97f` | Wave 2 Tasks 2.1 and 2.2 are ready and independent; E1 remains the final external gate. |
+| Wave 2 / 2.1, 2.2 | Parallel implementation with disjoint Settings-coordinator and trigger-route ownership; coordinator integrated review fixes and serialized Xcode/Git work. | 90 focused tests pass with 0 failures/skips; authoritative Debug build, `git diff --check`, and changed-file credential scan pass. Review fixes closed fresh-base/opaque profile preservation, recovery fidelity, exact modifier/release pairing, symmetric collision validation, and native accessible warning behavior; final independent re-review found no blockers. Fresh artifact relaunched from DerivedData as PID 87647. | `54a8ce8`, `a6914a6`, `2b94bca` | Wave 3 Tasks 3.1 and 3.2 are ready and independent. Task 3.2 must correct the expanded restore-warning scope; E1 remains the final external gate. |
+| Wave 3 / 3.1, 3.2 | Parallel implementation with disjoint runtime and Menu Items ownership; coordinator integrated review fixes and serialized Xcode/Git work. | 113 focused regressions pass with no failures/skips; the final 11-test runtime class also passes after auxiliary-trigger adoption. Authoritative Debug build, `git diff --check`, and changed-file credential scan pass. Review closed save-timing wording, opaque-profile recovery/replacement, duplicate-name ambiguity, stale release/drag isolation, and new-trigger adoption; final re-review found no important residual issue. Fresh artifact relaunched from DerivedData as PID 86795. The real 1120×712 Menu Items pane shows the native profile bar and explanations without clipping; native AX/control tests cover identifiers and keyboard choice behavior. The user reports the app-aware HUD system works in the fresh build. | `d445388`, `9e71e28` | Wave 4 Task 4.1 is ready; E1 remains the final external gate, including its explicit transition/persistence flow. |
+| Wave 4 / 4.1 | Serial native center/RingMenuView seam under the coordinator; independent AppKit/SwiftUI review after implementation and after fixes. | 45 focused center/runtime/opening regressions pass with no failures/skips; hosted and production-controller checks preserve the exact 40×40 AX frame and full-button hit target during app-to-Global replacement. Authoritative Debug build, `git diff --check`, and changed-file credential scan pass. Review fixes preserved adaptive icon rendering and made the decorative gear badge click-through; final re-review found no remaining important issue. Fresh artifact relaunched from DerivedData as PID 54738. | `6d0f391` | Wave 5 Task 5.1 is ready for complete integration/adversarial verification; E1 remains the final external signed-live gate. |
+| Wave 5 / 5.1 | Serial cross-cutting integration under the coordinator; independent persistence and runtime adversarial reviews, followed by fix re-reviews. | AC1–AC18 mapped above. Final F: 158 passed, 0 failed/skipped. Final T: 377 passed, 0 failed/skipped. B and D pass; changed-file credential scan found no credential material. Review fixes cover lossless Global raw fields and recovery, same-profile concurrency, noncanonical selection, async App Switcher isolation, frozen action PID, selective held-trigger reconfiguration/cancellation, native replacement center/drag, and legacy null compatibility. Developer ID build artifact launched as PID 13881; strict deep verification reached `CSSMERR_TP_NOT_TRUSTED` on macOS 27 beta, so E1 retains signature trust as a live gate. | `c2b70c3` | Run E1 signed-live Finder/Global acceptance; do not claim AC19 yet. |
 
-| Wave | Started | Completed | Evidence |
-|---|---|---|---|
-| 1 | 2026-09-05 | 2026-09-05 | 31 focused tests + authoritative Debug build passed |
-| 2 | 2026-09-05 | 2026-09-05 | 39 focused tests + authoritative Debug build passed |
-| 3 | 2026-09-05 | 2026-09-05 | 35 focused tests + authoritative Debug build passed |
-| 4 | 2026-09-05 | 2026-09-05 | 79 focused tests + authoritative Debug build + minimum-size live Settings inspection passed |
-| 5 | 2026-09-05 | — | Review fixed endpoint-only interpolation (`e96ba44`), same-app dismissal/tap-toggle ownership, and initial runtime playback. A clean single-process check confirmed insertion still settled before spatial playback became visible, so runtime now performs the working preview's replay-identity transition one frame after panel mount with stale-invocation protection. The earlier 112 focused/290 full suites and latest 31 focused tests pass; Settings-click dismissal is live-confirmed. A fresh clean build at `/tmp/MousePlus-OpeningStyles-PostMount-Live/Build/Products/Debug/MousePlus.app` is timestamped 2026-09-05 11:10:58 CEST and passes strict Developer ID verification. Runtime animation and remaining live acceptance remain. |
-
-Delete this disposable plan only after all tasks close; retain the specification and
-completion evidence. Sync task completion with `docs/TASKS.md` during execution.
+---
+*Keep active while required work or acceptance is incomplete. On completion, archive with execution
+evidence and update incoming links before retiring the active copy.*

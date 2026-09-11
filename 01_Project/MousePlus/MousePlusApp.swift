@@ -47,6 +47,11 @@ struct HUDInvocationOwnership: Equatable {
             guard mode == .holdRelease, releaseOwner == source else { return .ignore }
             releaseOwner = nil
             return .commitRelease
+
+        case .cancel(let source):
+            guard releaseOwner == source else { return .ignore }
+            close()
+            return .dismiss
         }
     }
 

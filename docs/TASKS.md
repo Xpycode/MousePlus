@@ -6,16 +6,25 @@
 <!-- Ideas and future work. Added by /interview, user input, or discovered during development. -->
 <!-- Priority: top = highest, bottom = lowest -->
 
-- [ ] Scope the next MousePlus App Switcher increment beyond the live-verified full-circle running-app ring: compare window switching, recent apps, search, grouping/paging, app-specific actions, and keyboard/pointer hybrids.
+- [ ] Scope the next MousePlus App Switcher increment beyond the live-verified full-circle running-app ring: compare window switching, recent apps, search, grouping/paging, and keyboard/pointer hybrids. Complete app-specific HUDs are now scoped separately in the active plan.
+
+- [ ] Center outer-ring labels beneath their icons when an expansion chevron is present. A
+  2026-09-11 user screenshot shows the `Apps` and `Snap` labels centered under the combined
+  icon-plus-chevron row rather than under the icon itself, shifting both labels toward the
+  chevron. Confirmed visual polish issue; non-blocking for Opening Styles acceptance.
+
+- [ ] Before release, perform the deferred VoiceOver acceptance pass for Opening Styles: Settings
+  label/value and Replay button, preview semantics, and stable live-HUD action labels/order with
+  immediate activation. Explicitly skipped by the user on 2026-09-11; untested, not failed.
+
+- [ ] Before release, complete deferred Opening Styles coverage outside the supported BetterMouse
+  route: isolated direct MousePlus physical mouse triggering, maximum geometry and screen edges,
+  branch/configuration combinations, and smoothness on other supported Macs. Explicitly deferred
+  by the user on 2026-09-11; untested, not failed.
 
 ## Current Sprint
 <!-- Active work. Populated by /plan or /execute. Keep focused (3-7 tasks). -->
 <!-- When done: /log moves to tasks-archive.md -->
-
-Implementation in progress; fixed a reproduced post-mount panel-center drift, with 303 scheme tests passing. User confirms selected runtime animation works via keyboard and BetterMouse mapped to keyboard. Direct physical mouse-trigger behavior remains open. Details and validation:
-[HUD Opening Styles implementation plan](../IMPLEMENTATION_PLAN.md).
-
-- [ ] Task 5.1: Close remaining native mouse-trigger and visual/accessibility acceptance. User confirms selected animation works via keyboard and BetterMouse → ⌃⌥⌘M; direct MousePlus mouse-button triggering previously reported fade-only and has not been physically rechecked after the layout fix. The new diagnostics and a failing regression exposed post-mount panel-center drift, now fixed. Preserve the working BetterMouse setup and disabled direct binding: the user explicitly wants button 5 to stop advancing Warp tabs. Any physical native-trigger reproduction must be isolated from Warp. Settings-click dismissal remains accepted.
 
 ---
 

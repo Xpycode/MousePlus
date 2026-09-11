@@ -1,6 +1,6 @@
 # Project State
 
-**Last updated:** 2026-09-05
+**Last updated:** 2026-09-11
 
 ## Identity
 
@@ -11,18 +11,19 @@
 
 ## Now
 
-- **Phase:** HUD Opening Styles implementation; Wave 5 verification in progress. <!-- Phase changed: 2026-09-05 -->
-- **Focus:** Live acceptance of the HUD center-drift fix through the working BetterMouse shortcut. All 303 scheme tests pass; direct physical mouse-trigger and remaining visual/accessibility acceptance are still open.
-- **Blocker:** Native mouse-trigger opening acceptance remains open; BetterMouse → keyboard shortcut is a user-verified working setup. Unrelated: advanced Logitech support awaits raw captures/strategy, and Leave-a-Tip awaits a platform/URL.
-- **Next:** Verify the fixed HUD visually through BetterMouse → ⌃⌥⌘M, keeping MousePlus's direct mouse binding disabled. The user explicitly requires that button 5 never resume advancing Warp tabs. Native-trigger reproduction must be isolated from Warp and preserve the working mapping; Task 5.1 remains open for physical-trigger and remaining visual/accessibility acceptance.
+- **Phase:** Implementation — app-specific HUDs. <!-- Phase changed: 2026-09-11 -->
+- **Focus:** Complete signed-live Finder and Global HUD acceptance for app-specific HUDs.
+- **Blocker:** none for implementation. Signed-live Finder acceptance is an external completion gate; advanced Logitech support and Leave-a-Tip retain their separate dependencies.
+- **Next:** Run E1 in the fresh PID 13881 build: Finder profile creation/editing, both routes and switching, Reduce Motion, fallback, action targeting, relaunch persistence, deletion, and duplicate-shortcut rejection.
+- **Execution:** `../IMPLEMENTATION_PLAN.md` is active; Waves 1–5 and automated AC1–AC18 are complete, awaiting E1/AC19 signed-live acceptance.
 
 ## Recent
 
-- **2026-09-05:** Added source/hover-coordinate diagnostics, reproduced center drift in a failing real-renderer panel test, and fixed the hosted root size; 303 tests pass. User requires BetterMouse to keep suppressing Warp tab navigation.
-- **2026-09-05:** User confirms keyboard-triggered animation works and BetterMouse mapping the mouse button to that shortcut also works. Recorded the preferred working setup; direct mouse-trigger failure remains open. Live diagnostics distinguish full stagger playback from hover cancellation before replay.
-- **2026-09-05:** User still reports a fade in the real HUD. Found that custom Debug config omitted the Swift DEBUG condition, so the first diagnostic build contained no trace owner. Enabled DEBUG, verified trace strings and strict signature, gracefully quit the old copy and launched the corrected build. Global quit/relaunch preference saved in Codex instructions.
-- **2026-09-05:** Added full-renderer playback/interruption regressions and bounded Debug runtime diagnostics. 53 focused tests pass; centered live-interaction test and isolated stagger material captures show selected playback. A fixed-position test false alarm was legitimate pointer hover, not a proven mount defect. User live reproduction remains open.
-- **2026-09-05:** User reports the concealed-mount build is flash-free but only fades in again. Recorded the selected-animation regression and the gap in hosted frame tests; no further code fix during pre-clear logging.
+- **2026-09-11:** Completed Wave 5 integration and adversarial closure; 158 focused and 377 complete tests pass, and the fresh Developer ID build is running for E1 acceptance.
+- **2026-09-11:** Completed Wave 4 native center context presentation; 45 focused regressions and the Debug build pass after independent review, and the fresh artifact is running from DerivedData.
+- **2026-09-11:** Completed Wave 3 runtime resolution/safe route switching and native Settings profile management; 113 focused regressions and the Debug build pass after independent review.
+- **2026-09-11:** Completed Wave 2’s selected-profile Settings coordinator and independent Global keyboard route; 90 focused tests and the Debug build pass after independent review, and the fresh artifact is running from DerivedData.
+- **2026-09-11:** Completed Wave 1’s lossless app-profile, deterministic resolution and Global-shortcut contracts; 34 focused tests and the Debug build pass after independent data-integrity review.
 
 ## Progress
 
@@ -32,9 +33,9 @@
 - **Ring-controls reorganization (Menu/Inner/Middle/Outer tabs + per-ring labels):** 4/4 waves complete; automated, adversarial, signed-build, and user-driven checks passed.
 - **HUD actions:** Window snapping and keystroke delivery work; App Switcher v1 is complete and signed-live verified, including MRU order and rapid re-point safety; menu-bar mirror, system toggles, and screenshots remain.
 - **HUD Motion v1:** 5/5 waves complete; automated checks and independent review passed, with overall signed-live acceptance from the user.
-- **HUD Opening Styles:** Wave 5 verification in progress; 6/7 implementation tasks complete. Selected runtime animation is user-verified through keyboard and BetterMouse-to-keyboard triggering; direct native mouse-trigger and remaining accessibility acceptance are open.
+- **HUD Opening Styles:** 7/7 tasks complete and signed-live verified on the supported BetterMouse-to-keyboard route. VoiceOver, direct MousePlus mouse triggering and the broad device/geometry performance matrix are deferred before release and remain untested.
 - **Trigger backend:** Keyboard and standard mouse paths work; advanced Logitech HID++ support remains undecided.
-- **Task tracker:** 0/1 current sprint tasks complete; 35/37 tracked items complete overall (95%), with one backlog item.
+- **Task tracker:** no current sprint tasks; 43/47 tracked items complete overall (91%), with four backlog items.
 
 ## Risks and Backlog
 
@@ -58,14 +59,17 @@
 - Product and engineering rationale: `decisions.md`
 - Session history and handoffs: `sessions/_index.md`
 - Current tracker and backlog: `TASKS.md`
+- App-specific HUD Wave 5 closure and next-session handoff: `sessions/2026-09-11.md`
 - Unified Settings specification: `../specs/unified-settings-workspace.md`
 - Sustained-use HUD redesign specification: `../specs/sustained-use-hud-redesign.md`
 - HUD action roadmap: `HUD_ACTIONS_PLAN.md`
 - App menu-bar mirror (Feature A) implementation plan: `APP_COMMANDS_PLAN.md`
 - Dynamic app switcher (Feature C) implementation plan: `APP_SWITCHER_PLAN.md`
 - HUD Motion v1 completion and pre-clear handoff: `sessions/2026-09-05.md`
-- Current opening-styles implementation plan: `../IMPLEMENTATION_PLAN.md`
+- Completed opening-styles implementation plan: `plans/hud-opening-styles-implementation.md`
 - Opening-styles behavior, preview, and acceptance criteria: `../specs/hud-opening-styles.md`
+- App-specific HUD behavior, fallback, switching, and acceptance criteria: `../specs/app-specific-huds.md`
+- Active app-specific HUD implementation plan: `../IMPLEMENTATION_PLAN.md`
 - System toggles (Feature D) implementation plan: `SYSTEM_TOGGLES_PLAN.md`
 - Help/Feedback/Tip/Appearance Settings plan: `APP_CHROME_SETTINGS_PLAN.md`
 - Send Keystroke implementation record: `SEND_KEYSTROKE_PLAN.md`

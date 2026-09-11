@@ -10,12 +10,24 @@ struct HUDActionLayout: Codable, Equatable {
     private var preservedMiddleJSON: [JSONValue]
 
     init(inner: [RingMenuItem], middle: [RingMenuItem]) {
+        self.init(inner: inner, middle: middle, preservingInner: [], preservingMiddle: [])
+    }
+
+    init(
+        inner: [RingMenuItem],
+        middle: [RingMenuItem],
+        preservingInner: [JSONValue],
+        preservingMiddle: [JSONValue]
+    ) {
         self.inner = inner
         self.middle = middle
         unknownFields = [:]
-        preservedInnerJSON = []
-        preservedMiddleJSON = []
+        preservedInnerJSON = preservingInner
+        preservedMiddleJSON = preservingMiddle
     }
+
+    var preservedInnerItemsJSON: [JSONValue] { preservedInnerJSON }
+    var preservedMiddleItemsJSON: [JSONValue] { preservedMiddleJSON }
 
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: DynamicCodingKey.self)
@@ -56,7 +68,7 @@ struct HUDActionLayout: Codable, Equatable {
         "wedgeColor", "iconColor", "dynamicSource", "keyboardShortcut",
     ]
 
-    private static func mergedItems(
+    static func mergedItems(
         _ items: [RingMenuItem],
         preserving originals: [JSONValue]
     ) throws -> [JSONValue] {

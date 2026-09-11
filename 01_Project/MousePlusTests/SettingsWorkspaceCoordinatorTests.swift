@@ -338,6 +338,66 @@ final class SettingsWorkspaceCoordinatorTests: XCTestCase {
         XCTAssertEqual(try XCTUnwrap(saved.appHUDProfile(forBundleIdentifier: "com.apple.Notes")).middle[0].label, "External Notes")
     }
 
+    func testFreshBaseRejectsConcurrentTypedEditToLocallyEditedProfile() async throws {
+        var initial = Configuration()
+        _ = initial.setAppHUDProfile(
+            AppHUDProfile(layout: labeledLayout("Finder")),
+            forBundleIdentifier: "com.apple.finder"
+        )
+        let persistence = RecordingConfigurationPersistence(initial)
+        let coordinator = makeCoordinator(persistence)
+        await coordinator.load()
+        XCTAssertTrue(coordinator.selectHUDProfile(.app(bundleIdentifier: "com.apple.finder")))
+        coordinator.menuEditorModel.middle[0].label = "Local Finder"
+        coordinator.menuItemsDidChange()
+        await persistence.mutateCurrent {
+            var finder = $0.appHUDProfile(forBundleIdentifier: "com.apple.finder")!
+            finder.middle[0].label = "External Finder"
+            _ = $0.setAppHUDProfile(finder, forBundleIdentifier: "com.apple.finder")
+        }
+
+        let flushed = await coordinator.flush()
+        let saveCount = await persistence.saveCount
+        let saved = await persistence.current
+        XCTAssertFalse(flushed)
+        XCTAssertEqual(saveCount, 0)
+        XCTAssertEqual(
+            saved.appHUDProfile(forBundleIdentifier: "com.apple.finder")?.middle[0].label,
+            "External Finder"
+        )
+        XCTAssertEqual(coordinator.dirtyFields, [.menuItems])
+        guard case .saveFailed = coordinator.status else {
+            return XCTFail("A concurrent typed edit to the same profile must fail closed")
+        }
+    }
+
+    func testSelectingNoncanonicalStoredProfileDoesNotNormalizeDirtyOrSave() async {
+        var nestedInner = labeledLayout("Finder").inner[0]
+        nestedInner.subItems = [RingMenuItem(
+            label: "Legacy child", icon: "circle", actionType: .custom
+        )]
+        let invalidSnap = RingMenuItem(
+            label: "Legacy snap", icon: "rectangle", actionType: .windowSnap, actionData: ""
+        )
+        var initial = Configuration()
+        _ = initial.setAppHUDProfile(
+            AppHUDProfile(layout: HUDActionLayout(inner: [nestedInner], middle: [invalidSnap])),
+            forBundleIdentifier: "com.apple.finder"
+        )
+        let persistence = RecordingConfigurationPersistence(initial)
+        let coordinator = makeCoordinator(persistence)
+        await coordinator.load()
+
+        XCTAssertTrue(coordinator.selectHUDProfile(.app(bundleIdentifier: "com.apple.finder")))
+        coordinator.menuItemsDidChange() // mirrors a SwiftUI observation callback after selection
+
+        XCTAssertNotNil(coordinator.menuEditorModel.inner[0].subItems)
+        XCTAssertEqual(coordinator.menuEditorModel.middle[0].actionData, "")
+        XCTAssertTrue(coordinator.dirtyFields.isEmpty)
+        let saveCount = await persistence.saveCount
+        XCTAssertEqual(saveCount, 0)
+    }
+
     func testFreshBaseOpaqueCollectionRejectsProfileEditWithoutFalseSuccess() async throws {
         var initial = Configuration()
         _ = initial.setAppHUDProfile(
@@ -772,6 +832,43 @@ final class SettingsWorkspaceCoordinatorTests: XCTestCase {
             "Backed-up Finder"
         )
         XCTAssertNil(restored.appHUDProfile(forBundleIdentifier: "com.apple.Notes"))
+    }
+
+    func testRecoveryOperationsRestoreGlobalUnknownItemFieldsFromTheirSnapshot() async throws {
+        func withToken(_ token: String, source: Configuration = Configuration()) throws -> Configuration {
+            try configuration(source) { object in
+                var middle = object["middle"] as? [[String: Any]] ?? []
+                middle[0]["futureItem"] = ["token": token]
+                object["middle"] = middle
+            }
+        }
+        func token(in configuration: Configuration) throws -> String? {
+            let middle = try XCTUnwrap(try encodedObject(configuration)["middle"] as? [[String: Any]])
+            return (middle[0]["futureItem"] as? [String: Any])?["token"] as? String
+        }
+
+        let original = try withToken("undo-snapshot")
+        let persistence = RecordingConfigurationPersistence(original)
+        let coordinator = makeCoordinator(persistence)
+        await coordinator.load()
+
+        let reset = await coordinator.resetMenuItems()
+        XCTAssertTrue(reset)
+        let externalAfterReset = try withToken("external-after-reset", source: await persistence.current)
+        await persistence.mutateCurrent { $0 = externalAfterReset }
+        let undone = await coordinator.undoMenuItemsReset()
+        XCTAssertTrue(undone)
+        let afterUndo = await persistence.current
+        XCTAssertEqual(try token(in: afterUndo), "undo-snapshot")
+
+        let backup = try withToken("backup-snapshot")
+        await persistence.setBackup(backup)
+        let externalBeforeRestore = try withToken("external-before-restore", source: await persistence.current)
+        await persistence.mutateCurrent { $0 = externalBeforeRestore }
+        let restored = await coordinator.restoreMenuItemsFromBackup()
+        XCTAssertTrue(restored)
+        let afterRestore = await persistence.current
+        XCTAssertEqual(try token(in: afterRestore), "backup-snapshot")
     }
 
     func testBackupRestorePreservesOpaqueFutureProfileCollectionExactly() async throws {

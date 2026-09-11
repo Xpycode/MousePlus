@@ -120,14 +120,17 @@ final class MenuEditorModel {
     func load(
         actionLayout: HUDActionLayout,
         hudCustomization: HUDCustomization,
-        preservingSelection: Bool = false
+        preservingSelection: Bool = false,
+        normalizeStoredValues: Bool = true
     ) {
         let previousSelection = preservingSelection ? selection : nil
         inner = actionLayout.inner
         middle = actionLayout.middle
         self.hudCustomization = hudCustomization
-        enforceInnerInvariants()
-        normalizeSnapPayloads()
+        if normalizeStoredValues {
+            enforceInnerInvariants()
+            normalizeSnapPayloads()
+        }
         selection = previousSelection.flatMap(validSelection)
     }
 

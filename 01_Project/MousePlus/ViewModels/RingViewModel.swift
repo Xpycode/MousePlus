@@ -171,14 +171,14 @@ final class RingViewModel {
     /// them; ordinary configuration saves never mutate a visible HUD.
     private(set) var resolvedHUDProfile: ResolvedHUDProfile?
 
-    private let actionService: ActionService
+    private let actionService: any ActionExecuting
     private let actionResultRouter: ActionResultRouter
-    private let appSwitcherService: AppSwitcherService
+    private let appSwitcherService: any AppSwitcherProviding
 
     init(
-        actionService: ActionService = ActionService(),
+        actionService: any ActionExecuting = ActionService(),
         actionResultRouter: ActionResultRouter = ActionResultRouter(),
-        appSwitcherService: AppSwitcherService = AppSwitcherService()
+        appSwitcherService: any AppSwitcherProviding = AppSwitcherService()
     ) {
         self.actionService = actionService
         self.actionResultRouter = actionResultRouter

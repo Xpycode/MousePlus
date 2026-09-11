@@ -8,6 +8,10 @@ struct AppEntry: Identifiable, Sendable {
     let processIdentifier: pid_t
 }
 
+protocol AppSwitcherProviding: Sendable {
+    func runningApps(excluding processIdentifier: pid_t?) async -> [AppEntry]
+}
+
 /// Enumerates running regular apps and self-tracks most-recently-activated order.
 ///
 /// No public running-app z-order/MRU API exists on macOS 14 — MRU is self-tracked
@@ -99,3 +103,5 @@ actor AppSwitcherService {
         }
     }
 }
+
+extension AppSwitcherService: AppSwitcherProviding {}

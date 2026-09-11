@@ -15,12 +15,23 @@ struct Configuration: Codable {
     private var storedAppHUDProfiles: [String: StoredAppHUDProfile]
     private var unavailableAppHUDProfilesCollection: JSONValue?
     private var unknownFields: [String: JSONValue]
+    private var preservedGlobalInnerJSON: [JSONValue]
+    private var preservedGlobalMiddleJSON: [JSONValue]
 
     var globalHUDActionLayout: HUDActionLayout {
-        get { HUDActionLayout(inner: inner, middle: middle) }
+        get {
+            HUDActionLayout(
+                inner: inner,
+                middle: middle,
+                preservingInner: preservedGlobalInnerJSON,
+                preservingMiddle: preservedGlobalMiddleJSON
+            )
+        }
         set {
             inner = newValue.inner
             middle = newValue.middle
+            preservedGlobalInnerJSON = newValue.preservedInnerItemsJSON
+            preservedGlobalMiddleJSON = newValue.preservedMiddleItemsJSON
         }
     }
 
@@ -63,6 +74,8 @@ struct Configuration: Codable {
         }
         unavailableAppHUDProfilesCollection = nil
         unknownFields = [:]
+        preservedGlobalInnerJSON = []
+        preservedGlobalMiddleJSON = []
     }
 
     private enum CodingKeys: String, CodingKey, CaseIterable {
@@ -86,14 +99,32 @@ struct Configuration: Codable {
         //   New format → `inner` + `middle` keys read directly.
         //   Old format → only a flat `items` array; it lands in `middle`, `inner` defaults.
         if c.contains(.middle) || c.contains(.inner) {
-            middle = try c.decodeIfPresent([RingMenuItem].self, forKey: .middle) ?? RingMenuItem.sampleItems
-            inner = try c.decodeIfPresent([RingMenuItem].self, forKey: .inner) ?? []
-        } else if let legacyItems = try c.decodeIfPresent([RingMenuItem].self, forKey: .items) {
-            middle = legacyItems
+            if let rawMiddle = try c.decodeIfPresent([JSONValue].self, forKey: .middle) {
+                preservedGlobalMiddleJSON = rawMiddle
+                middle = try rawMiddle.map { try $0.decode(RingMenuItem.self) }
+            } else {
+                // Preserve the pre-sidecar compatibility behavior for both a
+                // missing key and an explicit `null` value.
+                preservedGlobalMiddleJSON = []
+                middle = RingMenuItem.sampleItems
+            }
+            if let rawInner = try c.decodeIfPresent([JSONValue].self, forKey: .inner) {
+                preservedGlobalInnerJSON = rawInner
+                inner = try rawInner.map { try $0.decode(RingMenuItem.self) }
+            } else {
+                preservedGlobalInnerJSON = []
+                inner = []
+            }
+        } else if let legacyItems = try c.decodeIfPresent([JSONValue].self, forKey: .items) {
+            preservedGlobalMiddleJSON = legacyItems
+            preservedGlobalInnerJSON = []
+            middle = try legacyItems.map { try $0.decode(RingMenuItem.self) }
             inner = []
         } else {
             inner = RingMenuItem.sampleInnerItems
             middle = RingMenuItem.sampleItems
+            preservedGlobalInnerJSON = []
+            preservedGlobalMiddleJSON = []
         }
 
         appearance = try c.decodeIfPresent(AppearanceConfig.self, forKey: .appearance) ?? .default
@@ -140,8 +171,14 @@ struct Configuration: Codable {
         var c = encoder.container(keyedBy: CodingKeys.self)
         // Canonical new keys.
         try c.encode(Self.currentSchemaVersion, forKey: .schemaVersion)
-        try c.encode(inner, forKey: .inner)
-        try c.encode(middle, forKey: .middle)
+        try c.encode(
+            HUDActionLayout.mergedItems(inner, preserving: preservedGlobalInnerJSON),
+            forKey: .inner
+        )
+        try c.encode(
+            HUDActionLayout.mergedItems(middle, preserving: preservedGlobalMiddleJSON),
+            forKey: .middle
+        )
         try c.encode(triggers, forKey: .triggers)
         try c.encode(appearance, forKey: .appearance)
         try c.encode(behavior, forKey: .behavior)

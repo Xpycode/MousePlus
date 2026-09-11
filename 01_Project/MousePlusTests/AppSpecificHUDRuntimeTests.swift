@@ -124,6 +124,88 @@ final class AppSpecificHUDRuntimeTests: XCTestCase {
         XCTAssertEqual(model.innerItems.map(\.label), ["New Finder"])
     }
 
+    func testCommittedActionsUseFrozenInvocationPIDAndReplacementOwnerPID() async {
+        let executor = RecordingActionExecutor()
+        let model = RingViewModel(actionService: executor)
+        let first = resolved(
+            layout: HUDActionLayout(inner: [item("Finder Action")], middle: []),
+            pid: 11
+        )
+        let replacement = resolved(
+            route: .global,
+            layout: HUDActionLayout(inner: [item("Global Action")], middle: []),
+            pid: 22
+        )
+        let configuration = Configuration()
+
+        model.load(resolved: first, presentation: configuration)
+        model.activeSelection = ActiveSelection(band: .inner, index: 0)
+        XCTAssertEqual(model.commitActive(), .executed)
+        let firstCompleted = await waitForExecutionCount(1, recorder: executor)
+        XCTAssertTrue(firstCompleted)
+
+        model.load(resolved: replacement, presentation: configuration)
+        model.activeSelection = ActiveSelection(band: .inner, index: 0)
+        XCTAssertEqual(model.commitActive(), .executed)
+        let replacementCompleted = await waitForExecutionCount(2, recorder: executor)
+        XCTAssertTrue(replacementCompleted)
+
+        let contexts = await executor.contexts
+        XCTAssertEqual(contexts.map(\.frontmostPID), [11, 22])
+    }
+
+    func testSuspendedAppSwitcherResultCannotCrossProfileReplacement() async {
+        let appSwitcher = SuspendedAppSwitcher()
+        let model = RingViewModel(appSwitcherService: appSwitcher)
+        var apps = item("Apps")
+        apps.dynamicSource = .runningApps
+        var configuration = Configuration()
+        configuration.hudCustomization.outerRingVisibility = .alwaysVisible
+        let contextualApps = resolved(
+            layout: HUDActionLayout(inner: [], middle: [apps]), pid: 11
+        )
+        let globalStatic = resolved(
+            route: .global,
+            layout: HUDActionLayout(inner: [item("Global")], middle: []), pid: 22
+        )
+        let entry = AppEntry(
+            id: "com.example.App",
+            name: "Example",
+            icon: NSImage(size: NSSize(width: 16, height: 16)),
+            processIdentifier: 33
+        )
+
+        model.load(resolved: contextualApps, presentation: configuration)
+        model.expand(0)
+        let firstRequestStarted = await waitForSwitcherRequest(appSwitcher)
+        XCTAssertTrue(firstRequestStarted)
+        model.load(resolved: globalStatic, presentation: configuration)
+        let firstResumed = await appSwitcher.resumeNext(with: [entry])
+        XCTAssertTrue(firstResumed)
+        let firstFinished = await waitForSwitcherCompletion(1, switcher: appSwitcher)
+        XCTAssertTrue(firstFinished)
+
+        XCTAssertNil(model.expandedParentIndex)
+        XCTAssertTrue(model.outerItems.isEmpty)
+        XCTAssertTrue(model.dynamicIcons.isEmpty)
+
+        model.load(resolved: contextualApps, presentation: configuration)
+        model.expand(0)
+        let secondRequestStarted = await waitForSwitcherRequest(appSwitcher)
+        XCTAssertTrue(secondRequestStarted)
+        let secondResumed = await appSwitcher.resumeNext(with: [entry])
+        XCTAssertTrue(secondResumed)
+        let secondFinished = await waitForSwitcherCompletion(2, switcher: appSwitcher)
+        XCTAssertTrue(secondFinished)
+        let itemsApplied = await waitForOuterItems(1, model: model)
+        XCTAssertTrue(itemsApplied)
+
+        XCTAssertEqual(model.expandedParentIndex, 0)
+        XCTAssertEqual(model.outerItems.map(\.label), ["Example"])
+        XCTAssertEqual(model.dynamicIcons.count, 1)
+        XCTAssertEqual(model.outerRingLayout, .fullCircle)
+    }
+
     func testGlobalRouteBypassesExactAppProfileAndFallbackRemainsCompleteGlobalLayout() {
         let globalLayout = HUDActionLayout(
             inner: [item("Global Inner")], middle: [item("Global Middle")]
@@ -282,6 +364,12 @@ final class AppSpecificHUDRuntimeTests: XCTestCase {
             presentation: Configuration()
         )
         var iconRequests: [String] = []
+        var openingFrames: [HUDOpeningMotionFrame] = []
+        var replacementFrames: [HUDOpeningMotionFrame] = []
+        var closeCount = 0
+        var settingsCount = 0
+        model.requestClose = { closeCount += 1 }
+        model.requestOpenMenuItemsSettings = { settingsCount += 1 }
         let iconProvider: @MainActor (String) -> NSImage? = { bundleIdentifier in
             iconRequests.append(bundleIdentifier)
             return NSImage(size: NSSize(width: 16, height: 16))
@@ -292,8 +380,10 @@ final class AppSpecificHUDRuntimeTests: XCTestCase {
             outerRadius: model.radii.r3,
             content: RingMenuView(
                 viewModel: model,
-                interactionEnabled: false,
+                interactionEnabled: true,
                 openingPlaybackEnabled: false,
+                onOpeningFrame: { openingFrames.append($0) },
+                onCenterDrag: { controller.movePanel(by: $0) },
                 centerApplicationIcon: iconProvider
             ),
             onPrimaryMouseUp: nil,
@@ -313,7 +403,11 @@ final class AppSpecificHUDRuntimeTests: XCTestCase {
         XCTAssertEqual(originalButton.accessibilityLabel(),
                        "Open MousePlus Settings — Test HUD active")
         XCTAssertEqual(iconRequests, ["com.test.app"])
+        XCTAssertTrue(openingFrames.allSatisfy {
+            $0.artworkScale == 1 && $0.mask == .none
+        })
 
+        let openingInvocationID = model.openingInvocationID
         model.load(
             resolved: resolved(
                 route: .global,
@@ -326,8 +420,10 @@ final class AppSpecificHUDRuntimeTests: XCTestCase {
             outerRadius: model.radii.r3,
             content: RingMenuView(
                 viewModel: model,
-                interactionEnabled: false,
+                interactionEnabled: true,
                 openingPlaybackEnabled: false,
+                onOpeningFrame: { replacementFrames.append($0) },
+                onCenterDrag: { controller.movePanel(by: $0) },
                 centerApplicationIcon: iconProvider
             ),
             onPrimaryMouseUp: nil,
@@ -342,6 +438,20 @@ final class AppSpecificHUDRuntimeTests: XCTestCase {
         XCTAssertEqual(replacementButton.accessibilityLabel(),
                        "Open MousePlus Settings — Global HUD active")
         XCTAssertEqual(iconRequests, ["com.test.app"])
+        XCTAssertEqual(model.openingInvocationID, openingInvocationID)
+        XCTAssertFalse(replacementFrames.isEmpty)
+        XCTAssertTrue(replacementFrames.allSatisfy {
+            $0.artworkScale == 1 && $0.mask == .none
+        })
+        XCTAssertEqual(centerButtonCount(in: try XCTUnwrap(panel.contentView)), 1)
+        let trackingButton = try XCTUnwrap(replacementButton as? HUDCenterTrackingButton)
+        let frameBeforeDrag = panel.frame
+        trackingButton.onDrag(CGSize(width: 6, height: 4))
+        XCTAssertNotEqual(panel.frame.origin, frameBeforeDrag.origin)
+        XCTAssertEqual(settingsCount, 0, "dragging the replacement center must not activate Settings")
+        _ = replacementButton.accessibilityPerformPress()
+        XCTAssertEqual(closeCount, 1)
+        XCTAssertEqual(settingsCount, 1)
     }
 
     func testNativeInputSequencesCannotCrossAnInPlaceReplacement() {
@@ -365,6 +475,23 @@ final class AppSpecificHUDRuntimeTests: XCTestCase {
         ownership.beginReplacement(adoptingAuxiliaryButton: 5)
         XCTAssertTrue(ownership.ownsAuxiliaryDrag(buttonNumber: 5))
         XCTAssertFalse(ownership.ownsAuxiliaryDrag(buttonNumber: 4))
+    }
+
+    func testCancellationDismissesOnlyTheHeldInvocationOwner() {
+        let contextual = TriggerSource(
+            route: .contextual,
+            physicalSource: .keyboard(keyCode: 1, modifiers: 2)
+        )
+        let global = TriggerSource(
+            route: .global,
+            physicalSource: .keyboard(keyCode: 3, modifiers: 4)
+        )
+        var ownership = HUDInvocationOwnership()
+        XCTAssertEqual(ownership.handle(down(contextual, .holdRelease)), .show)
+
+        XCTAssertEqual(ownership.handle(.cancel(source: global)), .ignore)
+        XCTAssertEqual(ownership.handle(.cancel(source: contextual)), .dismiss)
+        XCTAssertNil(ownership.visibleRoute)
     }
 
     private func resolved(
@@ -416,5 +543,76 @@ final class AppSpecificHUDRuntimeTests: XCTestCase {
             return button
         }
         return view.subviews.lazy.compactMap { self.centerButton(in: $0) }.first
+    }
+
+    private func centerButtonCount(in view: NSView) -> Int {
+        let ownCount = (view as? NSButton)?.accessibilityIdentifier()
+            == HUDCenterSettingsControl.accessibilityIdentifier ? 1 : 0
+        return ownCount + view.subviews.reduce(0) { $0 + centerButtonCount(in: $1) }
+    }
+
+    private func waitForExecutionCount(_ count: Int, recorder: RecordingActionExecutor) async -> Bool {
+        for _ in 0..<100 {
+            if await recorder.contexts.count >= count { return true }
+            await Task.yield()
+        }
+        return false
+    }
+
+    private func waitForSwitcherRequest(_ switcher: SuspendedAppSwitcher) async -> Bool {
+        for _ in 0..<100 {
+            if await switcher.hasPendingRequest { return true }
+            await Task.yield()
+        }
+        return false
+    }
+
+    private func waitForSwitcherCompletion(
+        _ count: Int,
+        switcher: SuspendedAppSwitcher
+    ) async -> Bool {
+        for _ in 0..<100 {
+            if await switcher.completedResponseCount >= count { return true }
+            await Task.yield()
+        }
+        return false
+    }
+
+    private func waitForOuterItems(_ count: Int, model: RingViewModel) async -> Bool {
+        for _ in 0..<100 {
+            if model.outerItems.count == count { return true }
+            await Task.yield()
+        }
+        return false
+    }
+}
+
+private actor RecordingActionExecutor: ActionExecuting {
+    private(set) var contexts: [ActionContext] = []
+
+    func execute(_ item: RingMenuItem, context: ActionContext) async -> ActionExecutionResult {
+        contexts.append(context)
+        return .completed
+    }
+}
+
+private actor SuspendedAppSwitcher: AppSwitcherProviding {
+    private var continuations: [CheckedContinuation<[AppEntry], Never>] = []
+    private(set) var completedResponseCount = 0
+
+    var hasPendingRequest: Bool { !continuations.isEmpty }
+
+    func runningApps(excluding processIdentifier: pid_t?) async -> [AppEntry] {
+        let entries = await withCheckedContinuation { continuation in
+            continuations.append(continuation)
+        }
+        completedResponseCount += 1
+        return entries
+    }
+
+    func resumeNext(with entries: [AppEntry]) -> Bool {
+        guard !continuations.isEmpty else { return false }
+        continuations.removeFirst().resume(returning: entries)
+        return true
     }
 }

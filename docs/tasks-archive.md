@@ -1,8 +1,16 @@
 # Completed Tasks
 
-**Total archived:** 35
-**Last updated:** 2026-09-05
+**Total archived:** 43
+**Last updated:** 2026-09-11
 
+- [x] (2026-09-11) App-Specific HUDs — Task 5.1: Closed AC1–AC18 automated evidence, full-suite/build gates, and independent persistence/runtime adversarial review; signed-live Finder acceptance remains E1.
+- [x] (2026-09-11) App-Specific HUDs — Task 4.1: Presented the frozen app or Global context in the existing native center Settings action while preserving geometry, hit testing, drag ownership, accessibility, and preview isolation.
+- [x] (2026-09-11) App-Specific HUDs — Task 3.2: Added native profile selection, copy-on-create, deletion/recovery messaging, duplicate/missing-app handling, and safe opaque-profile replacement above Menu Items.
+- [x] (2026-09-11) App-Specific HUDs — Task 3.1: Added frozen invocation resolution, anchored Contextual/Global replacement, exact event ownership, and generation-bound native pointer sequences.
+- [x] (2026-09-11) App-Specific HUDs — Task 2.2: Added an independent Global HUD keyboard route with unambiguous trigger identity, exact collision handling, and native accessible Settings controls.
+- [x] (2026-09-11) App-Specific HUDs — Task 2.1: Added safe selected-profile editing, creation, deletion, reset/undo, fresh-base merging, and lossless backup recovery to the Settings coordinator.
+- [x] (2026-09-11) App-Specific HUDs — Task 1.1: Added lossless app-profile storage, deterministic Contextual/Global resolution, and the decode-tolerant Global shortcut contract.
+- [x] (2026-09-11) HUD Opening Styles — Task 5.1: Closed signed-live acceptance on the supported BetterMouse route; deferred VoiceOver, direct MousePlus triggering and broad device/geometry performance checks are retained in Backlog.
 - [x] (2026-09-05) HUD Opening Styles — Task 4.1: Expose all styles in native Settings and add an isolated replay preview.
 - [x] (2026-09-05) HUD Opening Styles — Task 3.3: Implement Staggered Segments with one shared animation clock.
 - [x] (2026-09-05) HUD Opening Styles — Task 3.2: Implement bounded Bloom with fixed native and accessibility targets.

@@ -133,6 +133,113 @@ final class HUDTriggerRoutingTests: XCTestCase {
         XCTAssertEqual([contextual.stopCount, global.stopCount, mouse.stopCount], [3, 3, 3])
     }
 
+    func testUnchangedLiveApplyDoesNotRestartHeldTriggerMonitors() {
+        let contextual = TestKeyboardTriggerMonitor()
+        let global = TestKeyboardTriggerMonitor()
+        let mouse = TestMouseButtonTriggerMonitor()
+        let service = TriggerService(
+            contextualKeyboardMonitor: contextual,
+            globalKeyboardMonitor: global,
+            mouseButtonMonitor: mouse
+        )
+        let config = TriggersConfig(
+            keyboard: .keyboard(keyCode: 1, modifiers: 2, mode: .holdRelease),
+            mouseButton: .mouseButton(buttonNumber: 4, mode: .holdRelease),
+            globalHUDShortcut: .keyboard(keyCode: 3, modifiers: 4, mode: .tapToggle)
+        )
+        service.start(config: config)
+        contextual.sendDown()
+
+        service.updateConfig(config)
+        contextual.sendUp()
+
+        XCTAssertEqual([contextual.startCount, global.startCount, mouse.startCount], [1, 1, 1])
+        XCTAssertEqual([contextual.stopCount, global.stopCount, mouse.stopCount], [1, 1, 1])
+    }
+
+    func testChangingGlobalBindingDoesNotRestartHeldContextualMonitor() {
+        let contextual = TestKeyboardTriggerMonitor()
+        let global = TestKeyboardTriggerMonitor()
+        let mouse = TestMouseButtonTriggerMonitor()
+        let service = TriggerService(
+            contextualKeyboardMonitor: contextual,
+            globalKeyboardMonitor: global,
+            mouseButtonMonitor: mouse
+        )
+        let initial = TriggersConfig(
+            keyboard: .keyboard(keyCode: 1, modifiers: 2, mode: .holdRelease),
+            mouseButton: .mouseButton(buttonNumber: 4, mode: .holdRelease),
+            globalHUDShortcut: .keyboard(keyCode: 3, modifiers: 4, mode: .tapToggle)
+        )
+        service.start(config: initial)
+        contextual.sendDown()
+
+        var changed = initial
+        changed.globalHUDShortcut = .keyboard(keyCode: 5, modifiers: 6, mode: .tapToggle)
+        service.updateConfig(changed)
+        contextual.sendUp()
+
+        XCTAssertEqual([contextual.startCount, global.startCount, mouse.startCount], [1, 2, 1])
+        XCTAssertEqual([contextual.stopCount, global.stopCount, mouse.stopCount], [1, 2, 1])
+    }
+
+    func testChangingNoncollidingContextualBindingDoesNotRestartHeldGlobalMonitor() {
+        let contextual = TestKeyboardTriggerMonitor()
+        let global = TestKeyboardTriggerMonitor()
+        let service = TriggerService(
+            contextualKeyboardMonitor: contextual,
+            globalKeyboardMonitor: global,
+            mouseButtonMonitor: TestMouseButtonTriggerMonitor()
+        )
+        let initial = TriggersConfig(
+            keyboard: .keyboard(keyCode: 1, modifiers: 2, mode: .tapToggle),
+            globalHUDShortcut: .keyboard(keyCode: 3, modifiers: 4, mode: .holdRelease)
+        )
+        service.start(config: initial)
+        global.sendDown()
+
+        var changed = initial
+        changed.keyboard = .keyboard(keyCode: 5, modifiers: 6, mode: .tapToggle)
+        service.updateConfig(changed)
+        global.sendUp()
+
+        XCTAssertEqual(contextual.startCount, 2)
+        XCTAssertEqual(global.startCount, 1)
+        XCTAssertEqual(global.stopCount, 1)
+    }
+
+    func testCollisionDrivenShutdownCancelsHeldGlobalBinding() async throws {
+        let contextual = TestKeyboardTriggerMonitor()
+        let global = TestKeyboardTriggerMonitor()
+        let service = TriggerService(
+            contextualKeyboardMonitor: contextual,
+            globalKeyboardMonitor: global,
+            mouseButtonMonitor: TestMouseButtonTriggerMonitor()
+        )
+        let globalBinding = TriggerBinding.keyboard(
+            keyCode: 3, modifiers: 4, mode: .holdRelease
+        )
+        service.start(config: TriggersConfig(
+            keyboard: .none,
+            globalHUDShortcut: globalBinding
+        ))
+        var iterator = service.events.makeAsyncIterator()
+        global.sendDown()
+        _ = await iterator.next()
+
+        service.updateConfig(TriggersConfig(
+            keyboard: globalBinding,
+            globalHUDShortcut: globalBinding
+        ))
+
+        let next = await iterator.next()
+        guard case .cancel(let source) = try XCTUnwrap(next) else {
+            return XCTFail("a held Global binding must be cancelled before its monitor stops")
+        }
+        XCTAssertEqual(source.route, .global)
+        XCTAssertEqual(global.stopCount, 2)
+    }
+
     func testExactKeyboardCollisionIgnoresModeAndRetainsPreviousGlobalBinding() {
         let contextual = TriggerBinding.keyboard(
             keyCode: 96, modifiers: 1_048_576, mode: .holdRelease
@@ -329,6 +436,8 @@ final class HUDTriggerRoutingTests: XCTestCase {
         case let .down(source, mode, point): actual = (.down, source, mode, point)
         case let .moved(source, mode, point): actual = (.moved, source, mode, point)
         case let .up(source, mode, point): actual = (.up, source, mode, point)
+        case .cancel:
+            return XCTFail("Expected a pointer event, received cancellation", file: file, line: line)
         }
         XCTAssertEqual(actual.0, phase, file: file, line: line)
         XCTAssertEqual(actual.1, source, file: file, line: line)

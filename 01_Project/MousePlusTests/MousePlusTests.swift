@@ -282,8 +282,8 @@ final class RingRuntimeInteractionTests: XCTestCase {
 
         let localPoint = CGPoint(x: 32, y: 47)
         let windowPoint = CGPoint(x: localPoint.x, y: side - localPoint.y)
-        let event = try XCTUnwrap(NSEvent.mouseEvent(
-            with: .leftMouseUp,
+        let mouseDown = try XCTUnwrap(NSEvent.mouseEvent(
+            with: .leftMouseDown,
             location: windowPoint,
             modifierFlags: [],
             timestamp: 0,
@@ -293,8 +293,20 @@ final class RingRuntimeInteractionTests: XCTestCase {
             clickCount: 1,
             pressure: 0
         ))
+        let mouseUp = try XCTUnwrap(NSEvent.mouseEvent(
+            with: .leftMouseUp,
+            location: windowPoint,
+            modifierFlags: [],
+            timestamp: 0,
+            windowNumber: window.windowNumber,
+            context: nil,
+            eventNumber: 2,
+            clickCount: 1,
+            pressure: 0
+        ))
 
-        host.mouseUp(with: event)
+        host.mouseDown(with: mouseDown)
+        host.mouseUp(with: mouseUp)
 
         let actualPoint = try XCTUnwrap(forwardedPoint)
         XCTAssertEqual(actualPoint.x, localPoint.x, accuracy: 0.001)

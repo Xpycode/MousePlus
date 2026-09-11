@@ -26,6 +26,8 @@ enum TriggerEvent: Sendable {
     case down(source: TriggerSource, mode: TriggerMode, pointerLocation: CGPoint)
     case moved(source: TriggerSource, mode: TriggerMode, pointerLocation: CGPoint)
     case up(source: TriggerSource, mode: TriggerMode, pointerLocation: CGPoint)
+    /// A held binding was removed or replaced before its native release.
+    case cancel(source: TriggerSource)
 }
 
 /// Owns the active trigger bindings and emits a unified event stream.
@@ -42,6 +44,10 @@ final class TriggerService {
     private let globalKeyboardMonitor: any KeyboardTriggerMonitoring
     private let mouseButtonMonitor: any MouseButtonTriggerMonitoring
     private var currentConfig: TriggersConfig = .default
+    private var isRunning = false
+    private var activeContextualKeyboardSource: TriggerSource?
+    private var activeGlobalKeyboardSource: TriggerSource?
+    private var activeMouseSource: TriggerSource?
 
     init(
         contextualKeyboardMonitor: (any KeyboardTriggerMonitoring)? = nil,
@@ -58,23 +64,78 @@ final class TriggerService {
 
     func start(config: TriggersConfig) {
         currentConfig = config
+        isRunning = true
         applyConfig()
     }
 
     func updateConfig(_ config: TriggersConfig) {
+        guard isRunning else {
+            start(config: config)
+            return
+        }
+        guard config != currentConfig else { return }
+        let previous = currentConfig
         currentConfig = config
-        applyConfig()
+
+        if previous.keyboard != config.keyboard {
+            if let source = takeActiveSource(&activeContextualKeyboardSource) {
+                continuation.yield(.cancel(source: source))
+            }
+            contextualKeyboardMonitor.stop()
+            startContextualKeyboardMonitor()
+        }
+        if previous.mouseButton != config.mouseButton {
+            if let source = takeActiveSource(&activeMouseSource) {
+                continuation.yield(.cancel(source: source))
+            }
+            mouseButtonMonitor.stop()
+            startMouseButtonMonitor()
+        }
+        // Contextual edits restart Global only when they actually change its
+        // effective binding (for example by creating/removing a collision).
+        if effectiveGlobalBinding(in: previous) != effectiveGlobalBinding(in: config) {
+            if let source = takeActiveSource(&activeGlobalKeyboardSource) {
+                continuation.yield(.cancel(source: source))
+            }
+            globalKeyboardMonitor.stop()
+            startGlobalKeyboardMonitor()
+        }
     }
 
     func stop() {
+        isRunning = false
+        stopMonitors()
+    }
+
+    private func stopMonitors() {
         contextualKeyboardMonitor.stop()
         globalKeyboardMonitor.stop()
         mouseButtonMonitor.stop()
     }
 
-    private func applyConfig() {
-        stop()
+    private func takeActiveSource(_ source: inout TriggerSource?) -> TriggerSource? {
+        let active = source
+        source = nil
+        return active
+    }
 
+    private func effectiveGlobalBinding(in config: TriggersConfig) -> TriggerBinding {
+        guard HUDTriggerRouting.collision(
+            globalHUDShortcut: config.globalHUDShortcut,
+            contextualKeyboard: config.keyboard
+        ) == nil else { return .none }
+        return config.globalHUDShortcut
+    }
+
+    private func applyConfig() {
+        stopMonitors()
+
+        startContextualKeyboardMonitor()
+        startGlobalKeyboardMonitor()
+        startMouseButtonMonitor()
+    }
+
+    private func startContextualKeyboardMonitor() {
         if case let .keyboard(keyCode, modifiers, mode) = currentConfig.keyboard {
             let source = TriggerSource(
                 route: .contextual,
@@ -84,18 +145,22 @@ final class TriggerService {
                 keyCode: keyCode,
                 modifiers: modifiers,
                 onDown: { [weak self] in
+                    self?.activeContextualKeyboardSource = source
                     self?.continuation.yield(.down(
                         source: source, mode: mode, pointerLocation: NSEvent.mouseLocation
                     ))
                 },
                 onUp: { [weak self] in
+                    self?.activeContextualKeyboardSource = nil
                     self?.continuation.yield(.up(
                         source: source, mode: mode, pointerLocation: NSEvent.mouseLocation
                     ))
                 }
             )
         }
+    }
 
+    private func startGlobalKeyboardMonitor() {
         if case let .keyboard(keyCode, modifiers, mode) = currentConfig.globalHUDShortcut,
            HUDTriggerRouting.collision(
                globalHUDShortcut: currentConfig.globalHUDShortcut,
@@ -109,18 +174,22 @@ final class TriggerService {
                 keyCode: keyCode,
                 modifiers: modifiers,
                 onDown: { [weak self] in
+                    self?.activeGlobalKeyboardSource = source
                     self?.continuation.yield(.down(
                         source: source, mode: mode, pointerLocation: NSEvent.mouseLocation
                     ))
                 },
                 onUp: { [weak self] in
+                    self?.activeGlobalKeyboardSource = nil
                     self?.continuation.yield(.up(
                         source: source, mode: mode, pointerLocation: NSEvent.mouseLocation
                     ))
                 }
             )
         }
+    }
 
+    private func startMouseButtonMonitor() {
         if case let .mouseButton(buttonNumber, mode) = currentConfig.mouseButton {
             let source = TriggerSource(
                 route: .contextual,
@@ -129,6 +198,7 @@ final class TriggerService {
             mouseButtonMonitor.start(
                 buttonNumber: buttonNumber,
                 onDown: { [weak self] pointerLocation in
+                    self?.activeMouseSource = source
                     self?.continuation.yield(.down(
                         source: source, mode: mode, pointerLocation: pointerLocation
                     ))
@@ -139,6 +209,7 @@ final class TriggerService {
                     ))
                 },
                 onUp: { [weak self] pointerLocation in
+                    self?.activeMouseSource = nil
                     self?.continuation.yield(.up(
                         source: source, mode: mode, pointerLocation: pointerLocation
                     ))

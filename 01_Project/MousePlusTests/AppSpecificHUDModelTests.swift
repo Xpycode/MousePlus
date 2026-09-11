@@ -61,6 +61,15 @@ final class AppSpecificHUDModelTests: XCTestCase {
         XCTAssertEqual(savedTriggers["keyboard"] as? NSDictionary, contextual as? NSDictionary)
     }
 
+    func testExplicitNullMiddleRetainsLegacySampleFallback() throws {
+        let data = Data(#"{"inner":[],"middle":null}"#.utf8)
+
+        let decoded = try JSONDecoder().decode(Configuration.self, from: data)
+
+        XCTAssertEqual(decoded.inner, [])
+        XCTAssertEqual(decoded.middle, RingMenuItem.sampleItems)
+    }
+
     func testProfileCreatedFromGlobalHasIndependentValueSemantics() {
         var configuration = Configuration(
             inner: makeLayout("Global").inner,
@@ -77,6 +86,64 @@ final class AppSpecificHUDModelTests: XCTestCase {
         XCTAssertEqual(
             configuration.appHUDProfile(forBundleIdentifier: finderBundleID)?.inner[0].label,
             "Finder changed"
+        )
+    }
+
+    func testGlobalUnknownItemFieldsSurviveSaveAndCreateByCopy() throws {
+        let childID = UUID().uuidString
+        let base = try JSONEncoder().encode(Configuration(
+            inner: [RingMenuItem(label: "Inner", icon: "circle", actionType: .custom)],
+            middle: [RingMenuItem(
+                label: "Middle",
+                icon: "square",
+                actionType: .custom,
+                subItems: [RingMenuItem(
+                    id: UUID(uuidString: childID)!,
+                    label: "Child",
+                    icon: "triangle",
+                    actionType: .custom
+                )]
+            )]
+        ))
+        var object = try XCTUnwrap(JSONSerialization.jsonObject(with: base) as? [String: Any])
+        var inner = try XCTUnwrap(object["inner"] as? [[String: Any]])
+        inner[0]["futureInner"] = ["token": "inner-v2"]
+        object["inner"] = inner
+        var middle = try XCTUnwrap(object["middle"] as? [[String: Any]])
+        var children = try XCTUnwrap(middle[0]["subItems"] as? [[String: Any]])
+        children[0]["futureChild"] = ["token": "child-v2"]
+        middle[0]["subItems"] = children
+        object["middle"] = middle
+
+        var decoded = try JSONDecoder().decode(
+            Configuration.self,
+            from: JSONSerialization.data(withJSONObject: object)
+        )
+        decoded.behavior.dismissOnEscape.toggle()
+        let copied = decoded.makeAppHUDProfileFromGlobal()
+        XCTAssertTrue(decoded.setAppHUDProfile(copied, forBundleIdentifier: finderBundleID))
+
+        let saved = try XCTUnwrap(
+            JSONSerialization.jsonObject(with: JSONEncoder().encode(decoded)) as? [String: Any]
+        )
+        let savedInner = try XCTUnwrap(saved["inner"] as? [[String: Any]])
+        XCTAssertEqual(
+            ((savedInner[0]["futureInner"] as? [String: Any])?["token"] as? String),
+            "inner-v2"
+        )
+        let savedMiddle = try XCTUnwrap(saved["middle"] as? [[String: Any]])
+        let savedChildren = try XCTUnwrap(savedMiddle[0]["subItems"] as? [[String: Any]])
+        XCTAssertEqual(
+            ((savedChildren[0]["futureChild"] as? [String: Any])?["token"] as? String),
+            "child-v2"
+        )
+        let profiles = try XCTUnwrap(saved["appHUDProfiles"] as? [String: Any])
+        let finder = try XCTUnwrap(profiles[finderBundleID] as? [String: Any])
+        let layout = try XCTUnwrap(finder["layout"] as? [String: Any])
+        let copiedInner = try XCTUnwrap(layout["inner"] as? [[String: Any]])
+        XCTAssertEqual(
+            ((copiedInner[0]["futureInner"] as? [String: Any])?["token"] as? String),
+            "inner-v2"
         )
     }
 

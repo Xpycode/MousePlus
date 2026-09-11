@@ -138,7 +138,7 @@ struct HUDCenterDragState {
 
 /// Tracks in global coordinates so moving the panel beneath the pointer does not
 /// perturb subsequent drag deltas.
-private final class HUDCenterTrackingButton: NSButton {
+final class HUDCenterTrackingButton: NSButton {
     /// Match the original image-only circular button's native hit target. The
     /// context title must never make AppKit resize the action between profiles.
     override var intrinsicContentSize: NSSize { NSSize(width: 38, height: 38) }
