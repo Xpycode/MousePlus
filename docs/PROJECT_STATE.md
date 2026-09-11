@@ -13,17 +13,17 @@
 
 - **Phase:** Implementation — app-specific HUDs. <!-- Phase changed: 2026-09-11 -->
 - **Focus:** Complete signed-live Finder and Global HUD acceptance for app-specific HUDs.
-- **Blocker:** none for implementation. Signed-live Finder acceptance is an external completion gate; advanced Logitech support and Leave-a-Tip retain their separate dependencies.
-- **Next:** Run E1 in the fresh PID 13881 build: Finder profile creation/editing, both routes and switching, Reduce Motion, fallback, action targeting, relaunch persistence, deletion, and duplicate-shortcut rejection.
+- **Blocker:** none for implementation. The remaining signed-live Finder acceptance is an external completion gate; advanced Logitech support and Leave-a-Tip retain their separate dependencies.
+- **Next:** Continue E1 in the fresh PID 13650 build: both routes and switching, stale-release isolation, center interaction, Reduce Motion, fallback, action targeting, relaunch persistence, and deletion.
 - **Execution:** `../IMPLEMENTATION_PLAN.md` is active; Waves 1–5 and automated AC1–AC18 are complete, awaiting E1/AC19 signed-live acceptance.
 
 ## Recent
 
+- **2026-09-11:** E1 setup and trigger-collision acceptance passed; handled shortcuts no longer beep, duplicate bindings retain the saved shortcut and explain the collision inline, and the fresh signed build remains running.
 - **2026-09-11:** Completed Wave 5 integration and adversarial closure; 158 focused and 377 complete tests pass, and the fresh Developer ID build is running for E1 acceptance.
 - **2026-09-11:** Completed Wave 4 native center context presentation; 45 focused regressions and the Debug build pass after independent review, and the fresh artifact is running from DerivedData.
 - **2026-09-11:** Completed Wave 3 runtime resolution/safe route switching and native Settings profile management; 113 focused regressions and the Debug build pass after independent review.
 - **2026-09-11:** Completed Wave 2’s selected-profile Settings coordinator and independent Global keyboard route; 90 focused tests and the Debug build pass after independent review, and the fresh artifact is running from DerivedData.
-- **2026-09-11:** Completed Wave 1’s lossless app-profile, deterministic resolution and Global-shortcut contracts; 34 focused tests and the Debug build pass after independent data-integrity review.
 
 ## Progress
 
@@ -35,7 +35,7 @@
 - **HUD Motion v1:** 5/5 waves complete; automated checks and independent review passed, with overall signed-live acceptance from the user.
 - **HUD Opening Styles:** 7/7 tasks complete and signed-live verified on the supported BetterMouse-to-keyboard route. VoiceOver, direct MousePlus mouse triggering and the broad device/geometry performance matrix are deferred before release and remain untested.
 - **Trigger backend:** Keyboard and standard mouse paths work; advanced Logitech HID++ support remains undecided.
-- **Task tracker:** no current sprint tasks; 43/47 tracked items complete overall (91%), with four backlog items.
+- **Task tracker:** no current sprint tasks; 43/48 tracked items complete overall (90%), with five backlog items.
 
 ## Risks and Backlog
 

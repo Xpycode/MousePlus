@@ -315,6 +315,19 @@ git diff --check
     MousePlus instances exit gracefully; launch the exact fresh artifact and verify its running
     executable path; the user confirms the flow without stale commits, mixed profiles, target drift,
     lost settings, or accessibility/control regressions.
+  - Live attempt (2026-09-11): isolated Developer ID build and strict deep verification pass; the
+    exact artifact runs as PID 72850. The user confirmed Finder profile creation, inner/middle edits,
+    visible save, a distinct Global shortcut, and duplicate rejection with retention through setup
+    steps 1–6. The required collision explanation was not visible, so AC15/E1 remain open pending an
+    inline Triggers-pane remediation and signed-live rerun. The first build also passed handled
+    chords through to the active app, producing a system beep in Finder and MousePlus Settings.
+    Remediation moved persistent keyboard handling to a consumable event tap while preserving
+    recorder priority; 14 trigger-routing and 14 accessibility/UI tests pass. In the signed-live
+    remediation build, the user confirmed the beep is gone and the collision explanation is visible
+    while the saved `Ctrl+Opt+Cmd+G` binding remains intact. The explanation now renders immediately
+    below the shortcut/Record/Clear row and above the mode selector; the focused suites pass again,
+    and the user accepted the signed-live placement. The exact final artifact runs as PID 13650.
+    The remaining E1 route, motion, targeting, persistence, and deletion flow is still open.
 
 ## Operational Learnings
 

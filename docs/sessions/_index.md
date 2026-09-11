@@ -10,7 +10,7 @@
 
 | Date | Focus | Outcome | Log |
 |------|-------|---------|-----|
-| 2026-09-11 | Close Opening Styles, plan app-specific HUDs, and execute Waves 1–5 | Automated AC1–AC18 closure is complete after independent review: 158 focused and 377 complete tests pass; fresh Developer ID build runs as PID 13881. Next: E1 signed-live Finder/Global acceptance. | [→](2026-09-11.md) |
+| 2026-09-11 | Close Opening Styles, plan app-specific HUDs, and execute Waves 1–5 | E1 setup/collision acceptance passed: no trigger beep, duplicate retains the saved shortcut, and inline explanation is accepted. Fresh signed PID 13650 remains running. Next: route switching through deletion/persistence. | [→](2026-09-11.md) |
 | 2026-09-06 | Continue opening-style acceptance | Added native center frame/AXPress regression; 124 focused and 304 full tests pass. Signed build/live AX verified. Saved test checklist and pre-clear handoff; no new user acceptance. Task 5.1 open. | [→](2026-09-06.md) |
 | 2026-09-05 | HUD Opening Styles and trigger diagnosis | User verified the center-drift fix through BetterMouse and continued Warp tab-navigation suppression; recorded tests: 303 passed. Native-trigger and remaining acceptance checks stay open. | [→](2026-09-05.md) |
 | 2026-09-04 | Execute HUD Motion v1 Wave 3 | Added summon fade and safe outer-branch crossfades; immediate commit/dismissal preserved. All 48 focused tests and Debug build pass. Next: Wave 4 native motion controls; live checks remain in Wave 5. | [→](2026-09-04.md) |

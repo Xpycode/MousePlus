@@ -292,7 +292,8 @@ final class HUDTriggerRoutingTests: XCTestCase {
     }
 
     func testKeyboardMonitorRequiresExactNormalizedModifiersAndPairsRelease() throws {
-        let monitor = KeyboardTriggerMonitor()
+        let tap = KeyboardTriggerEventTapStub()
+        let monitor = KeyboardTriggerMonitor(eventTap: tap)
         var downCount = 0
         var upCount = 0
         monitor.start(
@@ -303,17 +304,77 @@ final class HUDTriggerRoutingTests: XCTestCase {
         )
         defer { monitor.stop() }
 
-        monitor.handle(try keyEvent(.keyDown, keyCode: 96, modifiers: [.option, .shift]))
-        monitor.handle(try keyEvent(.keyUp, keyCode: 96, modifiers: [.option, .shift]))
+        XCTAssertEqual(
+            tap.send(.keyDown(
+                keyCode: 96,
+                modifiers: NSEvent.ModifierFlags([.option, .shift]).rawValue,
+                isRepeat: false
+            )),
+            .passThrough
+        )
+        XCTAssertEqual(tap.send(.keyUp(keyCode: 96)), .passThrough)
         XCTAssertEqual(downCount, 0)
         XCTAssertEqual(upCount, 0, "a rejected chord must not manufacture a release")
 
-        monitor.handle(try keyEvent(.keyDown, keyCode: 96, modifiers: [.option, .capsLock, .function]))
-        monitor.handle(try keyEvent(.keyDown, keyCode: 96, modifiers: [.option]))
+        XCTAssertEqual(
+            tap.send(.keyDown(
+                keyCode: 96,
+                modifiers: NSEvent.ModifierFlags([.option, .capsLock, .function]).rawValue,
+                isRepeat: false
+            )),
+            .consume
+        )
+        XCTAssertEqual(
+            tap.send(.keyDown(
+                keyCode: 96,
+                modifiers: NSEvent.ModifierFlags.option.rawValue,
+                isRepeat: true
+            )),
+            .consume
+        )
         XCTAssertEqual(downCount, 1, "key repeat must not create a second ownership down")
-        monitor.handle(try keyEvent(.keyUp, keyCode: 96, modifiers: []))
-        monitor.handle(try keyEvent(.keyUp, keyCode: 96, modifiers: []))
+        XCTAssertEqual(tap.send(.keyUp(keyCode: 96)), .consume)
+        XCTAssertEqual(tap.send(.keyUp(keyCode: 96)), .passThrough)
         XCTAssertEqual(upCount, 1)
+
+        XCTAssertEqual(tap.send(.tapDisabled), .passThrough)
+        XCTAssertEqual(tap.reenableCount, 1)
+    }
+
+    func testKeyboardRecorderTakesPriorityOverActiveTriggerTap() {
+        let tap = KeyboardTriggerEventTapStub()
+        let monitor = KeyboardTriggerMonitor(eventTap: tap)
+        var downCount = 0
+        monitor.start(
+            keyCode: 96,
+            modifiers: NSEvent.ModifierFlags.option.rawValue,
+            onDown: { downCount += 1 },
+            onUp: {}
+        )
+        defer { monitor.stop() }
+
+        let recorder = TriggerRecorderService()
+        recorder.record(.keyboard)
+        XCTAssertEqual(
+            tap.send(.keyDown(
+                keyCode: 96,
+                modifiers: NSEvent.ModifierFlags.option.rawValue,
+                isRepeat: false
+            )),
+            .passThrough
+        )
+        XCTAssertEqual(downCount, 0)
+        recorder.cancel()
+
+        XCTAssertEqual(
+            tap.send(.keyDown(
+                keyCode: 96,
+                modifiers: NSEvent.ModifierFlags.option.rawValue,
+                isRepeat: false
+            )),
+            .consume
+        )
+        XCTAssertEqual(downCount, 1)
     }
 
     func testContextualRecorderRejectsCollisionAndRetainsPreviousBinding() async throws {
@@ -403,25 +464,6 @@ final class HUDTriggerRoutingTests: XCTestCase {
 
     private enum Phase: Equatable { case down, moved, up }
 
-    private func keyEvent(
-        _ type: NSEvent.EventType,
-        keyCode: UInt16,
-        modifiers: NSEvent.ModifierFlags
-    ) throws -> NSEvent {
-        try XCTUnwrap(NSEvent.keyEvent(
-            with: type,
-            location: .zero,
-            modifierFlags: modifiers,
-            timestamp: 0,
-            windowNumber: 0,
-            context: nil,
-            characters: "",
-            charactersIgnoringModifiers: "",
-            isARepeat: false,
-            keyCode: keyCode
-        ))
-    }
-
     private func assertEvent(
         _ event: TriggerEvent,
         phase: Phase,
@@ -472,6 +514,30 @@ private final class TestKeyboardTriggerMonitor: KeyboardTriggerMonitoring {
 
     func sendDown() { onDown?() }
     func sendUp() { onUp?() }
+}
+
+@MainActor
+private final class KeyboardTriggerEventTapStub: KeystrokeCaptureTapping {
+    private var handler: ((KeystrokeCaptureEvent) -> KeystrokeCaptureDisposition)?
+    private(set) var reenableCount = 0
+
+    func start(
+        handler: @escaping (KeystrokeCaptureEvent) -> KeystrokeCaptureDisposition
+    ) throws {
+        self.handler = handler
+    }
+
+    func reenable() {
+        reenableCount += 1
+    }
+
+    func stop() {
+        handler = nil
+    }
+
+    func send(_ event: KeystrokeCaptureEvent) -> KeystrokeCaptureDisposition {
+        handler?(event) ?? .passThrough
+    }
 }
 
 @MainActor

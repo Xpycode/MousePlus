@@ -14,6 +14,11 @@ import AppKit
 @MainActor
 @Observable
 final class TriggerRecorderService {
+    /// Persistent trigger taps consult this while the Settings recorder owns
+    /// keyboard capture. Active bindings must pass through here so recording a
+    /// duplicate chord can reach the recorder and produce its validation message.
+    private(set) static var isRecordingKeyboardShortcut = false
+
     enum Target: Equatable {
         case keyboard
         case mouseButton
@@ -43,6 +48,7 @@ final class TriggerRecorderService {
         self.target = target
         outcome = nil
         isRecording = true
+        Self.isRecordingKeyboardShortcut = target == .keyboard
 
         let mask: NSEvent.EventTypeMask = target == .keyboard
             ? [.keyDown]
@@ -99,6 +105,7 @@ final class TriggerRecorderService {
     private func finish(_ outcome: Outcome) {
         stopMonitors()
         isRecording = false
+        Self.isRecordingKeyboardShortcut = false
         self.outcome = outcome
     }
 

@@ -97,12 +97,6 @@ struct TriggersSettingsView: View {
                 }
             }
 
-            if let displayedBindingCollision {
-                Section {
-                    TriggerCollisionAppKitLabel(text: displayedBindingCollision.explanation)
-                }
-            }
-
             Section {
                 Text("Hold-release: hold the trigger, move to a slice, release to pick. "
                      + "Tap-toggle: tap to open, click a slice to pick.")
@@ -168,6 +162,10 @@ struct TriggersSettingsView: View {
             ) {
                 binding.wrappedValue = .none
             }
+        }
+
+        if slot == .globalHUDShortcut, let displayedBindingCollision {
+            TriggerCollisionAppKitLabel(text: displayedBindingCollision.explanation)
         }
 
         // The Settings hotkey fires once on key-down — hold-release vs tap-toggle is
