@@ -97,7 +97,7 @@ final class SettingsWorkspaceCoordinatorTests: XCTestCase {
         XCTAssertEqual(stored.middle[0].label, "Existing Finder")
     }
 
-    func testUnreadableDuplicateIsRejectedAndPreservedThroughUnrelatedMenuSave() async throws {
+    func testUnreadableDuplicateCanBeIntentionallyReplacedByCreatingThatAppHUD() async throws {
         var object = try XCTUnwrap(
             JSONSerialization.jsonObject(with: JSONEncoder().encode(Configuration()))
                 as? [String: Any]
@@ -115,22 +115,50 @@ final class SettingsWorkspaceCoordinatorTests: XCTestCase {
 
         XCTAssertEqual(
             coordinator.createAppHUD(forBundleIdentifier: "com.example.future"),
-            .rejected
+            .replacedUnavailable
         )
-        coordinator.menuEditorModel.middle[0].label = "Ordinary Global edit"
-        coordinator.menuItemsDidChange()
         let flushed = await coordinator.flush()
         XCTAssertTrue(flushed)
 
         let saved = await persistence.current
-        let savedData = try JSONEncoder().encode(saved)
-        let savedObject = try XCTUnwrap(
-            JSONSerialization.jsonObject(with: savedData) as? [String: Any]
+        let replacement = try XCTUnwrap(
+            saved.appHUDProfile(forBundleIdentifier: "com.example.future")
         )
+        XCTAssertEqual(replacement.layout, saved.globalHUDActionLayout)
+        XCTAssertFalse(saved.hasUnavailableAppHUDProfile(forBundleIdentifier: "com.example.future"))
+    }
+
+    func testUnreadableReplacementRefusesToOverwriteExternallyChangedOpaquePayload() async throws {
+        let bundleIdentifier = "com.example.future"
+        let initial = try configuration(Configuration()) { object in
+            object["appHUDProfiles"] = [
+                bundleIdentifier: ["futurePayload": ["token": "original"]],
+            ]
+        }
+        let persistence = RecordingConfigurationPersistence(initial)
+        let coordinator = makeCoordinator(persistence)
+        await coordinator.load()
+        XCTAssertEqual(
+            coordinator.createAppHUD(forBundleIdentifier: bundleIdentifier),
+            .replacedUnavailable
+        )
+
+        let externallyChanged = try configuration(initial) { object in
+            object["appHUDProfiles"] = [
+                bundleIdentifier: ["futurePayload": ["token": "external"]],
+            ]
+        }
+        await persistence.mutateCurrent { $0 = externallyChanged }
+
+        let flushed = await coordinator.flush()
+        XCTAssertFalse(flushed)
+        let saved = await persistence.current
+        XCTAssertTrue(saved.hasUnavailableAppHUDProfile(forBundleIdentifier: bundleIdentifier))
+        let savedObject = try encodedObject(saved)
         let profiles = try XCTUnwrap(savedObject["appHUDProfiles"] as? [String: Any])
-        let opaque = try XCTUnwrap(profiles["com.example.future"] as? [String: Any])
+        let opaque = try XCTUnwrap(profiles[bundleIdentifier] as? [String: Any])
         let payload = try XCTUnwrap(opaque["futurePayload"] as? [String: Any])
-        XCTAssertEqual(payload["token"] as? String, "keep-me")
+        XCTAssertEqual(payload["token"] as? String, "external")
     }
 
     func testAppEditUsesGlobalCustomizationWithoutWritingOtherActionProfiles() async throws {

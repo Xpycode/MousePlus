@@ -170,6 +170,11 @@ struct Configuration: Codable {
         return true
     }
 
+    func unavailableAppHUDProfile(forBundleIdentifier bundleIdentifier: String) -> JSONValue? {
+        guard case .unavailable(let raw) = storedAppHUDProfiles[bundleIdentifier] else { return nil }
+        return raw
+    }
+
     var hasUnavailableAppHUDProfilesCollection: Bool {
         unavailableAppHUDProfilesCollection != nil
     }

@@ -28,6 +28,7 @@ final class SettingsWorkspaceCoordinator {
     enum AppHUDCreationResult: Equatable {
         case created
         case selectedExisting
+        case replacedUnavailable
         case rejected
     }
 
@@ -57,6 +58,7 @@ final class SettingsWorkspaceCoordinator {
     private var menuItemsBaseline = Configuration()
     private var sessionUndoMenuItems: (configuration: Configuration, selection: HUDProfileReference)?
     private var pendingAppHUDProfileRecovery: Configuration?
+    private var intentionallyReplacedUnavailableAppHUDProfiles: Set<String> = []
 
     private(set) var configuration = Configuration()
     private(set) var status: Status = .idle
@@ -105,6 +107,7 @@ final class SettingsWorkspaceCoordinator {
             generations.removeAll()
             sessionUndoMenuItems = nil
             pendingAppHUDProfileRecovery = nil
+            intentionallyReplacedUnavailableAppHUDProfiles.removeAll()
             isLoaded = true
             status = .saved
             workspaceState.reset = .idle
@@ -172,12 +175,15 @@ final class SettingsWorkspaceCoordinator {
             _ = selectHUDProfile(.app(bundleIdentifier: bundleIdentifier))
             return .selectedExisting
         }
-        guard !configuration.hasUnavailableAppHUDProfile(
+        let replacesUnavailable = configuration.hasUnavailableAppHUDProfile(
             forBundleIdentifier: bundleIdentifier
-        ) else { return .rejected }
+        )
         let profile = configuration.makeAppHUDProfileFromGlobal()
         guard configuration.setAppHUDProfile(profile, forBundleIdentifier: bundleIdentifier) else {
             return .rejected
+        }
+        if replacesUnavailable {
+            intentionallyReplacedUnavailableAppHUDProfiles.insert(bundleIdentifier)
         }
         markDirty([.menuItems])
         scheduleSave()
@@ -185,7 +191,7 @@ final class SettingsWorkspaceCoordinator {
         loadSelectedProfileIntoEditor()
         workspaceState.reset = .idle
         sessionUndoMenuItems = nil
-        return .created
+        return replacesUnavailable ? .replacedUnavailable : .created
     }
 
     /// Global cannot be deleted. Deleting any app profile keeps another valid
@@ -590,10 +596,22 @@ final class SettingsWorkspaceCoordinator {
 
         for bundleIdentifier in changedBundleIdentifiers {
             guard original[bundleIdentifier] != desired[bundleIdentifier] else { continue }
-            guard !target.hasUnavailableAppHUDProfile(
+            if let freshOpaque = target.unavailableAppHUDProfile(
                 forBundleIdentifier: bundleIdentifier
-            ) else {
-                throw MenuItemsMergeError.appProfilesChangedExternally
+            ) {
+                guard intentionallyReplacedUnavailableAppHUDProfiles.contains(bundleIdentifier),
+                      baseline.unavailableAppHUDProfile(
+                          forBundleIdentifier: bundleIdentifier
+                      ) == freshOpaque,
+                      original[bundleIdentifier] == nil,
+                      let desiredProfile = desired[bundleIdentifier],
+                      target.setAppHUDProfile(
+                          desiredProfile,
+                          forBundleIdentifier: bundleIdentifier
+                      ) else {
+                    throw MenuItemsMergeError.appProfilesChangedExternally
+                }
+                continue
             }
 
             switch (original[bundleIdentifier], desired[bundleIdentifier]) {

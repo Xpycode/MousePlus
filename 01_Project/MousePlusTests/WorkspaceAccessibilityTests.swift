@@ -260,6 +260,69 @@ final class WorkspaceAccessibilityTests: XCTestCase {
         )
     }
 
+    func testMenuItemsProfileBarUsesNativeControlsAndSelectionIsNonDirty() async throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let persistence = ConfigurationService(store: ConfigurationStore(directoryURL: directory))
+        var configuration = Configuration()
+        let missingBundleIdentifier = "invalid.uninstalled.mouseplus-tests"
+        _ = configuration.setAppHUDProfile(
+            AppHUDProfile(layout: configuration.globalHUDActionLayout),
+            forBundleIdentifier: missingBundleIdentifier
+        )
+        try await persistence.save(configuration)
+
+        let coordinator = SettingsWorkspaceCoordinator(persistence: persistence)
+        await coordinator.load()
+        let host = MenuItemsSettingsTestHost(coordinator)
+
+        let popup: NSPopUpButton = try host.control("menuItems.profile.selector")
+        XCTAssertEqual(popup.accessibilityLabel(), "HUD profile")
+        XCTAssertEqual(popup.itemTitles.first, "Global")
+        XCTAssertEqual(popup.indexOfSelectedItem, 0)
+        XCTAssertEqual(popup.accessibilityValue() as? String, "Global")
+
+        let missingTitle = try XCTUnwrap(
+            popup.itemTitles.first { $0.contains(missingBundleIdentifier) }
+        )
+        XCTAssertTrue(missingTitle.hasPrefix("Missing App"))
+
+        let add: NSButton = try host.control("menuItems.profile.add")
+        let delete: NSButton = try host.control("menuItems.profile.delete")
+        XCTAssertEqual(add.accessibilityLabel(), "Add App HUD")
+        XCTAssertTrue(add.isEnabled)
+        XCTAssertFalse(delete.isEnabled, "Global cannot be deleted")
+
+        popup.selectItem(withTitle: missingTitle)
+        XCTAssertTrue(popup.sendAction(popup.action, to: popup.target))
+        await host.waitUntil { coordinator.selectedAppHUDBundleIdentifier == missingBundleIdentifier }
+
+        XCTAssertTrue(coordinator.dirtyFields.isEmpty)
+        await host.waitUntil { delete.isEnabled }
+        XCTAssertTrue((delete.accessibilityLabel() ?? "").contains(missingBundleIdentifier))
+        let editing = try host.view("menuItems.profile.editing")
+        XCTAssertTrue((editing.accessibilityLabel() ?? "").contains(missingBundleIdentifier))
+    }
+
+    func testMenuItemsProfileCopyAndRecoveryExplanationsAreExplicit() async throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let coordinator = SettingsWorkspaceCoordinator(
+            persistence: ConfigurationService(store: ConfigurationStore(directoryURL: directory))
+        )
+        await coordinator.load()
+        let host = MenuItemsSettingsTestHost(coordinator)
+
+        let copy = try host.view("menuItems.profile.copyExplanation")
+        XCTAssertTrue((copy.accessibilityLabel() ?? "").contains("copy Global once"))
+        XCTAssertTrue((copy.accessibilityLabel() ?? "").contains("independent"))
+
+        let semantics = try host.view("menuItems.profile.semantics")
+        let explanation = semantics.accessibilityLabel() ?? ""
+        XCTAssertTrue(explanation.contains("every App HUD"))
+        XCTAssertTrue(explanation.contains("shared HUD customization"))
+    }
+
     func testPersistenceStatesNeverDependOnColorForMeaning() {
         let states: [SettingsWorkspaceCoordinator.Status] = [
             .idle,
@@ -357,5 +420,57 @@ private final class TriggersSettingsTestHost {
             return candidate.subviews.lazy.compactMap { find($0) }.first
         }
         return try XCTUnwrap(find(host), "Missing native view: \(identifier)")
+    }
+}
+
+@MainActor
+private final class MenuItemsSettingsTestHost {
+    private let host: NSHostingView<AnyView>
+    private let window: NSWindow
+
+    init(_ coordinator: SettingsWorkspaceCoordinator) {
+        let provider = SettingsActionContextProvider()
+        host = NSHostingView(
+            rootView: AnyView(
+                MenuItemsPane(coordinator: coordinator)
+                    .environmentObject(provider)
+            )
+        )
+        window = NSWindow(
+            contentRect: NSRect(x: 0, y: 0, width: 920, height: 640),
+            styleMask: .borderless,
+            backing: .buffered,
+            defer: false
+        )
+        window.contentView = host
+        host.layoutSubtreeIfNeeded()
+    }
+
+    func control<T: NSControl>(_ identifier: String) throws -> T {
+        host.layoutSubtreeIfNeeded()
+        func find(_ view: NSView) -> T? {
+            if view.accessibilityIdentifier() == identifier, let control = view as? T { return control }
+            return view.subviews.lazy.compactMap { find($0) }.first
+        }
+        return try XCTUnwrap(find(host), "Missing native control: \(identifier)")
+    }
+
+    func view(_ identifier: String) throws -> NSView {
+        host.layoutSubtreeIfNeeded()
+        func find(_ candidate: NSView) -> NSView? {
+            if candidate.accessibilityIdentifier() == identifier { return candidate }
+            return candidate.subviews.lazy.compactMap { find($0) }.first
+        }
+        return try XCTUnwrap(find(host), "Missing native view: \(identifier)")
+    }
+
+    func waitUntil(_ predicate: () -> Bool) async {
+        let deadline = ContinuousClock.now + .seconds(2)
+        while !predicate() && ContinuousClock.now < deadline {
+            host.layoutSubtreeIfNeeded()
+            try? await Task.sleep(for: .milliseconds(10))
+        }
+        host.layoutSubtreeIfNeeded()
+        XCTAssertTrue(predicate(), "Menu Items did not update its native controls")
     }
 }
