@@ -59,7 +59,11 @@ struct HUDOuterWedgeSnapshot: Identifiable {
 
     var id: UUID { item.id }
 
-    func render(descriptor: HUDMotionPresentationDescriptor, progress: CGFloat) -> some View {
+    func render(
+        descriptor: HUDMotionPresentationDescriptor,
+        progress: CGFloat,
+        includesBacking: Bool = true
+    ) -> some View {
         let frame = HUDOuterBandMotionFrame.resolve(
             layout: layout, descriptor: descriptor, progress: progress,
             parentMidpoint: parentMidpoint,
@@ -67,11 +71,13 @@ struct HUDOuterWedgeSnapshot: Identifiable {
             innerRadius: radii.r2, outerRadius: radii.r3
         )
         return ZStack {
-            OuterWedgeBacking(
-                startAngle: frame.startAngle, endAngle: frame.endAngle,
-                innerRadius: frame.innerRadius, outerRadius: frame.outerRadius, size: size
-            )
-            .accessibilityHidden(true)
+            if includesBacking {
+                OuterWedgeBacking(
+                    startAngle: frame.startAngle, endAngle: frame.endAngle,
+                    innerRadius: frame.innerRadius, outerRadius: frame.outerRadius, size: size
+                )
+                .accessibilityHidden(true)
+            }
 
             WedgeView(
                 item: item, iconSource: iconSource,

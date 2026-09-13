@@ -4,6 +4,86 @@ This file tracks the WHY behind technical and design decisions.
 
 ---
 
+## 2026-09-13 - Unused HUD slots use transparent backing with an optional complete-ring treatment
+
+**Context:** Fixed inner and middle slot counts preserve angular positions when fewer items are
+configured, and localized outer branches intentionally occupy only part of the outer circumference.
+Removing material from unconfigured regions made those gaps accurately reveal the desktop, but a
+complete circular silhouette is a legitimate visual preference. Outer visibility controls when an
+outer branch exists; it should not also encode this independent appearance choice.
+
+**Options:** Always leave unused regions transparent; always restore full material disks; add
+per-ring controls; overload Always/Reveal outer visibility; or provide one shared menu appearance
+choice for transparent versus complete backing.
+
+**Decision:** Keep unused backing transparent by default and add one shared, persisted `Fill unused
+slots` checkbox under Menu customization. When enabled, material completes reserved inner and middle
+rings and any currently visible outer ring. The setting changes backing only: unconfigured regions
+never gain wedge content, hit targets, actions, or accessibility elements. Keep outer visibility as
+the separate Always/Reveal/Hidden policy. Place the hidden-submenu warning immediately below that
+visibility control so its conditional appearance does not move the scope selector.
+
+**Rationale:** A single menu-level choice matches the user's intent—complete versus incomplete ring
+silhouettes—without multiplying controls or conflating presentation with outer-ring lifecycle.
+Transparent-by-default preserves the accepted spatial clarity, while the opt-in restores the
+continuous shape preferred by some users.
+
+**Consequences:** `HUDCustomization` gains a tolerant Boolean field defaulting to false for existing
+files. Runtime and editor preview share the same backing policy and motion. Geometry, selection,
+commit behavior, and accessibility remain unchanged across both appearances.
+
+---
+
+## 2026-09-11 - App-specific HUDs use complete action layouts and explicit Global routing
+
+**Context:** MousePlus currently loads one Global inner/middle action layout for every application.
+An older planned app-aware command-ring design kept Rings 1 and 2 global and changed only a curated
+outer ring. The user instead wants the HUD itself to adapt to the frontmost application while
+retaining an immediate, dependable route back to the familiar Global HUD. The existing runtime
+already captures the frontmost PID before showing its non-activating panel, and the unified Settings
+workspace already owns safe configuration writes, so this can extend established seams rather than
+introduce another window or persistence writer.
+
+**Options:** Keep only the outer ring app-aware; apply sparse per-slot overrides to Global; switch a
+complete saved configuration per app; or give each app a complete action layout while keeping
+presentation, behavior, and trigger policy global. For navigation, add permanent Global/App wedges,
+overload the center, use a hidden modifier convention, persist a mode, or provide explicit
+Contextual and Global invocation routes.
+
+**Decision:** Each configured bundle identifier owns one complete, independently editable inner and
+middle action layout. Creating it copies the current Global layout once; later edits do not propagate
+between them. The existing `Configuration.inner`/`middle` remain Global for backward compatibility.
+Geometry, menu/ring appearance, motion, behavior, and ordinary trigger policy remain global;
+item-level overrides stay with the copied items. Exact bundle-ID resolution occurs from an immutable
+frontmost-app snapshot at invocation, with MousePlus, missing IDs, missing profiles, and unavailable
+profiles falling back to Global.
+
+Existing keyboard and mouse HUD triggers are Contextual routes. A separate recordable Global HUD
+keyboard shortcut, unbound by default and usable through BetterMouse mapping, always bypasses app
+resolution. Either route can replace the other in the visible panel without moving it. Replacement
+clears selection and expansion and transfers gesture ownership, so releasing an older Hold-release
+trigger cannot commit an item from the new layout. The center communicates the resolved context but
+keeps its single native Settings action and drag behavior. Finder is the first live acceptance target;
+MousePlus does not ship a hard-coded Finder profile.
+
+**Rationale:** Complete action layouts provide a clear mental model and meaningful contextual HUD
+without duplicating unrelated settings. Sparse overrides appear economical but make reorder,
+deletion, inheritance, reset, and recovery ambiguous. Explicit routes are discoverable and work with
+the user's supported BetterMouse-to-keyboard setup; permanent navigation wedges consume scarce
+radial slots, center overloading conflicts with its Settings role, and persistent modes are easy to
+forget. Keeping existing fields as Global makes old configurations migrate without user choices.
+
+**Consequences:** Configuration gains lossless bundle-ID-keyed profile storage and an unbound Global
+shortcut. Runtime context must carry both durable bundle identity and transient target PID, remain
+frozen per invocation, and reject stale releases after a route switch. The existing Settings
+coordinator must edit, reset, back up, and restore the selected profile through its one safe writer.
+The prior app-aware command-ring decision is narrowed: menu browsing, search, pagination, and pinning
+remain valid future features, but its always-global Rings 1/2 assumption does not govern app-specific
+HUDs. Sparse inheritance, per-app presentation, multiple profiles per app, and a second direct Global
+mouse slot are outside v1.
+
+---
+
 ### 2026-09-04 - HUD motion is role-based and presentation-only
 
 **Context:** MousePlus already applies one configurable spring to both active selection and expanded

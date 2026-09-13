@@ -12,6 +12,7 @@ final class HUDCustomizationCodingTests: XCTestCase {
         XCTAssertEqual(value.middle.layout.angularOffset, 0)
         XCTAssertEqual(value.iconOrientation, .upright)
         XCTAssertEqual(value.outerRingVisibility, .alwaysVisible)
+        XCTAssertFalse(value.fillsUnusedSlots)
         XCTAssertNil(value.wedgeColor)
         XCTAssertNil(value.iconColor)
         XCTAssertNil(value.inner.appearance.iconOrientation)
@@ -48,6 +49,7 @@ final class HUDCustomizationCodingTests: XCTestCase {
             "appearance": { "iconOrientation": "radial" }
           },
           "outerRingVisibility": "alwaysHidden",
+          "fillsUnusedSlots": true,
           "iconOrientation": "tangential"
         }
         """
@@ -60,6 +62,7 @@ final class HUDCustomizationCodingTests: XCTestCase {
         XCTAssertEqual(value.inner.appearance.iconOrientation, .radial)
         XCTAssertEqual(value.middle, HUDRingCustomization())
         XCTAssertEqual(value.outerRingVisibility, .alwaysHidden)
+        XCTAssertTrue(value.fillsUnusedSlots)
         XCTAssertEqual(value.iconOrientation, .tangential)
     }
 
@@ -105,6 +108,7 @@ final class HUDCustomizationCodingTests: XCTestCase {
             }
           },
           "outerRingVisibility": "futureVisibility",
+          "fillsUnusedSlots": "yes",
           "iconOrientation": "futureOrientation"
         }
         """
@@ -120,6 +124,7 @@ final class HUDCustomizationCodingTests: XCTestCase {
         XCTAssertEqual(value.middle.layout.fixedSlotCount, 8)
         XCTAssertEqual(value.middle.layout.angularOffset, 90)
         XCTAssertEqual(value.outerRingVisibility, .alwaysVisible)
+        XCTAssertFalse(value.fillsUnusedSlots)
         XCTAssertEqual(value.iconOrientation, .upright)
     }
 
@@ -170,6 +175,7 @@ final class HUDCustomizationCodingTests: XCTestCase {
                 iconOrientation: .upright, labelOrientation: .upright, labelVisible: false
             ),
             outerRingVisibility: .revealBeyondInnerRing,
+            fillsUnusedSlots: true,
             iconOrientation: .tangential,
             labelOrientation: .radial
         )

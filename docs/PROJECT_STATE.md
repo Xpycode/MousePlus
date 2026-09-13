@@ -1,6 +1,6 @@
 # Project State
 
-**Last updated:** 2026-09-11
+**Last updated:** 2026-09-13
 
 ## Identity
 
@@ -14,16 +14,16 @@
 - **Phase:** Implementation — app-specific HUDs. <!-- Phase changed: 2026-09-11 -->
 - **Focus:** Complete signed-live Finder and Global HUD acceptance for app-specific HUDs.
 - **Blocker:** none for implementation. The remaining signed-live Finder acceptance is an external completion gate; advanced Logitech support and Leave-a-Tip retain their separate dependencies.
-- **Next:** Continue E1 in the fresh PID 13650 build: both routes and switching, stale-release isolation, center interaction, Reduce Motion, fallback, action targeting, relaunch persistence, and deletion.
-- **Execution:** `../IMPLEMENTATION_PLAN.md` is active; Waves 1–5 and automated AC1–AC18 are complete, awaiting E1/AC19 signed-live acceptance.
+- **Next:** Finish E1 relaunch persistence, profile deletion, and post-delete Global fallback.
+- **Execution:** `../IMPLEMENTATION_PLAN.md` remains active; Waves 1–5 are implemented. E1 awaits the remaining live acceptance checks; switching, release isolation, center interactions, Reduce Motion, fallback, and action targeting passed.
 
 ## Recent
 
+- **2026-09-13:** Signed-live Finder/Global checks passed through action targeting; saved the remaining persistence/deletion handoff and quit the test build for session close.
+- **2026-09-13:** Made unused slot backing transparent by default with a persisted complete-ring option, kept empty regions inert, and stabilized the hidden-submenu warning layout; 134 focused regressions and the Debug build pass, and both appearances are signed-live accepted.
 - **2026-09-11:** E1 setup and trigger-collision acceptance passed; handled shortcuts no longer beep, duplicate bindings retain the saved shortcut and explain the collision inline, and the fresh signed build remains running.
 - **2026-09-11:** Completed Wave 5 integration and adversarial closure; 158 focused and 377 complete tests pass, and the fresh Developer ID build is running for E1 acceptance.
 - **2026-09-11:** Completed Wave 4 native center context presentation; 45 focused regressions and the Debug build pass after independent review, and the fresh artifact is running from DerivedData.
-- **2026-09-11:** Completed Wave 3 runtime resolution/safe route switching and native Settings profile management; 113 focused regressions and the Debug build pass after independent review.
-- **2026-09-11:** Completed Wave 2’s selected-profile Settings coordinator and independent Global keyboard route; 90 focused tests and the Debug build pass after independent review, and the fresh artifact is running from DerivedData.
 
 ## Progress
 

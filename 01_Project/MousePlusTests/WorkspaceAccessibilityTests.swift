@@ -323,6 +323,26 @@ final class WorkspaceAccessibilityTests: XCTestCase {
         XCTAssertTrue(explanation.contains("shared HUD customization"))
     }
 
+    func testFillUnusedSlotsUsesNativeCheckboxAndUpdatesSharedCustomization() async throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let coordinator = SettingsWorkspaceCoordinator(
+            persistence: ConfigurationService(store: ConfigurationStore(directoryURL: directory))
+        )
+        await coordinator.load()
+        let host = MenuItemsSettingsTestHost(coordinator)
+
+        let checkbox: NSButton = try host.control("hud.menu.fillUnusedSlots")
+        XCTAssertEqual(checkbox.accessibilityLabel(), "Fill unused ring slots")
+        XCTAssertEqual(checkbox.state, .off)
+
+        checkbox.performClick(nil)
+        await host.waitUntil { coordinator.menuEditorModel.hudCustomization.fillsUnusedSlots }
+
+        XCTAssertEqual(checkbox.state, .on)
+        XCTAssertEqual(coordinator.dirtyFields, [.menuItems])
+    }
+
     func testPersistenceStatesNeverDependOnColorForMeaning() {
         let states: [SettingsWorkspaceCoordinator.Status] = [
             .idle,

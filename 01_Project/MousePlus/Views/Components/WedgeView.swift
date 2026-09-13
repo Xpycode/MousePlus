@@ -3,11 +3,41 @@ import SwiftUI
 /// Testable radial bounds for the material surfaces rendered by the ring.
 struct RingSurfacePresentation: Equatable {
     let persistentOuterRadius: CGFloat
+    let innerBackingIndices: [Int]
+    let middleBackingIndices: [Int]
+    let fillsEntireOuterRing: Bool
     let localizedOuterInnerRadius: CGFloat?
     let localizedOuterOuterRadius: CGFloat?
 
     init(radii: BandRadii, isOuterRingVisible: Bool) {
+        self.init(
+            radii: radii,
+            geometry: .shared(spokeCount: 1),
+            innerItemCount: 1,
+            middleItemCount: 1,
+            isOuterRingVisible: isOuterRingVisible,
+            fillsUnusedSlots: false
+        )
+    }
+
+    init(
+        radii: BandRadii,
+        geometry: TopLevelRingGeometry,
+        innerItemCount: Int,
+        middleItemCount: Int,
+        isOuterRingVisible: Bool,
+        fillsUnusedSlots: Bool = false
+    ) {
         persistentOuterRadius = radii.r2
+        let innerBackingCount = fillsUnusedSlots
+            ? geometry.inner.slotCount
+            : min(max(0, innerItemCount), geometry.inner.slotCount)
+        let middleBackingCount = fillsUnusedSlots
+            ? geometry.middle.slotCount
+            : min(max(0, middleItemCount), geometry.middle.slotCount)
+        innerBackingIndices = Array(0..<innerBackingCount)
+        middleBackingIndices = Array(0..<middleBackingCount)
+        fillsEntireOuterRing = isOuterRingVisible && fillsUnusedSlots
         localizedOuterInnerRadius = isOuterRingVisible ? radii.r2 : nil
         localizedOuterOuterRadius = isOuterRingVisible ? radii.r3 : nil
     }

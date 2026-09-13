@@ -120,7 +120,14 @@ struct RingMenuView: View {
     private var radii: BandRadii { viewModel.radii }
     private var geometry: TopLevelRingGeometry { viewModel.geometry }
     private var surfacePresentation: RingSurfacePresentation {
-        RingSurfacePresentation(radii: radii, isOuterRingVisible: viewModel.isOuterRingVisible)
+        RingSurfacePresentation(
+            radii: radii,
+            geometry: geometry,
+            innerItemCount: viewModel.innerItems.count,
+            middleItemCount: viewModel.middleItems.count,
+            isOuterRingVisible: viewModel.isOuterRingVisible,
+            fillsUnusedSlots: viewModel.hudCustomization.fillsUnusedSlots
+        )
     }
 
     var body: some View {
@@ -159,8 +166,18 @@ struct RingMenuView: View {
                                 if viewModel.isOuterRingVisible {
                                     HUDOuterBandMotion(descriptor: expansion) { progress in
                                         ZStack {
+                                            if surfacePresentation.fillsEntireOuterRing {
+                                                completeOuterBacking(
+                                                    descriptor: expansion,
+                                                    progress: progress
+                                                )
+                                            }
                                             ForEach(wedges) { wedge in
-                                                wedge.render(descriptor: expansion, progress: progress)
+                                                wedge.render(
+                                                    descriptor: expansion,
+                                                    progress: progress,
+                                                    includesBacking: !surfacePresentation.fillsEntireOuterRing
+                                                )
                                             }
                                         }
                                     }
@@ -351,44 +368,58 @@ struct RingMenuView: View {
         }
     }
 
-    /// The normal surface is one material disk. During stagger playback it is
-    /// temporarily split into final-geometry slots so backing and wedge content
-    /// share the same cadence; at completion the original seamless disk returns.
+    /// Material exists only beneath the center and configured wedges. Fixed but
+    /// unused slots retain their geometry while revealing the desktop beneath
+    /// the panel. During stagger playback, each occupied backing follows its
+    /// wedge's cadence.
     @ViewBuilder
     private func persistentBacking(_ openingFrame: HUDOpeningMotionFrame) -> some View {
         if openingFrame.effect == .staggeredSegments, openingFrame.progress < 1 {
             ZStack {
-                staggeredBackingBand(
+                persistentBackingBand(
                     .inner,
                     innerRadius: radii.r0,
                     outerRadius: radii.r1,
+                    indices: surfacePresentation.innerBackingIndices,
                     frame: openingFrame
                 )
-                staggeredBackingBand(
+                persistentBackingBand(
                     .middle,
                     innerRadius: radii.r1,
                     outerRadius: radii.r2,
+                    indices: surfacePresentation.middleBackingIndices,
                     frame: openingFrame
                 )
             }
         } else {
-            Circle()
-                .fill(.ultraThinMaterial)
-                .frame(
-                    width: surfacePresentation.persistentOuterRadius * 2,
-                    height: surfacePresentation.persistentOuterRadius * 2
+            ZStack {
+                Circle()
+                    .fill(.ultraThinMaterial)
+                    .frame(width: radii.r0 * 2, height: radii.r0 * 2)
+                persistentBackingBand(
+                    .inner,
+                    innerRadius: radii.r0,
+                    outerRadius: radii.r1,
+                    indices: surfacePresentation.innerBackingIndices
                 )
+                persistentBackingBand(
+                    .middle,
+                    innerRadius: radii.r1,
+                    outerRadius: radii.r2,
+                    indices: surfacePresentation.middleBackingIndices
+                )
+            }
         }
     }
 
-    private func staggeredBackingBand(
+    private func persistentBackingBand(
         _ band: Band,
         innerRadius: CGFloat,
         outerRadius: CGFloat,
-        frame: HUDOpeningMotionFrame
+        indices: [Int],
+        frame: HUDOpeningMotionFrame? = nil
     ) -> some View {
-        let bandGeometry = geometry.geometry(for: band)
-        return ForEach(Array(0..<bandGeometry.slotCount), id: \.self) { index in
+        ForEach(indices, id: \.self) { index in
             let angles = RadialGeometry.wedgeAngles(
                 band: band,
                 index: index,
@@ -404,8 +435,36 @@ struct RingMenuView: View {
             )
             .fill(.ultraThinMaterial)
             .frame(width: size, height: size)
-            .opacity(staggerOpacity(for: band, index: index, frame: frame))
+            .opacity(frame.map { staggerOpacity(for: band, index: index, frame: $0) } ?? 1)
         }
+    }
+
+    /// Optional complete backing for a visible outer branch. This follows the
+    /// same radial/fade motion as outer content but never adds an interaction
+    /// or accessibility surface to unconfigured angles.
+    private func completeOuterBacking(
+        descriptor: HUDMotionPresentationDescriptor,
+        progress: CGFloat
+    ) -> some View {
+        let frame = HUDOuterBandMotionFrame.resolve(
+            layout: .fullCircle,
+            descriptor: descriptor,
+            progress: progress,
+            parentMidpoint: .zero,
+            finalStartAngle: .degrees(-90),
+            finalEndAngle: .degrees(270),
+            innerRadius: radii.r2,
+            outerRadius: radii.r3
+        )
+        return OuterWedgeBacking(
+            startAngle: frame.startAngle,
+            endAngle: frame.endAngle,
+            innerRadius: frame.innerRadius,
+            outerRadius: frame.outerRadius,
+            size: size
+        )
+        .opacity(frame.contentOpacity)
+        .accessibilityHidden(true)
     }
 
     private func staggerOpacity(

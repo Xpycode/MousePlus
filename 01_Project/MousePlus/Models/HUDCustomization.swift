@@ -163,13 +163,17 @@ struct HUDRingCustomization: Codable, Equatable, Sendable {
 ///
 /// Defaults deliberately reproduce the pre-customization HUD: item-derived
 /// slots, no rotation, upright icons and labels, application-owned colors,
-/// outer items presented whenever their parent is expanded, and the inner
-/// ring's label hidden while the middle and outer rings' labels are shown.
+/// outer items presented whenever their parent is expanded, unused positions
+/// left transparent, and the inner ring's label hidden while the middle and
+/// outer rings' labels are shown.
 struct HUDCustomization: Codable, Equatable, Sendable {
     var inner: HUDRingCustomization
     var middle: HUDRingCustomization
     var outerAppearance: HUDRingAppearance
     var outerRingVisibility: OuterRingVisibility
+    /// Paint material beneath reserved-but-unconfigured positions. Geometry,
+    /// hit testing, and accessibility remain limited to configured items.
+    var fillsUnusedSlots: Bool
     var iconOrientation: IconOrientation
     var labelOrientation: LabelOrientation
     var wedgeColor: HUDColor?
@@ -180,6 +184,7 @@ struct HUDCustomization: Codable, Equatable, Sendable {
         middle: HUDRingCustomization = .init(),
         outerAppearance: HUDRingAppearance = .init(),
         outerRingVisibility: OuterRingVisibility = .alwaysVisible,
+        fillsUnusedSlots: Bool = false,
         iconOrientation: IconOrientation = .upright,
         labelOrientation: LabelOrientation = .upright,
         wedgeColor: HUDColor? = nil,
@@ -189,6 +194,7 @@ struct HUDCustomization: Codable, Equatable, Sendable {
         self.middle = middle
         self.outerAppearance = outerAppearance
         self.outerRingVisibility = outerRingVisibility
+        self.fillsUnusedSlots = fillsUnusedSlots
         self.iconOrientation = iconOrientation
         self.labelOrientation = labelOrientation
         self.wedgeColor = wedgeColor
@@ -196,7 +202,7 @@ struct HUDCustomization: Codable, Equatable, Sendable {
     }
 
     private enum CodingKeys: String, CodingKey {
-        case inner, middle, outerAppearance, outerRingVisibility
+        case inner, middle, outerAppearance, outerRingVisibility, fillsUnusedSlots
         case iconOrientation, labelOrientation, wedgeColor, iconColor
     }
 
@@ -209,6 +215,7 @@ struct HUDCustomization: Codable, Equatable, Sendable {
         outerAppearance = (try? Self.decodeAppearance(from: c, forKey: .outerAppearance, defaultLabelVisible: true))
             ?? .init()
         outerRingVisibility = (try? c.decode(OuterRingVisibility.self, forKey: .outerRingVisibility)) ?? .alwaysVisible
+        fillsUnusedSlots = (try? c.decode(Bool.self, forKey: .fillsUnusedSlots)) ?? false
         iconOrientation = (try? c.decode(IconOrientation.self, forKey: .iconOrientation)) ?? .upright
         labelOrientation = (try? c.decode(LabelOrientation.self, forKey: .labelOrientation)) ?? .upright
         wedgeColor = try? c.decode(HUDColor.self, forKey: .wedgeColor)

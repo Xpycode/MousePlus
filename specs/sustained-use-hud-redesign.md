@@ -34,7 +34,7 @@ Turn the HUD editor into a safe, live experimentation surface with center access
 
 1. Open Settings directly from a dedicated control in the HUD center.
 2. Configure the outer ring as always visible, pointer-revealed, or always hidden.
-3. Give the inner and middle rings independent automatic or fixed slot counts, with unused fixed slots preserving geometry while rendering invisibly.
+3. Give the inner and middle rings independent automatic or fixed slot counts, with unused fixed slots preserving geometry and a shared appearance choice to leave their backing transparent or complete the rings.
 4. Give the inner and middle rings independent angular offsets.
 5. Configure upright, radial, or tangential icon orientation through a menu default with optional per-ring overrides.
 6. Configure wedge and icon colors through menu defaults, optional ring overrides, and optional item overrides, with `Default/Inherit` and accessible contrast protection.
@@ -107,7 +107,8 @@ Turn the HUD editor into a safe, live experimentation surface with center access
 ### Independent Slot Counts and Hidden Wedges
 
 - [x] Given inner and middle rings have different item counts and both use `Auto`, when the HUD renders, then each ring derives its own slot count rather than sharing a spoke count.
-- [x] Given a ring uses a valid fixed slot count larger than its item count, when it renders, then configured items retain fixed angular positions and unused slots render invisibly.
+- [x] Given a ring uses a valid fixed slot count larger than its item count and Fill unused slots is off, when it renders, then configured items retain fixed angular positions and unused slots render transparently.
+- [x] Given Fill unused slots is on, when a fixed ring or visible outer branch has unconfigured space, then material backing completes the ring without creating wedge content, hit targets, actions, or accessibility elements.
 - [x] Given an unused fixed slot, when the user hovers, clicks, releases, or uses VoiceOver over its angular region, then it cannot become active or execute an action and exposes no phantom accessibility element.
 - [x] Given a fixed count equals the configured item count, when another item is added, then the editor prevents the invalid state or offers an explicit non-destructive count increase; it never drops or overlaps items.
 - [x] Given the other ring changes between auto and fixed, when the preview updates, then the untouched ring's slot count and item positions remain unchanged.
@@ -216,7 +217,7 @@ Explicitly excluded from this spec:
 | Does the preview execute configured actions? | Resolved | No; it supports safe hover, selection, reveal, and layout testing only. |
 | How is the outer ring shown? | Resolved | User-selectable always visible, pointer-revealed, or always hidden modes. |
 | Does a conditionally revealed outer ring hide again during the same invocation? | Resolved | No; it remains visible until that invocation closes. |
-| How do slot counts work? | Resolved | Auto or fixed, independently for inner and middle rings; invisible unused fixed slots preserve geometry. |
+| How do slot counts work? | Resolved | Auto or fixed, independently for inner and middle rings; unused positions preserve geometry and can use transparent or complete-ring backing. |
 | How are icon orientation and colors scoped? | Resolved | Menu defaults with optional ring overrides; colors additionally support item overrides. |
 | Which contrast metric and threshold should govern automatic icon fallback? | Resolved | WCAG 2.2 relative luminance: 3:1 for meaningful icons/control states and 4.5:1 for small labels; preserve requested colors and render a deterministic black/white fallback when needed. |
 | How should `Always hidden` present middle items that contain stored sub-items? | Resolved | Preserve the parent and sub-items, suppress expand/commit and the chevron, expose an unavailable reason, and warn in Settings; never execute the marker action as fallback. |

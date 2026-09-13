@@ -37,6 +37,7 @@ final class HUDCustomizationIntegrationTests: XCTestCase {
         model.hudCustomization.middle.layout = HUDRingLayout(
             slotCountMode: .fixed, fixedSlotCount: 7, angularOffset: 95
         )
+        model.hudCustomization.fillsUnusedSlots = true
         coordinator.menuItemsDidChange()
         let flushed = await coordinator.flush()
         XCTAssertTrue(flushed)
@@ -44,6 +45,8 @@ final class HUDCustomizationIntegrationTests: XCTestCase {
         let decoded = try await store.decoded()
         XCTAssertEqual(decoded.hudCustomization.inner.layout.angularOffset, 350)
         XCTAssertEqual(decoded.hudCustomization.middle.layout.angularOffset, 95)
+        XCTAssertTrue(decoded.hudCustomization.fillsUnusedSlots)
+        XCTAssertTrue(runtime.hudCustomization.fillsUnusedSlots)
         XCTAssertEqual(runtime.geometry.inner.slotCount, 5)
         XCTAssertEqual(runtime.geometry.middle.slotCount, 7)
         XCTAssertEqual(runtime.geometry.inner.angularOffset, 350 * .pi / 180, accuracy: 0.000_001)

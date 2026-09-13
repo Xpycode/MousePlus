@@ -5,6 +5,65 @@ import XCTest
 
 final class HUDOpeningMotionTests: XCTestCase {
     @MainActor
+    func testNativeCenterKeepsItsFrameAndAcceptsAccessibilityPressDuringConcealedOpening() async throws {
+        // This exercises the real native control in the production panel. It
+        // verifies its geometry and AXPress callback, not SwiftUI's virtual
+        // wedge accessibility tree or spoken VoiceOver navigation.
+        for style in HUDSummonMotionStyle.allCases {
+            let model = RingViewModel()
+            model.appearance.motion = HUDMotionConfiguration(baseDuration: 0.5, summon: style)
+            model.isVisible = true
+            let mountedID = model.prepareOpeningPlayback()
+            var frames: [HUDOpeningMotionFrame] = []
+            var closeCount = 0
+            var settingsCount = 0
+            model.requestClose = { closeCount += 1 }
+            model.requestOpenMenuItemsSettings = { settingsCount += 1 }
+            let previousWindows = Set(NSApp.windows.map(\.windowNumber))
+            let controller = RingWindowController()
+            controller.show(
+                at: NSEvent.mouseLocation, outerRadius: model.radii.r3,
+                content: RingMenuView(
+                    viewModel: model, interactionEnabled: false,
+                    onOpeningFrame: { frames.append($0) }
+                )
+            )
+            defer { controller.hide() }
+            let panel = try XCTUnwrap(NSApp.windows.first {
+                !previousWindows.contains($0.windowNumber) && $0 is NSPanel
+            })
+            try await Task.sleep(for: .milliseconds(80))
+            let center = try XCTUnwrap(openingCenterButton(in: try XCTUnwrap(panel.contentView)))
+            let initialFrame = center.accessibilityFrame()
+            XCTAssertFalse(initialFrame.isEmpty)
+            let panelFrame = panel.frame
+
+            model.replayOpening(afterMounting: mountedID)
+            for delay in [100, 150, 400] {
+                try await Task.sleep(for: .milliseconds(delay))
+                let actual = center.accessibilityFrame()
+                XCTAssertEqual(actual.origin.x, initialFrame.origin.x, accuracy: 1, "\(style)")
+                XCTAssertEqual(actual.origin.y, initialFrame.origin.y, accuracy: 1, "\(style)")
+                XCTAssertEqual(actual.width, initialFrame.width, accuracy: 1, "\(style)")
+                XCTAssertEqual(actual.height, initialFrame.height, accuracy: 1, "\(style)")
+                XCTAssertEqual(panel.frame, panelFrame)
+            }
+            XCTAssertEqual(frames.last?.progress, 1)
+
+            // Invoke the native AXPress while a new entrance awaits replay.
+            _ = model.prepareOpeningPlayback()
+            try await Task.sleep(for: .milliseconds(80))
+            if style != .off { XCTAssertEqual(frames.last?.centerOpacity, 0) }
+            // Assert delivered callbacks; AppKit's return value is false on
+            // this host even when the button synchronously sends its action.
+            _ = center.accessibilityPerformPress()
+            XCTAssertEqual(closeCount, 1)
+            XCTAssertEqual(settingsCount, 1)
+            XCTAssertNil(model.activeSelection)
+        }
+    }
+
+    @MainActor
     func testFullRuntimeSelectionDuringMountSuppressesReplayAndReportsReason() async throws {
         let model = RingViewModel()
         model.appearance.motion = HUDMotionConfiguration(baseDuration: 0.5, summon: .bloom)
@@ -376,6 +435,15 @@ final class HUDOpeningMotionTests: XCTestCase {
             accuracy: 0.000_001
         )
     }
+}
+
+@MainActor
+private func openingCenterButton(in view: NSView) -> NSButton? {
+    if let button = view as? NSButton,
+       button.accessibilityIdentifier() == HUDCenterSettingsControl.accessibilityIdentifier {
+        return button
+    }
+    return view.subviews.lazy.compactMap { openingCenterButton(in: $0) }.first
 }
 
 /// Exercises the real NSPanel and SwiftUI opening owner, recording the frames

@@ -176,6 +176,6 @@ Scope is user-requested; implementation defaults and layout are proposed, not li
 
 ## Related
 
-- [Implementation plan](../IMPLEMENTATION_PLAN.md)
+- [Completed implementation plan](../docs/plans/hud-opening-styles-implementation.md)
 - [Existing motion decision](../docs/decisions.md#2026-09-04---hud-motion-is-role-based-and-presentation-only)
 - [Motion v1 completion evidence](../docs/sessions/2026-09-05.md)

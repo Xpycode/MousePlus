@@ -30,8 +30,6 @@ struct HUDCustomizationControls: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            hiddenSubmenuWarning
-
             AppKitSegmentedControl(
                 labels: Tab.allCases.map(\.label),
                 selection: tabSelection,
@@ -77,8 +75,16 @@ struct HUDCustomizationControls: View {
                 )
                 colorRow("Wedge color", color: menuWedgeColor, identifier: "hud.menu.wedgeColor", inheritTitle: "Default")
                 colorRow("Icon color", color: menuIconColor, identifier: "hud.menu.iconColor", inheritTitle: "Default")
+                row("Empty slots") {
+                    AppKitCheckbox(
+                        title: "Fill unused slots",
+                        isOn: fillUnusedSlotsBinding,
+                        accessibilityLabel: "Fill unused ring slots",
+                        accessibilityIdentifier: "hud.menu.fillUnusedSlots"
+                    )
+                }
 
-                Text("Menu settings are the application default. Inner, Middle, and Outer can inherit them or override per ring; individual items can override their ring.")
+                Text("Menu settings are the application default. Inner, Middle, and Outer can inherit them or override per ring; individual items can override their ring. Filling unused slots completes the material backing without making empty areas interactive.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .accessibilityIdentifier("hud.menu.hierarchyHelp")
@@ -210,6 +216,7 @@ struct HUDCustomizationControls: View {
                         accessibilityIdentifier: "hud.outer.visibility"
                     )
                 }
+                hiddenSubmenuWarning
                 orientationRow(
                     title: "Icon direction",
                     selection: outerOrientationSelection,
@@ -412,6 +419,12 @@ struct HUDCustomizationControls: View {
 
     private var menuWedgeColor: Binding<NSColor?> { colorBinding(get: { customization.wedgeColor }, set: { model.hudCustomization.wedgeColor = $0 }) }
     private var menuIconColor: Binding<NSColor?> { colorBinding(get: { customization.iconColor }, set: { model.hudCustomization.iconColor = $0 }) }
+    private var fillUnusedSlotsBinding: Binding<Bool> {
+        Binding(
+            get: { customization.fillsUnusedSlots },
+            set: { model.hudCustomization.fillsUnusedSlots = $0 }
+        )
+    }
 
     // MARK: - Outer-scoped state
 

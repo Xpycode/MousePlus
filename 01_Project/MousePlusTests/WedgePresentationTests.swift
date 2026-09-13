@@ -2,6 +2,54 @@ import XCTest
 @testable import MousePlus
 
 final class WedgePresentationTests: XCTestCase {
+    func testPersistentMaterialBacksOnlyConfiguredFixedSlots() {
+        let presentation = RingSurfacePresentation(
+            radii: BandRadii(r0: 10, r1: 20, r2: 30, r3: 40),
+            geometry: TopLevelRingGeometry(
+                inner: RingBandGeometry(slotCount: 6),
+                middle: RingBandGeometry(slotCount: 8)
+            ),
+            innerItemCount: 4,
+            middleItemCount: 3,
+            isOuterRingVisible: false
+        )
+
+        XCTAssertEqual(presentation.innerBackingIndices, [0, 1, 2, 3])
+        XCTAssertEqual(presentation.middleBackingIndices, [0, 1, 2])
+        XCTAssertFalse(presentation.fillsEntireOuterRing)
+    }
+
+    func testFillUnusedSlotsCompletesBackingWithoutChangingConfiguredItemCounts() {
+        let presentation = RingSurfacePresentation(
+            radii: BandRadii(r0: 10, r1: 20, r2: 30, r3: 40),
+            geometry: TopLevelRingGeometry(
+                inner: RingBandGeometry(slotCount: 6),
+                middle: RingBandGeometry(slotCount: 8)
+            ),
+            innerItemCount: 4,
+            middleItemCount: 3,
+            isOuterRingVisible: true,
+            fillsUnusedSlots: true
+        )
+
+        XCTAssertEqual(presentation.innerBackingIndices, Array(0..<6))
+        XCTAssertEqual(presentation.middleBackingIndices, Array(0..<8))
+        XCTAssertTrue(presentation.fillsEntireOuterRing)
+    }
+
+    func testFillUnusedSlotsDoesNotManufactureHiddenOuterSurface() {
+        let presentation = RingSurfacePresentation(
+            radii: BandRadii(r0: 10, r1: 20, r2: 30, r3: 40),
+            geometry: .shared(spokeCount: 4),
+            innerItemCount: 1,
+            middleItemCount: 1,
+            isOuterRingVisible: false,
+            fillsUnusedSlots: true
+        )
+
+        XCTAssertFalse(presentation.fillsEntireOuterRing)
+    }
+
     func testPersistentMaterialStopsAtMiddleEdgeWithoutOuterSurface() {
         let radii = BandRadii(r0: 10, r1: 20, r2: 30, r3: 40)
         let presentation = RingSurfacePresentation(radii: radii, isOuterRingVisible: false)
