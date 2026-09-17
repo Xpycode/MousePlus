@@ -1,6 +1,6 @@
 # Implementation Plan — App-Specific HUDs
 
-**Created:** 2026-09-11 · **Status:** Automated implementation complete — E1 signed-live acceptance pending
+**Created:** 2026-09-11 · **Completed:** 2026-09-17 · **Status:** Closed — Waves 1–5 and E1 signed-live acceptance passed on the supported BetterMouse-to-keyboard route.
 
 ## Goal
 
@@ -20,12 +20,12 @@ The authoritative behavior and AC1–AC19 live in the linked specification.
   preserving panel position and preventing stale release commits or ambiguous bindings (AC10–AC15).
 - [x] The center and Settings surfaces expose the active/editing profile through native,
   accessible controls and preserve Reduce Motion and existing interaction contracts (AC16–AC18).
-- [ ] A signed fresh build passes the Finder/unconfigured-app end-to-end acceptance flow, including
+- [x] A signed fresh build passes the Finder/unconfigured-app end-to-end acceptance flow, including
   save/relaunch and both invocation routes (AC19).
 
 ## Specs and Current Code Evidence
 
-- [App-specific HUD specification](specs/app-specific-huds.md) — authoritative scope, behavior,
+- [App-specific HUD specification](../../specs/app-specific-huds.md) — authoritative scope, behavior,
   edge cases, UI placement, and acceptance criteria.
 - `Models/Configuration.swift` — existing `inner`/`middle` are the backward-compatible Global
   layout; `TriggersConfig` already has tolerant per-field decoding but no Global HUD binding.
@@ -294,7 +294,7 @@ git diff --check
 
 ## External Checks
 
-- [ ] **E1: Signed-live Finder and Global HUD acceptance.**
+- [x] **E1: Signed-live Finder and Global HUD acceptance.**
   - Depends on: 5.1.
   - Requires: user availability, configured Accessibility/keystroke permissions, Finder, one
     unconfigured app such as TextEdit, and distinct Contextual/Global shortcuts. Continue using the
@@ -349,6 +349,18 @@ git diff --check
     after switching to Global; only the intended window moved. Relaunch persistence, deletion, and
     post-delete fallback remain unverified. User requested commit/push and pre-clear handoff at this
     boundary; E1 and overall feature completion remain open.
+  - Live continuation (2026-09-17): the prior isolated artifact was no longer present. A fresh
+    isolated Debug build at `/private/tmp/MousePlus-E1-20260917/Build/Products/Debug/MousePlus.app`
+    succeeded, strict deep Developer ID signature verification passed, and no MousePlus instance was
+    running before launch. The exact artifact launched as PID 42677 and its executable path was
+    verified. The saved configuration still contains the Finder profile and Global rings. The user
+    confirmed that Finder/Global layouts, edited inner/middle actions, and both shortcuts survived
+    relaunch. The user deleted Finder and confirmed immediate unchanged Global fallback. The saved
+    configuration no longer contains Finder and retains the Global rings. The test app exited
+    gracefully and the exact signed artifact relaunched as PID 72056; its path was verified and
+    the saved Finder deletion remains on disk. The user confirmed the Finder profile stayed absent
+    in Settings and the Finder Contextual HUD still showed unchanged Global after relaunch. E1 and
+    AC19 passed on the supported route.
 
 ## Operational Learnings
 
@@ -362,7 +374,7 @@ git diff --check
 
 ## Blocked Tasks
 
-None at planning time. E1 is an explicit external acceptance gate, not an implementation blocker.
+None. E1 is complete; deferred release checks remain tracked separately in Backlog.
 
 ## Execution Log
 
@@ -374,6 +386,7 @@ None at planning time. E1 is an explicit external acceptance gate, not an implem
 | Wave 4 / 4.1 | Serial native center/RingMenuView seam under the coordinator; independent AppKit/SwiftUI review after implementation and after fixes. | 45 focused center/runtime/opening regressions pass with no failures/skips; hosted and production-controller checks preserve the exact 40×40 AX frame and full-button hit target during app-to-Global replacement. Authoritative Debug build, `git diff --check`, and changed-file credential scan pass. Review fixes preserved adaptive icon rendering and made the decorative gear badge click-through; final re-review found no remaining important issue. Fresh artifact relaunched from DerivedData as PID 54738. | `6d0f391` | Wave 5 Task 5.1 is ready for complete integration/adversarial verification; E1 remains the final external signed-live gate. |
 | Wave 5 / 5.1 | Serial cross-cutting integration under the coordinator; independent persistence and runtime adversarial reviews, followed by fix re-reviews. | AC1–AC18 mapped above. Final F: 158 passed, 0 failed/skipped. Final T: 377 passed, 0 failed/skipped. B and D pass; changed-file credential scan found no credential material. Review fixes cover lossless Global raw fields and recovery, same-profile concurrency, noncanonical selection, async App Switcher isolation, frozen action PID, selective held-trigger reconfiguration/cancellation, native replacement center/drag, and legacy null compatibility. Developer ID build artifact launched as PID 13881; strict deep verification reached `CSSMERR_TP_NOT_TRUSTED` on macOS 27 beta, so E1 retains signature trust as a live gate. | `a8d7db8` | Run E1 signed-live Finder/Global acceptance; do not claim AC19 yet. |
 | E1 / 2026-09-13 | Serial user-observed acceptance; no independent implementation tasks to delegate. | Fresh isolated Debug build and strict deep Developer ID verification passed; exact process path verified. User accepted both appearances, Finder/Global routing, dismissal, stale release, center context/drag/Settings, Reduce Motion, fallback, and action targeting. Session index and whitespace checks passed. | Included in the user-requested all-pending-work commit on `fix/hud-live-remediation`. | User requested pre-clear pause. Relaunch persistence, deletion, and post-delete fallback remain; E1 and AC19 stay open. Test app quit gracefully. |
+| E1 / 2026-09-17 | Serial user-observed acceptance on the supported BetterMouse-to-keyboard route; no independent implementation tasks. | Fresh isolated Debug build, strict deep Developer ID verification, and exact process-path check passed. User confirmed Finder/Global layouts, edited actions, and shortcuts survived relaunch; Finder deletion caused immediate unchanged Global fallback; after another graceful relaunch, Finder stayed absent and Global fallback still appeared. Saved configuration confirmed Finder absence and retained Global rings. | Documentation closure commit recorded separately. | E1 and AC19 complete; plan archived. |
 
 ---
 *Keep active while required work or acceptance is incomplete. On completion, archive with execution

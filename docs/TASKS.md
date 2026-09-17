@@ -10,7 +10,7 @@
   inside its existing Browse popover. Requested during app-specific HUD E1 acceptance on 2026-09-11;
   placement and exact catalog scope still need confirmation under the UI-change protocol.
 
-- [ ] Scope the next MousePlus App Switcher increment beyond the live-verified full-circle running-app ring: compare window switching, recent apps, search, grouping/paging, and keyboard/pointer hybrids. Complete app-specific HUDs are now scoped separately in the active plan.
+- [ ] Scope the next MousePlus App Switcher increment beyond the live-verified full-circle running-app ring: compare window switching, recent apps, search, grouping/paging, and keyboard/pointer hybrids. Complete app-specific HUDs are finished separately.
 
 - [ ] Center outer-ring labels beneath their icons when an expansion chevron is present. A
   2026-09-11 user screenshot shows the `Apps` and `Snap` labels centered under the combined
