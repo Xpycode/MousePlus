@@ -5,6 +5,67 @@ import XCTest
 
 @MainActor
 final class WorkspaceAccessibilityTests: XCTestCase {
+    func testMotionControlsExposeNativeChoicesAndFollowMasterWithoutLosingValues() async throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let coordinator = SettingsWorkspaceCoordinator(
+            persistence: ConfigurationService(store: ConfigurationStore(directoryURL: directory))
+        )
+        let host = MotionSettingsTestHost(coordinator)
+        let master: NSButton = try host.control("appearance.animationEnabled")
+        XCTAssertFalse(master.isEnabled)
+        await coordinator.load()
+        await host.waitUntil { master.isEnabled }
+        XCTAssertEqual(master.accessibilityValue() as? NSNumber, NSNumber(value: true))
+
+        let roles = [
+            ("summon", "Opening", ["Off", "Fade", "Circular Sweep", "Iris Reveal", "Bloom", "Staggered Segments"]),
+            ("hover", "Hover", ["Off", "Emphasis"]),
+            ("outerExpansion", "Outer ring", ["Off", "Radial reveal"]),
+            ("branchChange", "Branch change", ["Off", "Crossfade"])
+        ]
+        for (role, label, choices) in roles {
+            let popup: NSPopUpButton = try host.control("appearance.motion.\(role)")
+            XCTAssertEqual(popup.accessibilityLabel(), label)
+            XCTAssertEqual(popup.itemTitles, choices)
+            XCTAssertEqual(popup.titleOfSelectedItem, choices[1])
+            XCTAssertEqual(popup.accessibilityValue() as? String, choices[1])
+            XCTAssertTrue(popup.isEnabled)
+            popup.selectItem(at: 0)
+            XCTAssertTrue(popup.sendAction(popup.action, to: popup.target))
+        }
+        let slider: NSSlider = try host.control("appearance.motion.baseDuration")
+        XCTAssertEqual(slider.accessibilityLabel(), "Motion speed")
+        XCTAssertEqual(slider.minValue, 0.05)
+        XCTAssertEqual(slider.maxValue, 0.5)
+        XCTAssertEqual(slider.doubleValue, 0.15)
+        XCTAssertEqual(slider.accessibilityValue() as? NSNumber, NSNumber(value: 0.15))
+        master.performClick(nil)
+        await host.waitUntil { !slider.isEnabled }
+        XCTAssertEqual(master.accessibilityValue() as? NSNumber, NSNumber(value: false))
+        for (role, _, _) in roles {
+            let popup: NSPopUpButton = try host.control("appearance.motion.\(role)")
+            XCTAssertFalse(popup.isEnabled)
+            XCTAssertEqual(popup.titleOfSelectedItem, "Off")
+            XCTAssertEqual(popup.accessibilityValue() as? String, "Off")
+        }
+        master.performClick(nil)
+        await host.waitUntil { slider.isEnabled }
+        for (role, _, _) in roles {
+            let popup: NSPopUpButton = try host.control("appearance.motion.\(role)")
+            XCTAssertTrue(popup.isEnabled)
+            XCTAssertEqual(popup.titleOfSelectedItem, "Off")
+        }
+
+        let replay: NSButton = try host.control("appearance.motion.replayOpening")
+        XCTAssertFalse(replay.isEnabled, "Off must disable replay")
+        XCTAssertEqual(replay.accessibilityLabel(), "Replay opening animation")
+        let preview = try host.view("appearance.motion.openingPreview")
+        XCTAssertEqual(preview.accessibilityLabel(), "Opening animation preview")
+        let flushed = await coordinator.teardown()
+        XCTAssertTrue(flushed)
+    }
+
     func testWedgePresentationExposesRequiredVoiceOverContext() {
         let item = RingMenuItem(
             label: "Left Half",
@@ -85,6 +146,26 @@ final class WorkspaceAccessibilityTests: XCTestCase {
         XCTAssertTrue(snapshot.outer.isEmpty)
     }
 
+    func testOuterAccessibilityAppearsOnlyWithPolicyResolvedSurface() {
+        let child = RingMenuItem(
+            label: "Left", icon: "arrow.left", actionType: .windowSnap
+        )
+
+        for visible in [false, true] {
+            let snapshot = RingAccessibilitySnapshot(
+                innerItems: [], middleItems: [], outerItems: [child],
+                selected: nil, outerVisible: visible
+            )
+            let surface = RingSurfacePresentation(
+                radii: BandRadii(r0: 10, r1: 20, r2: 30, r3: 40),
+                isOuterRingVisible: visible
+            )
+
+            XCTAssertEqual(snapshot.outer.isEmpty, !visible)
+            XCTAssertEqual(surface.localizedOuterOuterRadius == nil, !visible)
+        }
+    }
+
     func testPreviewUsesDistinctIdentifiersAndAnnouncesSelection() {
         let item = RingMenuItem(label: "Mission Control", icon: "rectangle.3.group", actionType: .custom)
         let snapshot = RingAccessibilitySnapshot(
@@ -122,6 +203,146 @@ final class WorkspaceAccessibilityTests: XCTestCase {
         XCTAssertEqual(control.label(forSegment: selection), "Reveal")
     }
 
+    func testGlobalHUDShortcutRowUsesNativeAccessibleControls() async throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let persistence = ConfigurationService(store: ConfigurationStore(directoryURL: directory))
+        var configuration = Configuration()
+        configuration.triggers.globalHUDShortcut = .keyboard(
+            keyCode: 97, modifiers: NSEvent.ModifierFlags.option.rawValue, mode: .tapToggle
+        )
+        try await persistence.save(configuration)
+        let coordinator = SettingsWorkspaceCoordinator(persistence: persistence)
+        await coordinator.load()
+        let host = TriggersSettingsTestHost(coordinator)
+
+        let binding: NSTextField = try host.control("triggers.globalHUDShortcut.binding")
+        XCTAssertEqual(binding.accessibilityLabel(), "Global HUD shortcut")
+        XCTAssertEqual(binding.accessibilityValue(), "Opt+F6")
+
+        let record: NSButton = try host.control("triggers.globalHUDShortcut.record")
+        let clear: NSButton = try host.control("triggers.globalHUDShortcut.clear")
+        let mode: NSSegmentedControl = try host.control("triggers.globalHUDShortcut.mode")
+        XCTAssertEqual(record.accessibilityLabel(), "Record")
+        XCTAssertEqual(clear.accessibilityLabel(), "Clear")
+        XCTAssertEqual(mode.accessibilityLabel(), "Global HUD shortcut mode")
+        XCTAssertEqual(mode.accessibilityValue() as? String, "Tap-toggle")
+        XCTAssertTrue(record.isEnabled)
+        XCTAssertTrue(clear.isEnabled)
+        XCTAssertTrue(mode.isEnabled)
+
+        mode.selectedSegment = 0
+        XCTAssertTrue(mode.sendAction(mode.action, to: mode.target))
+        XCTAssertEqual(coordinator.configuration.triggers.globalHUDShortcut.mode, .holdRelease)
+        XCTAssertEqual(coordinator.dirtyFields, [.triggers])
+    }
+
+    func testLoadedGlobalHUDShortcutCollisionIsVisible() async throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let persistence = ConfigurationService(store: ConfigurationStore(directoryURL: directory))
+        var configuration = Configuration()
+        let collision = TriggerBinding.keyboard(
+            keyCode: 97,
+            modifiers: NSEvent.ModifierFlags.option.rawValue,
+            mode: .holdRelease
+        )
+        configuration.triggers.keyboard = collision
+        configuration.triggers.globalHUDShortcut = collision.withMode(.tapToggle)
+        try await persistence.save(configuration)
+        let coordinator = SettingsWorkspaceCoordinator(persistence: persistence)
+        await coordinator.load()
+        let host = TriggersSettingsTestHost(coordinator)
+
+        let warning = try host.view("triggers.globalHUDShortcut.conflict")
+        XCTAssertTrue(
+            (warning.accessibilityLabel() ?? "").contains("must use different key combinations")
+        )
+    }
+
+    func testMenuItemsProfileBarUsesNativeControlsAndSelectionIsNonDirty() async throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let persistence = ConfigurationService(store: ConfigurationStore(directoryURL: directory))
+        var configuration = Configuration()
+        let missingBundleIdentifier = "invalid.uninstalled.mouseplus-tests"
+        _ = configuration.setAppHUDProfile(
+            AppHUDProfile(layout: configuration.globalHUDActionLayout),
+            forBundleIdentifier: missingBundleIdentifier
+        )
+        try await persistence.save(configuration)
+
+        let coordinator = SettingsWorkspaceCoordinator(persistence: persistence)
+        await coordinator.load()
+        let host = MenuItemsSettingsTestHost(coordinator)
+
+        let popup: NSPopUpButton = try host.control("menuItems.profile.selector")
+        XCTAssertEqual(popup.accessibilityLabel(), "HUD profile")
+        XCTAssertEqual(popup.itemTitles.first, "Global")
+        XCTAssertEqual(popup.indexOfSelectedItem, 0)
+        XCTAssertEqual(popup.accessibilityValue() as? String, "Global")
+
+        let missingTitle = try XCTUnwrap(
+            popup.itemTitles.first { $0.contains(missingBundleIdentifier) }
+        )
+        XCTAssertTrue(missingTitle.hasPrefix("Missing App"))
+
+        let add: NSButton = try host.control("menuItems.profile.add")
+        let delete: NSButton = try host.control("menuItems.profile.delete")
+        XCTAssertEqual(add.accessibilityLabel(), "Add App HUD")
+        XCTAssertTrue(add.isEnabled)
+        XCTAssertFalse(delete.isEnabled, "Global cannot be deleted")
+
+        popup.selectItem(withTitle: missingTitle)
+        XCTAssertTrue(popup.sendAction(popup.action, to: popup.target))
+        await host.waitUntil { coordinator.selectedAppHUDBundleIdentifier == missingBundleIdentifier }
+
+        XCTAssertTrue(coordinator.dirtyFields.isEmpty)
+        await host.waitUntil { delete.isEnabled }
+        XCTAssertTrue((delete.accessibilityLabel() ?? "").contains(missingBundleIdentifier))
+        let editing = try host.view("menuItems.profile.editing")
+        XCTAssertTrue((editing.accessibilityLabel() ?? "").contains(missingBundleIdentifier))
+    }
+
+    func testMenuItemsProfileCopyAndRecoveryExplanationsAreExplicit() async throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let coordinator = SettingsWorkspaceCoordinator(
+            persistence: ConfigurationService(store: ConfigurationStore(directoryURL: directory))
+        )
+        await coordinator.load()
+        let host = MenuItemsSettingsTestHost(coordinator)
+
+        let copy = try host.view("menuItems.profile.copyExplanation")
+        XCTAssertTrue((copy.accessibilityLabel() ?? "").contains("copy Global once"))
+        XCTAssertTrue((copy.accessibilityLabel() ?? "").contains("independent"))
+
+        let semantics = try host.view("menuItems.profile.semantics")
+        let explanation = semantics.accessibilityLabel() ?? ""
+        XCTAssertTrue(explanation.contains("every App HUD"))
+        XCTAssertTrue(explanation.contains("shared HUD customization"))
+    }
+
+    func testFillUnusedSlotsUsesNativeCheckboxAndUpdatesSharedCustomization() async throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let coordinator = SettingsWorkspaceCoordinator(
+            persistence: ConfigurationService(store: ConfigurationStore(directoryURL: directory))
+        )
+        await coordinator.load()
+        let host = MenuItemsSettingsTestHost(coordinator)
+
+        let checkbox: NSButton = try host.control("hud.menu.fillUnusedSlots")
+        XCTAssertEqual(checkbox.accessibilityLabel(), "Fill unused ring slots")
+        XCTAssertEqual(checkbox.state, .off)
+
+        checkbox.performClick(nil)
+        await host.waitUntil { coordinator.menuEditorModel.hudCustomization.fillsUnusedSlots }
+
+        XCTAssertEqual(checkbox.state, .on)
+        XCTAssertEqual(coordinator.dirtyFields, [.menuItems])
+    }
+
     func testPersistenceStatesNeverDependOnColorForMeaning() {
         let states: [SettingsWorkspaceCoordinator.Status] = [
             .idle,
@@ -140,5 +361,136 @@ final class WorkspaceAccessibilityTests: XCTestCase {
                 XCTAssertTrue(presentation.canRetry)
             }
         }
+    }
+}
+
+/// Hosts the actual Settings pane and invokes its native target/action bindings.
+/// This verifies AppKit accessibility metadata, not a spoken VoiceOver session.
+@MainActor
+final class MotionSettingsTestHost {
+    private let host: NSHostingView<RingAppearanceSettingsPane>
+    private let window: NSWindow
+
+    init(_ coordinator: SettingsWorkspaceCoordinator) {
+        host = NSHostingView(rootView: RingAppearanceSettingsPane(coordinator: coordinator))
+        window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 850, height: 1000),
+                          styleMask: .borderless, backing: .buffered, defer: false)
+        window.contentView = host
+        host.layoutSubtreeIfNeeded()
+    }
+
+    func control<T: NSControl>(_ identifier: String) throws -> T {
+        host.layoutSubtreeIfNeeded()
+        func find(_ view: NSView) -> T? {
+            if view.accessibilityIdentifier() == identifier, let control = view as? T { return control }
+            return view.subviews.lazy.compactMap { find($0) }.first
+        }
+        return try XCTUnwrap(find(host), "Missing native control: \(identifier)")
+    }
+
+    func view(_ identifier: String) throws -> NSView {
+        host.layoutSubtreeIfNeeded()
+        func find(_ candidate: NSView) -> NSView? {
+            if candidate.accessibilityIdentifier() == identifier { return candidate }
+            return candidate.subviews.lazy.compactMap { find($0) }.first
+        }
+        return try XCTUnwrap(find(host), "Missing native view: \(identifier)")
+    }
+
+    func waitUntil(_ predicate: () -> Bool) async {
+        let deadline = ContinuousClock.now + .seconds(2)
+        while !predicate() && ContinuousClock.now < deadline {
+            host.layoutSubtreeIfNeeded()
+            try? await Task.sleep(for: .milliseconds(10))
+        }
+        XCTAssertTrue(predicate(), "Settings did not update its native controls")
+    }
+}
+
+@MainActor
+private final class TriggersSettingsTestHost {
+    private let host: NSHostingView<TriggersSettingsView>
+    private let window: NSWindow
+
+    init(_ coordinator: SettingsWorkspaceCoordinator) {
+        host = NSHostingView(rootView: TriggersSettingsView(coordinator: coordinator))
+        window = NSWindow(
+            contentRect: NSRect(x: 0, y: 0, width: 850, height: 1000),
+            styleMask: .borderless,
+            backing: .buffered,
+            defer: false
+        )
+        window.contentView = host
+        host.layoutSubtreeIfNeeded()
+    }
+
+    func control<T: NSControl>(_ identifier: String) throws -> T {
+        host.layoutSubtreeIfNeeded()
+        func find(_ view: NSView) -> T? {
+            if view.accessibilityIdentifier() == identifier, let control = view as? T { return control }
+            return view.subviews.lazy.compactMap { find($0) }.first
+        }
+        return try XCTUnwrap(find(host), "Missing native control: \(identifier)")
+    }
+
+    func view(_ identifier: String) throws -> NSView {
+        host.layoutSubtreeIfNeeded()
+        func find(_ candidate: NSView) -> NSView? {
+            if candidate.accessibilityIdentifier() == identifier { return candidate }
+            return candidate.subviews.lazy.compactMap { find($0) }.first
+        }
+        return try XCTUnwrap(find(host), "Missing native view: \(identifier)")
+    }
+}
+
+@MainActor
+private final class MenuItemsSettingsTestHost {
+    private let host: NSHostingView<AnyView>
+    private let window: NSWindow
+
+    init(_ coordinator: SettingsWorkspaceCoordinator) {
+        let provider = SettingsActionContextProvider()
+        host = NSHostingView(
+            rootView: AnyView(
+                MenuItemsPane(coordinator: coordinator)
+                    .environmentObject(provider)
+            )
+        )
+        window = NSWindow(
+            contentRect: NSRect(x: 0, y: 0, width: 920, height: 640),
+            styleMask: .borderless,
+            backing: .buffered,
+            defer: false
+        )
+        window.contentView = host
+        host.layoutSubtreeIfNeeded()
+    }
+
+    func control<T: NSControl>(_ identifier: String) throws -> T {
+        host.layoutSubtreeIfNeeded()
+        func find(_ view: NSView) -> T? {
+            if view.accessibilityIdentifier() == identifier, let control = view as? T { return control }
+            return view.subviews.lazy.compactMap { find($0) }.first
+        }
+        return try XCTUnwrap(find(host), "Missing native control: \(identifier)")
+    }
+
+    func view(_ identifier: String) throws -> NSView {
+        host.layoutSubtreeIfNeeded()
+        func find(_ candidate: NSView) -> NSView? {
+            if candidate.accessibilityIdentifier() == identifier { return candidate }
+            return candidate.subviews.lazy.compactMap { find($0) }.first
+        }
+        return try XCTUnwrap(find(host), "Missing native view: \(identifier)")
+    }
+
+    func waitUntil(_ predicate: () -> Bool) async {
+        let deadline = ContinuousClock.now + .seconds(2)
+        while !predicate() && ContinuousClock.now < deadline {
+            host.layoutSubtreeIfNeeded()
+            try? await Task.sleep(for: .milliseconds(10))
+        }
+        host.layoutSubtreeIfNeeded()
+        XCTAssertTrue(predicate(), "Menu Items did not update its native controls")
     }
 }

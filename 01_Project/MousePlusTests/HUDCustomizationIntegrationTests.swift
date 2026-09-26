@@ -37,6 +37,7 @@ final class HUDCustomizationIntegrationTests: XCTestCase {
         model.hudCustomization.middle.layout = HUDRingLayout(
             slotCountMode: .fixed, fixedSlotCount: 7, angularOffset: 95
         )
+        model.hudCustomization.fillsUnusedSlots = true
         coordinator.menuItemsDidChange()
         let flushed = await coordinator.flush()
         XCTAssertTrue(flushed)
@@ -44,6 +45,8 @@ final class HUDCustomizationIntegrationTests: XCTestCase {
         let decoded = try await store.decoded()
         XCTAssertEqual(decoded.hudCustomization.inner.layout.angularOffset, 350)
         XCTAssertEqual(decoded.hudCustomization.middle.layout.angularOffset, 95)
+        XCTAssertTrue(decoded.hudCustomization.fillsUnusedSlots)
+        XCTAssertTrue(runtime.hudCustomization.fillsUnusedSlots)
         XCTAssertEqual(runtime.geometry.inner.slotCount, 5)
         XCTAssertEqual(runtime.geometry.middle.slotCount, 7)
         XCTAssertEqual(runtime.geometry.inner.angularOffset, 350 * .pi / 180, accuracy: 0.000_001)
@@ -71,6 +74,12 @@ final class HUDCustomizationIntegrationTests: XCTestCase {
         model.hudCustomization.inner.appearance.iconOrientation = nil       // menu inheritance
         model.hudCustomization.middle.appearance.iconOrientation = .tangential // ring override
         model.hudCustomization.outerAppearance.iconOrientation = .upright  // outer override
+        model.hudCustomization.labelOrientation = .tangential
+        model.hudCustomization.inner.appearance.labelOrientation = nil      // menu inheritance
+        model.hudCustomization.middle.appearance.labelOrientation = .radial // ring override
+        model.hudCustomization.outerAppearance.labelOrientation = .upright  // outer override
+        model.hudCustomization.inner.appearance.labelVisible = true         // opt in over the compat default
+        model.hudCustomization.outerAppearance.labelVisible = false         // opt out over the compat default
         model.hudCustomization.wedgeColor = black
         model.hudCustomization.iconColor = white
         model.hudCustomization.middle.appearance.wedgeColor = white
@@ -84,6 +93,12 @@ final class HUDCustomizationIntegrationTests: XCTestCase {
         XCTAssertEqual(runtime.iconOrientation(for: .inner), .radial)
         XCTAssertEqual(runtime.iconOrientation(for: .middle), .tangential)
         XCTAssertEqual(runtime.iconOrientation(for: .outer), .upright)
+        XCTAssertEqual(runtime.labelOrientation(for: .inner), .tangential, "nil ring override inherits the menu default")
+        XCTAssertEqual(runtime.labelOrientation(for: .middle), .radial)
+        XCTAssertEqual(runtime.labelOrientation(for: .outer), .upright)
+        XCTAssertTrue(runtime.isLabelVisible(for: .inner), "explicit override wins over the compatibility default")
+        XCTAssertTrue(runtime.isLabelVisible(for: .middle), "untouched compatibility default")
+        XCTAssertFalse(runtime.isLabelVisible(for: .outer), "explicit override wins over the compatibility default")
         let resolution = runtime.colorResolution(
             for: runtime.middleItems[0], band: .middle,
             application: .init(wedge: white, icon: black), backdrop: black
@@ -106,7 +121,8 @@ final class HUDCustomizationIntegrationTests: XCTestCase {
             let snapshot = HUDPreviewInteractionSnapshot(
                 geometry: runtime.geometry, radii: runtime.radii,
                 innerCount: 1, middleCount: 1, expandedParentIndex: 0,
-                outerCount: 2, outerVisibility: mode
+                outerCount: 2, outerVisibility: mode,
+                outerLayout: runtime.outerRingLayout
             )
             let outerPoint = RadialGeometry.centroid(
                 band: .outer, index: 0, center: .zero, radii: runtime.radii,
@@ -133,16 +149,23 @@ final class HUDCustomizationIntegrationTests: XCTestCase {
         await store.failNextSave()
         coordinator.menuEditorModel.hudCustomization.outerRingVisibility = .alwaysHidden
         coordinator.menuEditorModel.hudCustomization.middle.layout.angularOffset = 271
+        coordinator.menuEditorModel.hudCustomization.middle.appearance.labelVisible = false
+        coordinator.menuEditorModel.hudCustomization.outerAppearance.labelOrientation = .tangential
         coordinator.menuItemsDidChange()
 
         let failedFlush = await coordinator.flush()
         XCTAssertFalse(failedFlush)
         XCTAssertEqual(runtime.hudCustomization, .default, "failed saves never leak into live runtime")
+        XCTAssertTrue(runtime.isLabelVisible(for: .middle), "the runtime must still reflect the last durably-saved (default) label visibility")
         XCTAssertEqual(coordinator.menuEditorModel.hudCustomization.middle.layout.angularOffset, 271)
+        XCTAssertFalse(coordinator.menuEditorModel.hudCustomization.middle.appearance.labelVisible, "a failed save must not revert the editor's pending label edit")
+        XCTAssertEqual(coordinator.menuEditorModel.hudCustomization.outerAppearance.labelOrientation, .tangential)
         let retried = await coordinator.retry()
         XCTAssertTrue(retried)
         XCTAssertEqual(runtime.hudCustomization.outerRingVisibility, .alwaysHidden)
         XCTAssertEqual(runtime.hudCustomization.middle.layout.angularOffset, 271)
+        XCTAssertFalse(runtime.isLabelVisible(for: .middle), "retry must carry the label visibility edit through to the live runtime")
+        XCTAssertEqual(runtime.labelOrientation(for: .outer), .tangential, "retry must carry the label orientation edit through to the live runtime")
     }
 
     private func makeCoordinator(store: IntegrationPersistence, runtime: RingViewModel) -> SettingsWorkspaceCoordinator {

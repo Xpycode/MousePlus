@@ -96,6 +96,29 @@ final class RadialGeometryTests: XCTestCase {
                          geometry: geometry, parent: 0, outerCount: 3))
     }
 
+    func testFullCircleOuterRingAlignsFirstItemWithParentAndCoversEveryAngle() {
+        let geometry = TopLevelRingGeometry.shared(spokeCount: 4)
+        let span = RadialGeometry.outerArcSpan(
+            parentIndex: 0, parentGeometry: geometry.middle, outerCount: 4,
+            layout: .fullCircle
+        )
+        let first = RadialGeometry.wedgeAngles(
+            band: .outer, index: 0, geometry: geometry,
+            expandedParentIndex: 0, outerCount: 4, outerLayout: .fullCircle
+        )
+
+        XCTAssertEqual(span.end.radians - span.start.radians,
+                       2 * Double.pi, accuracy: 1e-12)
+        XCTAssertEqual((first.start.radians + first.end.radians) / 2,
+                       Double.pi / 4, accuracy: 1e-12)
+        XCTAssertHit(point(angle: .pi / 4, radius: 35), geometry: geometry,
+                     innerItems: 4, middleItems: 4, parent: 0, outerCount: 4,
+                     outerLayout: .fullCircle, band: .outer, index: 0)
+        XCTAssertHit(point(angle: 5 * .pi / 4, radius: 35), geometry: geometry,
+                     innerItems: 4, middleItems: 4, parent: 0, outerCount: 4,
+                     outerLayout: .fullCircle, band: .outer, index: 2)
+    }
+
     func testUnusedFixedSlotsRemainInGeometryButAreInert() {
         let geometry = TopLevelRingGeometry(
             inner: RingBandGeometry(slotCount: 6),
@@ -158,11 +181,13 @@ final class RadialGeometryTests: XCTestCase {
                      innerItems: Int = 4,
                      middleItems: Int = 4,
                      parent: Int? = nil,
-                     outerCount: Int = 0) -> (band: Band, index: Int)? {
+                     outerCount: Int = 0,
+                     outerLayout: OuterRingLayout = .localizedArc) -> (band: Band, index: Int)? {
         RadialGeometry.hitTest(
             point: point, center: center, radii: radii, geometry: geometry,
             innerItemCount: innerItems, middleItemCount: middleItems,
-            expandedParentIndex: parent, outerCount: outerCount
+            expandedParentIndex: parent, outerCount: outerCount,
+            outerLayout: outerLayout
         )
     }
 
@@ -172,13 +197,14 @@ final class RadialGeometryTests: XCTestCase {
                               middleItems: Int,
                               parent: Int? = nil,
                               outerCount: Int = 0,
+                              outerLayout: OuterRingLayout = .localizedArc,
                               band: Band,
                               index: Int,
                               file: StaticString = #filePath,
                               line: UInt = #line) {
         let result = hit(point, geometry: geometry, innerItems: innerItems,
                          middleItems: middleItems, parent: parent,
-                         outerCount: outerCount)
+                         outerCount: outerCount, outerLayout: outerLayout)
         XCTAssertEqual(result?.band, band, file: file, line: line)
         XCTAssertEqual(result?.index, index, file: file, line: line)
     }

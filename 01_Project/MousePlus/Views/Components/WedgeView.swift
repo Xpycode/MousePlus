@@ -1,5 +1,71 @@
 import SwiftUI
 
+/// Testable radial bounds for the material surfaces rendered by the ring.
+struct RingSurfacePresentation: Equatable {
+    let persistentOuterRadius: CGFloat
+    let innerBackingIndices: [Int]
+    let middleBackingIndices: [Int]
+    let fillsEntireOuterRing: Bool
+    let localizedOuterInnerRadius: CGFloat?
+    let localizedOuterOuterRadius: CGFloat?
+
+    init(radii: BandRadii, isOuterRingVisible: Bool) {
+        self.init(
+            radii: radii,
+            geometry: .shared(spokeCount: 1),
+            innerItemCount: 1,
+            middleItemCount: 1,
+            isOuterRingVisible: isOuterRingVisible,
+            fillsUnusedSlots: false
+        )
+    }
+
+    init(
+        radii: BandRadii,
+        geometry: TopLevelRingGeometry,
+        innerItemCount: Int,
+        middleItemCount: Int,
+        isOuterRingVisible: Bool,
+        fillsUnusedSlots: Bool = false
+    ) {
+        persistentOuterRadius = radii.r2
+        let innerBackingCount = fillsUnusedSlots
+            ? geometry.inner.slotCount
+            : min(max(0, innerItemCount), geometry.inner.slotCount)
+        let middleBackingCount = fillsUnusedSlots
+            ? geometry.middle.slotCount
+            : min(max(0, middleItemCount), geometry.middle.slotCount)
+        innerBackingIndices = Array(0..<innerBackingCount)
+        middleBackingIndices = Array(0..<middleBackingCount)
+        fillsEntireOuterRing = isOuterRingVisible && fillsUnusedSlots
+        localizedOuterInnerRadius = isOuterRingVisible ? radii.r2 : nil
+        localizedOuterOuterRadius = isOuterRingVisible ? radii.r3 : nil
+    }
+}
+
+/// Material surface for one localized outer-ring segment. The caller owns the
+/// policy gate; keeping this shape separate from `WedgeView` lets translucent
+/// configured wedge colors sit on material without extending the persistent
+/// circular backing beyond r2.
+struct OuterWedgeBacking: View {
+    let startAngle: Angle
+    let endAngle: Angle
+    let innerRadius: CGFloat
+    let outerRadius: CGFloat
+    let size: CGFloat
+
+    var body: some View {
+        AnnularWedge(
+            startAngle: startAngle,
+            endAngle: endAngle,
+            innerRadius: innerRadius,
+            outerRadius: outerRadius
+        )
+        .fill(.ultraThinMaterial)
+        .frame(width: size, height: size)
+    }
+}
+
 /// Renders ONE wedge of the concentric ring menu: an annular slice plus its
 /// icon (and, for labeled bands, a caption) anchored at the wedge centroid.
 ///
@@ -23,22 +89,35 @@ import SwiftUI
 struct WedgeView: View {
     /// The menu item this wedge represents.
     let item: RingMenuItem
+    /// Where this wedge's glyph comes from — an SF Symbol (tinted with
+    /// `iconColor`) or a live app icon (rendered full-color, never tinted).
+    let iconSource: IconSource
     /// Wedge angular start (view space, CW from +x). From `RadialGeometry.wedgeAngles`.
     let startAngle: Angle
     /// Wedge angular end (view space, CW from +x). From `RadialGeometry.wedgeAngles`.
     let endAngle: Angle
+    /// Final content angles may differ from the temporarily interpolated slice
+    /// during an outer reveal. Keeping these final prevents icon rotation and
+    /// caption reflow while the presentation-only wedge shape unfolds.
+    let contentStartAngle: Angle
+    let contentEndAngle: Angle
     /// Band inner radial edge.
     let innerRadius: CGFloat
     /// Band outer radial edge.
     let outerRadius: CGFloat
+    /// Final content radii remain fixed while an outer slice's render geometry
+    /// grows from `r2`, avoiding transient caption-width/layout changes.
+    let contentInnerRadius: CGFloat
+    let contentOuterRadius: CGFloat
     /// Glyph anchor in this view's local space (center == `size/2`).
     /// From `RadialGeometry.centroid` mapped to a `center = (size/2, size/2)`.
     let centroid: CGPoint
     /// Full side length of the square this view fills (`2 · r3`). Guarantees the
     /// slice's arc center coincides with the menu center.
     let size: CGFloat
-    /// Inner band → render the icon only, no caption label.
-    let symbolOnly: Bool
+    /// Resolved caption visibility and readable rotation, independent of icon
+    /// presentation. Governs the `Text` only — the icon and chevron never move.
+    let labelPresentation: LabelPresentation
     /// This wedge is the active selection → accent fill, white glyph.
     let isHighlighted: Bool
     /// Off the live branch → drop the whole wedge to `dimOpacity` (§2.3).
@@ -47,31 +126,55 @@ struct WedgeView: View {
     let dimOpacity: Double
     /// Fully resolved colors, orientation, and interaction state.
     let presentation: WedgePresentation
+    /// Presentation-only hover feedback. Logical selection and geometry have
+    /// already updated by the time this descriptor reaches the wedge.
+    let hoverMotion: HUDMotionPresentationDescriptor
+    /// Editor-only persistent selection. This neutral marker is independent of
+    /// hover emphasis so it never changes the configured fill or glyph colors.
+    let showsSelectionMarker: Bool
     let showsExpandAffordance: Bool
 
     init(
         item: RingMenuItem,
+        iconSource: IconSource,
         startAngle: Angle,
         endAngle: Angle,
+        contentStartAngle: Angle? = nil,
+        contentEndAngle: Angle? = nil,
         innerRadius: CGFloat,
         outerRadius: CGFloat,
+        contentInnerRadius: CGFloat? = nil,
+        contentOuterRadius: CGFloat? = nil,
         centroid: CGPoint,
         size: CGFloat,
-        symbolOnly: Bool = false,
+        labelPresentation: LabelPresentation? = nil,
         isHighlighted: Bool = false,
         dimmed: Bool = false,
         dimOpacity: Double = 0.30,
         presentation: WedgePresentation? = nil,
+        hoverMotion: HUDMotionPresentationDescriptor = .instant,
+        showsSelectionMarker: Bool = false,
         showsExpandAffordance: Bool = true
     ) {
         self.item = item
+        self.iconSource = iconSource
         self.startAngle = startAngle
         self.endAngle = endAngle
+        self.contentStartAngle = contentStartAngle ?? startAngle
+        self.contentEndAngle = contentEndAngle ?? endAngle
         self.innerRadius = innerRadius
         self.outerRadius = outerRadius
+        self.contentInnerRadius = contentInnerRadius ?? innerRadius
+        self.contentOuterRadius = contentOuterRadius ?? outerRadius
         self.centroid = centroid
         self.size = size
-        self.symbolOnly = symbolOnly
+        self.labelPresentation = labelPresentation ?? LabelPresentation(
+            accessibilityLabel: item.label,
+            orientation: .upright,
+            isVisible: true,
+            startAngle: startAngle,
+            endAngle: endAngle
+        )
         self.isHighlighted = isHighlighted
         self.dimmed = dimmed
         self.dimOpacity = dimOpacity
@@ -80,6 +183,8 @@ struct WedgeView: View {
             offBranch: dimmed && !isHighlighted,
             dimOpacity: dimOpacity
         )
+        self.hoverMotion = hoverMotion
+        self.showsSelectionMarker = showsSelectionMarker
         self.showsExpandAffordance = showsExpandAffordance
     }
 
@@ -99,12 +204,39 @@ struct WedgeView: View {
         Color(nsColor: presentation.wedgeColor.nsColor)
     }
 
+    /// A short ease-out keeps fast pointer feedback crisp without the overshoot
+    /// of the previous container spring. The scoped animation APIs below ensure
+    /// this transaction cannot interpolate wedge angles, centroids, or labels.
+    private var hoverAnimation: Animation? {
+        guard hoverMotion.effect != .instant else { return nil }
+        return .easeOut(duration: hoverMotion.duration)
+    }
+
+    /// Reduce Motion resolves emphasis to fade, which deliberately omits this
+    /// spatial component. Off/master-disabled modes also retain a scale of 1.
+    private var iconScale: CGFloat {
+        hoverMotion.effect == .emphasis && isHighlighted ? 1.03 : 1
+    }
+
     private var normalizedMidpoint: Angle {
-        let start = startAngle.degrees
-        var sweep = endAngle.degrees - start
+        let start = contentStartAngle.degrees
+        var sweep = contentEndAngle.degrees - start
         if sweep < 0 { sweep += 360 }
         let midpoint = (start + sweep / 2).truncatingRemainder(dividingBy: 360)
         return .degrees(midpoint < 0 ? midpoint + 360 : midpoint)
+    }
+
+    /// Chord width of the wedge at its band mid-radius — the widest a caption
+    /// can render without visually overlapping the neighboring wedge. Caps
+    /// `Text(item.label)`, which otherwise renders at its natural (unclipped)
+    /// width since `lineLimit(1)` alone only blocks wrapping.
+    private var captionMaxWidth: CGFloat {
+        let start = contentStartAngle.degrees
+        var sweep = contentEndAngle.degrees - start
+        if sweep < 0 { sweep += 360 }
+        let midRadius = (contentInnerRadius + contentOuterRadius) / 2
+        let chord = 2 * midRadius * sin(Angle.degrees(sweep / 2).radians)
+        return max(chord, 20)
     }
 
     var body: some View {
@@ -113,16 +245,37 @@ struct WedgeView: View {
             // shape fills the full `size × size` square.
             slice
                 .fill(fillColor)
-                .overlay(slice.fill(Color.white.opacity(presentation.emphasisOpacity)))
                 .overlay(
-                    slice.stroke(Color.white.opacity(presentation.borderOpacity), lineWidth: 1)
+                    slice
+                        .fill(Color.accentColor)
+                        .animation(hoverAnimation) { content in
+                            content.opacity(presentation.emphasisOpacity)
+                        }
+                )
+                .overlay(
+                    slice
+                        .stroke(Color.white, lineWidth: 1)
+                        .animation(hoverAnimation) { content in
+                            content.opacity(presentation.borderOpacity)
+                        }
+                )
+                .overlay(
+                    slice.stroke(
+                        Color.primary.opacity(showsSelectionMarker ? 0.8 : 0),
+                        style: StrokeStyle(lineWidth: 2, dash: [4, 3])
+                    )
                 )
 
             glyph
                 .position(centroid)
         }
         .frame(width: size, height: size)
-        .opacity(effectiveOpacity)
+        // Branch dimming is attached only to this wedge's opacity. Changes to
+        // `expandedParentIndex` therefore cannot animate its angles or glyph
+        // position, and pointer sweeps cannot restart geometry animation.
+        .animation(hoverAnimation) { content in
+            content.opacity(effectiveOpacity)
+        }
     }
 
     @ViewBuilder
@@ -130,22 +283,13 @@ struct WedgeView: View {
         let iconColor = Color(nsColor: presentation.iconColor.nsColor)
         let labelColor = Color(nsColor: presentation.labelColor.nsColor)
 
-        if symbolOnly {
-            OrientedHUDIcon(
-                systemName: SFSymbol.resolved(item.icon),
-                orientation: presentation.orientation,
-                wedgeMidpoint: normalizedMidpoint,
-                color: iconColor
-            )
-        } else {
+        if labelPresentation.isCaptionVisible {
             VStack(spacing: 4) {
                 HStack(spacing: 3) {
-                    OrientedHUDIcon(
-                        systemName: SFSymbol.resolved(item.icon),
-                        orientation: presentation.orientation,
-                        wedgeMidpoint: normalizedMidpoint,
-                        color: iconColor
-                    )
+                    iconView(color: iconColor)
+                        .animation(hoverAnimation) { content in
+                            content.scaleEffect(iconScale)
+                        }
                     // Subtle "expandable" hint for items with sub-items.
                     if item.hasSubItems && showsExpandAffordance {
                         Image(systemName: "chevron.right")
@@ -156,8 +300,40 @@ struct WedgeView: View {
                 Text(item.label)
                     .font(.caption)
                     .lineLimit(1)
+                    .truncationMode(.tail)
+                    .minimumScaleFactor(0.6)
+                    .frame(maxWidth: captionMaxWidth)
                     .foregroundStyle(labelColor)
+                    // Rotate only the caption, around its own center — the
+                    // icon/chevron above keep their independently resolved
+                    // orientation untouched.
+                    .rotationEffect(.degrees(labelPresentation.rotationDegrees))
             }
+        } else {
+            iconView(color: iconColor)
+                .animation(hoverAnimation) { content in
+                    content.scaleEffect(iconScale)
+                }
+        }
+    }
+
+    /// Renders `iconSource`: an SF Symbol (tinted, oriented like today) or a
+    /// live app icon (full-color, never tinted, clipped to a rounded rect).
+    @ViewBuilder
+    private func iconView(color: Color) -> some View {
+        switch iconSource {
+        case .sfSymbol(let name):
+            OrientedHUDIcon(
+                systemName: SFSymbol.resolved(name),
+                orientation: presentation.orientation,
+                wedgeMidpoint: normalizedMidpoint,
+                color: color
+            )
+        case .appIcon(let nsImage):
+            Image(nsImage: nsImage)
+                .resizable()
+                .frame(width: 28, height: 28)
+                .clipShape(RoundedRectangle(cornerRadius: 6))
         }
     }
 }
@@ -194,15 +370,20 @@ struct WedgeView: View {
         // Symbol-only inner wedge (index 0).
         WedgeView(
             item: inner,
+            iconSource: .sfSymbol(inner.icon),
             startAngle: angles(.inner, 0).start, endAngle: angles(.inner, 0).end,
             innerRadius: radii.r0, outerRadius: radii.r1,
             centroid: centroid(.inner, 0), size: size,
-            symbolOnly: true
+            labelPresentation: LabelPresentation(
+                accessibilityLabel: inner.label, orientation: .upright, isVisible: false,
+                startAngle: angles(.inner, 0).start, endAngle: angles(.inner, 0).end
+            )
         )
 
         // Labeled middle wedge (index 1).
         WedgeView(
             item: labeled,
+            iconSource: .sfSymbol(labeled.icon),
             startAngle: angles(.middle, 1).start, endAngle: angles(.middle, 1).end,
             innerRadius: radii.r1, outerRadius: radii.r2,
             centroid: centroid(.middle, 1), size: size
@@ -211,6 +392,7 @@ struct WedgeView: View {
         // Highlighted expandable middle wedge (index 2) — shows chevron hint.
         WedgeView(
             item: expandable,
+            iconSource: .sfSymbol(expandable.icon),
             startAngle: angles(.middle, 2).start, endAngle: angles(.middle, 2).end,
             innerRadius: radii.r1, outerRadius: radii.r2,
             centroid: centroid(.middle, 2), size: size,
@@ -220,6 +402,7 @@ struct WedgeView: View {
         // Dimmed middle wedge (index 3) — off the live branch.
         WedgeView(
             item: labeled,
+            iconSource: .sfSymbol(labeled.icon),
             startAngle: angles(.middle, 3).start, endAngle: angles(.middle, 3).end,
             innerRadius: radii.r1, outerRadius: radii.r2,
             centroid: centroid(.middle, 3), size: size,

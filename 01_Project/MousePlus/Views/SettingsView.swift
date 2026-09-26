@@ -56,6 +56,10 @@ struct SettingsView: View {
         .frame(minWidth: 1120, minHeight: 680)
         .background(SettingsWindowCloseBarrier(coordinator: coordinator).frame(width: 0, height: 0))
         .task {
+            AppDelegate.flushPendingSettingsChanges = { [weak coordinator] in
+                guard let coordinator else { return true }
+                return await coordinator.teardown()
+            }
             guard !coordinator.isLoaded else { return }
             await coordinator.load()
         }

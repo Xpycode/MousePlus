@@ -11,9 +11,18 @@ enum Band: Equatable {
     case inner
     /// Middle labeled band (`r1…r2`).
     case middle
-    /// On-demand outer band (`r2…r3`) — a localized arc expanded from a parent
-    /// middle wedge. Has its own item count `M`.
+    /// On-demand outer band (`r2…r3`) expanded from a parent middle wedge.
+    /// Its layout may be a localized arc or a full circle and has item count `M`.
     case outer
+}
+
+/// How an expanded middle item distributes its children around the outer band.
+/// Static submenus keep the compact parent-centered arc; the running-app
+/// switcher uses a complete circle with its first (MRU) item centered on the
+/// parent direction so the pointer can continue straight outward.
+enum OuterRingLayout: Equatable {
+    case localizedArc
+    case fullCircle
 }
 
 /// Angular layout for one top-level ring band.
@@ -127,7 +136,9 @@ enum RadialGeometry {
                         innerItemCount: Int,
                         middleItemCount: Int,
                         expandedParentIndex: Int?,
-                        outerCount M: Int) -> (band: Band, index: Int)? {
+                        outerCount M: Int,
+                        outerLayout: OuterRingLayout = .localizedArc)
+    -> (band: Band, index: Int)? {
         let dx = point.x - center.x
         let dy = point.y - center.y
         let dist = hypot(dx, dy)
@@ -152,7 +163,8 @@ enum RadialGeometry {
            M > 0 {
             let span = outerArcSpan(parentIndex: parent,
                                     parentGeometry: geometry.middle,
-                                    outerCount: M)
+                                    outerCount: M,
+                                    layout: outerLayout)
             let start = CGFloat(span.start.radians)
             let total = CGFloat(span.end.radians) - start
             let rawOffset = normalizedAngle(theta - start)
@@ -197,7 +209,8 @@ enum RadialGeometry {
                             index: Int,
                             geometry: TopLevelRingGeometry,
                             expandedParentIndex: Int?,
-                            outerCount M: Int) -> (start: Angle, end: Angle) {
+                            outerCount M: Int,
+                            outerLayout: OuterRingLayout = .localizedArc) -> (start: Angle, end: Angle) {
         switch band {
         case .inner, .middle:
             let bandGeometry = geometry.geometry(for: band)
@@ -209,7 +222,8 @@ enum RadialGeometry {
             let m = max(1, M)
             let span = outerArcSpan(parentIndex: expandedParentIndex ?? 0,
                                     parentGeometry: geometry.middle,
-                                    outerCount: m)
+                                    outerCount: m,
+                                    layout: outerLayout)
             let start = CGFloat(span.start.radians)
             let perItem = (CGFloat(span.end.radians) - start) / CGFloat(m)
             let i = clamp(index, lower: 0, upper: m - 1)
@@ -241,11 +255,13 @@ enum RadialGeometry {
                          radii: BandRadii,
                          geometry: TopLevelRingGeometry,
                          expandedParentIndex: Int?,
-                         outerCount M: Int) -> CGPoint {
+                         outerCount M: Int,
+                         outerLayout: OuterRingLayout = .localizedArc) -> CGPoint {
         let (start, end) = wedgeAngles(band: band, index: index,
                                        geometry: geometry,
                                        expandedParentIndex: expandedParentIndex,
-                                       outerCount: M)
+                                       outerCount: M,
+                                       outerLayout: outerLayout)
         return centroid(band: band, center: center, radii: radii,
                         start: start, end: end)
     }
@@ -307,15 +323,25 @@ enum RadialGeometry {
     /// `end - start ≤ 2π`.
     static func outerArcSpan(parentIndex p: Int,
                              parentGeometry: RingBandGeometry,
-                             outerCount M: Int) -> (start: Angle, end: Angle) {
+                             outerCount M: Int,
+                             layout: OuterRingLayout = .localizedArc)
+    -> (start: Angle, end: Angle) {
         let n = parentGeometry.slotCount
         let m = max(1, M)
         let wedge = twoPi / CGFloat(n)
-        let span = min(twoPi, max(wedge, CGFloat(m) * wedge / 3))
         let parent = clamp(p, lower: 0, upper: n - 1)
         let parentMid = parentGeometry.angularOffset + (CGFloat(parent) + 0.5) * wedge
-        return (.radians(Double(parentMid - span / 2)),
-                .radians(Double(parentMid + span / 2)))
+        switch layout {
+        case .localizedArc:
+            let span = min(twoPi, max(wedge, CGFloat(m) * wedge / 3))
+            return (.radians(Double(parentMid - span / 2)),
+                    .radians(Double(parentMid + span / 2)))
+        case .fullCircle:
+            let perItem = twoPi / CGFloat(m)
+            let start = parentMid - perItem / 2
+            return (.radians(Double(start)),
+                    .radians(Double(start + twoPi)))
+        }
     }
 
     /// Compatibility entry point for zero-offset shared-spoke geometry.

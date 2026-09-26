@@ -1,3 +1,4 @@
+import AppKit
 import SwiftUI
 
 /// A cursor-driven selection: which band, and which item index within it.
@@ -15,6 +16,54 @@ enum RingCommitResult: Equatable {
     case unavailable
     case expanded
     case executed
+}
+
+/// Pure outer-ring policy state shared by the runtime HUD and editor preview.
+/// Pointer history is scoped to the HUD invocation. Every invocation opens
+/// centered on the pointer, so Reveal begins with the inner boundary already
+/// entered; this keeps a direct hover or click on an expandable middle wedge
+/// from depending on whether AppKit delivered an intermediate hover sample.
+struct OuterRingPolicyState: Equatable {
+    private(set) var hasEnteredInnerBoundary = true
+    private(set) var hasRevealedOuterRing = false
+
+    struct Resolution: Equatable {
+        let state: OuterRingPolicyState
+        let isEligible: Bool
+        let isVisible: Bool
+    }
+
+    static func parentIsAvailable(policy: OuterRingVisibility, itemCount: Int) -> Bool {
+        policy != .alwaysHidden && itemCount > 0
+    }
+
+    func transition(
+        policy: OuterRingVisibility,
+        hasExpandedParent: Bool,
+        itemCount: Int,
+        pointerIsAtOrInsideInnerBoundary: Bool? = nil
+    ) -> Resolution {
+        var next = self
+        if policy == .revealBeyondInnerRing,
+           let pointerIsAtOrInsideInnerBoundary {
+            if pointerIsAtOrInsideInnerBoundary {
+                next.hasEnteredInnerBoundary = true
+            } else if next.hasEnteredInnerBoundary {
+                next.hasRevealedOuterRing = true
+            }
+        }
+
+        let eligible = hasExpandedParent && Self.parentIsAvailable(
+            policy: policy, itemCount: itemCount
+        )
+        guard eligible else {
+            return Resolution(state: next, isEligible: false, isVisible: false)
+        }
+
+        let visible = policy == .alwaysVisible
+            || (policy == .revealBeyondInnerRing && next.hasRevealedOuterRing)
+        return Resolution(state: next, isEligible: true, isVisible: visible)
+    }
 }
 
 /// Main view model for the concentric wedge ring menu.
@@ -43,6 +92,15 @@ final class RingViewModel {
     /// Current cursor-driven selection, or nil for the dead zone / out of bounds.
     var activeSelection: ActiveSelection?
 
+    /// Runtime-only icons for `.runningApps`-sourced outer items, keyed by item
+    /// `id`. Side dictionary — never persisted, never touches the `Codable` model.
+    private(set) var dynamicIcons: [RingMenuItem.ID: NSImage] = [:]
+
+    /// Bumped on every `expand()` call (and on `collapse()`/`reset()`) so a stale
+    /// in-flight async fetch from a since-collapsed or re-pointed expansion can
+    /// never assign late.
+    private var expansionEpoch = 0
+
     /// Band edge radii (defaults from §2.1). Sourced from `AppearanceConfig` via `load(from:)`.
     var radii = BandRadii()
 
@@ -63,21 +121,31 @@ final class RingViewModel {
         )
     }
 
+    /// Running apps get the whole outer circumference. Other expandable items
+    /// retain the compact arc centered on their middle-ring parent.
+    var outerRingLayout: OuterRingLayout {
+        guard let index = expandedParentIndex,
+              middleItems.indices.contains(index),
+              middleItems[index].dynamicSource == .runningApps else {
+            return .localizedArc
+        }
+        return .fullCircle
+    }
+
     /// Whether conditional reveal has latched for this invocation.
-    private(set) var hasRevealedOuterRing = false
+    private var outerRingPolicyState = OuterRingPolicyState()
+    var hasRevealedOuterRing: Bool { outerRingPolicyState.hasRevealedOuterRing }
     /// A reveal is only eligible after the pointer has reached `r1` or inward.
-    private(set) var hasEnteredInnerBoundary = false
-    private var wasAtOrInsideInnerBoundary = false
+    var hasEnteredInnerBoundary: Bool { outerRingPolicyState.hasEnteredInnerBoundary }
 
     /// Policy-resolved visibility. Availability still requires an expanded,
     /// non-empty parent branch.
     var isOuterRingVisible: Bool {
-        guard expandedParentIndex != nil, !outerItems.isEmpty else { return false }
-        switch hudCustomization.outerRingVisibility {
-        case .alwaysVisible: return true
-        case .revealBeyondInnerRing: return hasRevealedOuterRing
-        case .alwaysHidden: return false
-        }
+        outerRingPolicyState.transition(
+            policy: hudCustomization.outerRingVisibility,
+            hasExpandedParent: expandedParentIndex != nil,
+            itemCount: outerItems.count
+        ).isVisible
     }
 
     /// Whether the ring is on screen.
@@ -87,20 +155,34 @@ final class RingViewModel {
         }
     }
 
+    /// Identity observed by the live renderer for opening playback. The panel
+    /// owner advances it once before mounting and once after the first mounted
+    /// frame, matching the explicit replay boundary used by Settings preview.
+    private(set) var openingInvocationID = 0
+    private(set) var openingIsAwaitingMount = false
+
     /// Frontmost application's PID, captured by the owner (AppDelegate) at
     /// ring-open — *before* our non-activating panel shows — so window/menu
     /// actions target the user's app and not MousePlus. `nil` if none.
     var frontmostPID: pid_t?
 
-    private let actionService: ActionService
+    /// Complete context selected before the panel is shown. The value and its
+    /// action layout remain fixed until a later invocation explicitly replaces
+    /// them; ordinary configuration saves never mutate a visible HUD.
+    private(set) var resolvedHUDProfile: ResolvedHUDProfile?
+
+    private let actionService: any ActionExecuting
     private let actionResultRouter: ActionResultRouter
+    private let appSwitcherService: any AppSwitcherProviding
 
     init(
-        actionService: ActionService = ActionService(),
-        actionResultRouter: ActionResultRouter = ActionResultRouter()
+        actionService: any ActionExecuting = ActionService(),
+        actionResultRouter: ActionResultRouter = ActionResultRouter(),
+        appSwitcherService: any AppSwitcherProviding = AppSwitcherService()
     ) {
         self.actionService = actionService
         self.actionResultRouter = actionResultRouter
+        self.appSwitcherService = appSwitcherService
     }
 
     /// Pure UI callback the owner (AppDelegate) sets to dismiss the panel after a
@@ -136,6 +218,23 @@ final class RingViewModel {
         appearance = config.appearance
         radii = config.appearance.bandRadii
         hudCustomization = config.hudCustomization
+        resolvedHUDProfile = nil
+        frontmostPID = nil
+        reset()
+    }
+
+    /// Loads one invocation's resolved action layout while inheriting all
+    /// presentation and behavior settings from Global configuration.
+    func load(resolved profile: ResolvedHUDProfile, presentation config: Configuration) {
+        innerItems = profile.actionLayout.inner
+        middleItems = profile.actionLayout.middle
+        appearance = config.appearance
+        radii = config.appearance.bandRadii
+        hudCustomization = config.hudCustomization
+        resolvedHUDProfile = profile
+        frontmostPID = profile.targetApplication.processIdentifier > 0
+            ? profile.targetApplication.processIdentifier
+            : nil
         reset()
     }
 
@@ -143,6 +242,19 @@ final class RingViewModel {
     /// by both the runtime HUD and editor preview.
     func iconOrientation(for band: Band) -> IconOrientation {
         ringAppearance(for: band).iconOrientation ?? hudCustomization.iconOrientation
+    }
+
+    /// Mirrors `iconOrientation(for:)`'s menu → ring inheritance, but for
+    /// caption orientation. Independent of `iconOrientation` so reorienting a
+    /// label never perturbs the icon.
+    func labelOrientation(for band: Band) -> LabelOrientation {
+        ringAppearance(for: band).labelOrientation ?? hudCustomization.labelOrientation
+    }
+
+    /// Unlike orientation, visibility has no menu-level default to inherit —
+    /// each ring resolves its own `labelVisible` (see `HUDRingAppearance`).
+    func isLabelVisible(for band: Band) -> Bool {
+        ringAppearance(for: band).labelVisible
     }
 
     func colorResolution(
@@ -190,7 +302,7 @@ final class RingViewModel {
     /// Maps a pointer location to the current `activeSelection` using
     /// `RadialGeometry.hitTest` with the live spoke/expansion state (§2.2).
     func updateActive(at point: CGPoint, center: CGPoint) {
-        updateRevealState(at: point, center: center)
+        updateOuterRingReveal(at: point, center: center)
         if let hit = RadialGeometry.hitTest(point: point,
                                             center: center,
                                             radii: radii,
@@ -198,8 +310,11 @@ final class RingViewModel {
                                             innerItemCount: innerItems.count,
                                             middleItemCount: middleItems.count,
                                             expandedParentIndex: isOuterRingVisible ? expandedParentIndex : nil,
-                                            outerCount: isOuterRingVisible ? outerItems.count : 0) {
-            activeSelection = ActiveSelection(band: hit.band, index: hit.index)
+                                            outerCount: isOuterRingVisible ? outerItems.count : 0,
+                                            outerLayout: outerRingLayout) {
+            let selection = ActiveSelection(band: hit.band, index: hit.index)
+            activeSelection = selection
+            autoExpandRevealedParentIfNeeded(selection)
         } else {
             activeSelection = nil
         }
@@ -223,8 +338,16 @@ final class RingViewModel {
         // direct-only (depth cap 3), so never expand from `.outer`.
         if selection.band == .middle, item.hasSubItems {
             // A hidden submenu parent is unavailable. In particular, never
-            // execute its marker action as a fallback.
-            guard hudCustomization.outerRingVisibility != .alwaysHidden else {
+            // execute its marker action as a fallback. Dynamic parents are
+            // available before their asynchronous children have been fetched,
+            // so use a synthetic non-zero count for that availability check.
+            let availableItemCount = item.dynamicSource == .none
+                ? item.subItems?.count ?? 0
+                : 1
+            guard OuterRingPolicyState.parentIsAvailable(
+                policy: hudCustomization.outerRingVisibility,
+                itemCount: availableItemCount
+            ) else {
                 activeSelection = nil
                 return .unavailable
             }
@@ -257,19 +380,54 @@ final class RingViewModel {
     }
 
     /// Expand a middle wedge: point `expandedParentIndex` at it and populate the
-    /// outer band from its sub-items. Switching branches = just call with a
-    /// different index (re-points in place, no explicit collapse needed).
+    /// outer band from its sub-items (`.none`) or a runtime source (`.runningApps`).
+    /// Switching branches = just call with a different index (re-points in place,
+    /// no explicit collapse needed).
     func expand(_ parentIndex: Int) {
-        guard hudCustomization.outerRingVisibility != .alwaysHidden else { return }
         guard parentIndex >= 0, parentIndex < middleItems.count else { return }
-        expandedParentIndex = parentIndex
-        outerItems = middleItems[parentIndex].subItems ?? []
+        expansionEpoch += 1
+        let parent = middleItems[parentIndex]
+
+        switch parent.dynamicSource {
+        case .none:
+            let items = parent.subItems ?? []
+            guard OuterRingPolicyState.parentIsAvailable(
+                policy: hudCustomization.outerRingVisibility, itemCount: items.count
+            ) else { return }
+            expandedParentIndex = parentIndex
+            outerItems = items
+
+        case .runningApps:
+            expandedParentIndex = parentIndex
+            // Transient empty band — no "Loading…" placeholder; `NSWorkspace`
+            // enumeration is effectively instant (APP_SWITCHER_PLAN.md §3).
+            outerItems = []
+            let epoch = expansionEpoch
+            Task {
+                let entries = await appSwitcherService.runningApps(excluding: frontmostPID)
+                let items = entries.map { entry in
+                    RingMenuItem(label: entry.name, icon: "app.fill",
+                                actionType: .appSwitch, actionData: entry.id)
+                }
+                var icons: [RingMenuItem.ID: NSImage] = [:]
+                for (item, entry) in zip(items, entries) {
+                    icons[item.id] = entry.icon
+                }
+
+                guard epoch == self.expansionEpoch,
+                      self.expandedParentIndex == parentIndex else { return }
+                self.dynamicIcons = icons
+                self.outerItems = items
+            }
+        }
     }
 
     /// Collapse the outer band back to root (keeps any active selection).
     func collapse() {
         expandedParentIndex = nil
         outerItems = []
+        dynamicIcons = [:]
+        expansionEpoch += 1
     }
 
     /// Returns `true` when Escape should close the invocation. An expanded
@@ -292,9 +450,35 @@ final class RingViewModel {
         activeSelection = nil
         expandedParentIndex = nil
         outerItems = []
-        hasRevealedOuterRing = false
-        hasEnteredInnerBoundary = false
-        wasAtOrInsideInnerBoundary = false
+        dynamicIcons = [:]
+        expansionEpoch += 1
+        outerRingPolicyState = OuterRingPolicyState()
+    }
+
+    /// Establishes the identity captured by a newly mounted runtime HUD.
+    @discardableResult
+    func prepareOpeningPlayback() -> Int {
+        openingInvocationID &+= 1
+        openingIsAwaitingMount = true
+        return openingInvocationID
+    }
+
+    /// Requests playback only if the panel that prepared `mountedID` is still
+    /// the visible invocation. This prevents a delayed callback from replaying
+    /// a HUD that was closed and reopened in the meantime.
+    func replayOpening(afterMounting mountedID: Int) {
+        guard isVisible, openingInvocationID == mountedID else { return }
+        openingIsAwaitingMount = false
+        openingInvocationID &+= 1
+    }
+
+    /// Invalidates a pending mounted-frame replay when the visible panel is
+    /// repurposed for another route. Profile replacement is immediate and must
+    /// never inherit the first invocation's delayed summon motion.
+    func cancelOpeningPlayback() {
+        guard openingIsAwaitingMount else { return }
+        openingIsAwaitingMount = false
+        openingInvocationID &+= 1
     }
 
     // MARK: - Effective geometry and invocation reveal
@@ -317,17 +501,30 @@ final class RingViewModel {
                                 angularOffset: CGFloat(layout.angularOffset * .pi / 180))
     }
 
-    private func updateRevealState(at point: CGPoint, center: CGPoint) {
-        guard hudCustomization.outerRingVisibility == .revealBeyondInnerRing,
-              !hasRevealedOuterRing else { return }
-
+    /// Records the pointer's reveal traversal without changing the active wedge
+    /// or re-pointing the expanded parent. The editor preview uses this when its
+    /// independent pointer surface reports a reveal-state transition.
+    func updateOuterRingReveal(at point: CGPoint, center: CGPoint) {
         let radius = hypot(point.x - center.x, point.y - center.y)
-        let isAtOrInside = radius <= radii.r1
-        if isAtOrInside {
-            hasEnteredInnerBoundary = true
-        } else if hasEnteredInnerBoundary && wasAtOrInsideInnerBoundary {
-            hasRevealedOuterRing = true
-        }
-        wasAtOrInsideInnerBoundary = isAtOrInside
+        outerRingPolicyState = outerRingPolicyState.transition(
+            policy: hudCustomization.outerRingVisibility,
+            hasExpandedParent: expandedParentIndex != nil,
+            itemCount: outerItems.count,
+            pointerIsAtOrInsideInnerBoundary: radius <= radii.r1
+        ).state
+    }
+
+    /// Reveal mode is a hover-driven submenu interaction: once the invocation's
+    /// center-to-outside traversal latches, entering an expandable middle wedge
+    /// immediately points the outer arc at that parent. Always keeps its
+    /// click/release-to-expand behavior, and Hidden remains unavailable.
+    private func autoExpandRevealedParentIfNeeded(_ selection: ActiveSelection) {
+        guard hudCustomization.outerRingVisibility == .revealBeyondInnerRing,
+              hasRevealedOuterRing,
+              selection.band == .middle,
+              middleItems.indices.contains(selection.index),
+              middleItems[selection.index].hasSubItems,
+              expandedParentIndex != selection.index else { return }
+        expand(selection.index)
     }
 }

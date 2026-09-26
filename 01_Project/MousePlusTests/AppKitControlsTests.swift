@@ -41,6 +41,20 @@ final class AppKitControlsTests: XCTestCase {
         XCTAssertEqual(color, .systemGreen)
     }
 
+    func testColorWellDefaultsToInheritTitle() {
+        let binding = Binding<NSColor?>(get: { nil }, set: { _ in })
+        let well = AppKitColorWell(color: binding, accessibilityLabel: "Wedge color")
+
+        XCTAssertEqual(well.inheritTitle, "Inherit")
+    }
+
+    func testColorWellAcceptsMenuRootDefaultTitle() {
+        let binding = Binding<NSColor?>(get: { nil }, set: { _ in })
+        let well = AppKitColorWell(color: binding, inheritTitle: "Default", accessibilityLabel: "Wedge color")
+
+        XCTAssertEqual(well.inheritTitle, "Default")
+    }
+
     func testCountCoordinatorClampsStepperInput() {
         var value = 4
         let binding = Binding(get: { value }, set: { value = $0 })

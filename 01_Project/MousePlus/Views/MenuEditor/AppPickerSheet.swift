@@ -16,6 +16,9 @@ import AppKit
 import UniformTypeIdentifiers
 
 struct AppPickerSheet: View {
+    /// Bundle identifiers hidden from this picker (for example, MousePlus when
+    /// choosing the owner of a contextual HUD). Existing callers opt in.
+    var excludedBundleIdentifiers: Set<String> = []
     /// Called when the user picks an app: (bundleID, displayName, suggestedSFSymbol). The presenter dismisses.
     var onPick: (_ bundleID: String, _ name: String, _ suggestedSymbol: String) -> Void
     /// Called when the user cancels.
@@ -43,9 +46,10 @@ struct AppPickerSheet: View {
     private let suggestedSymbol = "app.fill"
 
     private var filteredEntries: [AppEntry] {
+        let available = entries.filter { !excludedBundleIdentifiers.contains($0.id) }
         let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !query.isEmpty else { return entries }
-        return entries.filter { $0.name.range(of: query, options: .caseInsensitive) != nil }
+        guard !query.isEmpty else { return available }
+        return available.filter { $0.name.range(of: query, options: .caseInsensitive) != nil }
     }
 
     // MARK: - Body
@@ -120,6 +124,7 @@ struct AppPickerSheet: View {
 
         guard panel.runModal() == .OK, let url = panel.url else { return }
         guard let bundleID = Bundle(url: url)?.bundleIdentifier else { return }
+        guard !excludedBundleIdentifiers.contains(bundleID) else { return }
         let name = Self.displayName(for: url)
         onPick(bundleID, name, suggestedSymbol)
     }

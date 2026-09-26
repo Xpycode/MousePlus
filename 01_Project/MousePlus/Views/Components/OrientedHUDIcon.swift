@@ -70,6 +70,23 @@ struct WedgePresentation: Equatable, Sendable {
         case .disabled: 0.08
         }
     }
+
+    static func state(hovered: Bool, offBranch: Bool, dimOpacity: Double) -> State {
+        hovered ? .hovered : (offBranch ? .offBranch(opacity: dimOpacity) : .normal)
+    }
+}
+
+/// Keeps preview editor selection orthogonal to transient pointer emphasis.
+struct WedgeInteractionPresentation: Equatable, Sendable {
+    let state: WedgePresentation.State
+    let showsSelectionMarker: Bool
+
+    init(hovered: Bool, persistentlySelected: Bool, offBranch: Bool, dimOpacity: Double) {
+        state = WedgePresentation.state(
+            hovered: hovered, offBranch: offBranch, dimOpacity: dimOpacity
+        )
+        showsSelectionMarker = persistentlySelected
+    }
 }
 
 /// Renders only the icon transform. Keeping this separate ensures captions and

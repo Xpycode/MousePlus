@@ -2,9 +2,9 @@ import AppKit
 import ApplicationServices
 
 /// Snapshot of screen geometry, captured on the main actor and handed to the
-/// `WindowService` actor as plain `Sendable` values (HUD_ACTIONS_PLAN §B "Threading").
+/// `WindowService` as plain `Sendable` values (HUD_ACTIONS_PLAN §B "Threading").
 ///
-/// `NSScreen` is main-thread-affine; the actor never touches it. All rects are in
+/// `NSScreen` is main-thread-affine; the service never touches it. All rects are in
 /// AppKit coordinates (bottom-left origin, `+y` up). `primaryMaxY` is the y-flip
 /// pivot used to convert into Accessibility (top-left) space — it is the **primary**
 /// screen's `frame.maxY` (`NSScreen.screens[0]`), not the target screen's.
@@ -45,9 +45,10 @@ enum WindowServiceError: LocalizedError {
 }
 
 /// Moves/resizes the frontmost app's focused window into a `SnapZone` via the
-/// Accessibility API (HUD Feature B). An `actor` because AX calls are thread-safe
-/// but can block for tens of ms — keeping them off the main actor stops the ring
-/// from janking.
+/// Accessibility API (HUD Feature B). AppKit's window coordinator requires AX
+/// window mutations on the main thread, so the service is main-actor isolated.
+/// The HUD is dismissed before execution, avoiding interaction jank while the
+/// synchronous AX writes complete.
 ///
 /// Uses the two Rectangle hacks verbatim (`HUD_ACTIONS_PLAN.md` §B):
 ///   1. Toggle the app's `AXEnhancedUserInterface` off around the move (some
@@ -56,7 +57,10 @@ enum WindowServiceError: LocalizedError {
 ///   2. Set order = **size → position → size**: macOS clamps to the display and
 ///      min-size, so shrink first (unblocks the move), then position, then size
 ///      again to correct any min-size clamping.
-actor WindowService {
+@MainActor
+final class WindowService {
+
+    nonisolated init() {}
 
     func snap(_ zone: SnapZone, pid: pid_t, layout: ScreenLayout) throws {
         guard AXIsProcessTrusted() else { throw WindowServiceError.notTrusted }

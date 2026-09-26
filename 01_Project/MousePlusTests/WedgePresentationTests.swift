@@ -2,6 +2,118 @@ import XCTest
 @testable import MousePlus
 
 final class WedgePresentationTests: XCTestCase {
+    func testPersistentMaterialBacksOnlyConfiguredFixedSlots() {
+        let presentation = RingSurfacePresentation(
+            radii: BandRadii(r0: 10, r1: 20, r2: 30, r3: 40),
+            geometry: TopLevelRingGeometry(
+                inner: RingBandGeometry(slotCount: 6),
+                middle: RingBandGeometry(slotCount: 8)
+            ),
+            innerItemCount: 4,
+            middleItemCount: 3,
+            isOuterRingVisible: false
+        )
+
+        XCTAssertEqual(presentation.innerBackingIndices, [0, 1, 2, 3])
+        XCTAssertEqual(presentation.middleBackingIndices, [0, 1, 2])
+        XCTAssertFalse(presentation.fillsEntireOuterRing)
+    }
+
+    func testFillUnusedSlotsCompletesBackingWithoutChangingConfiguredItemCounts() {
+        let presentation = RingSurfacePresentation(
+            radii: BandRadii(r0: 10, r1: 20, r2: 30, r3: 40),
+            geometry: TopLevelRingGeometry(
+                inner: RingBandGeometry(slotCount: 6),
+                middle: RingBandGeometry(slotCount: 8)
+            ),
+            innerItemCount: 4,
+            middleItemCount: 3,
+            isOuterRingVisible: true,
+            fillsUnusedSlots: true
+        )
+
+        XCTAssertEqual(presentation.innerBackingIndices, Array(0..<6))
+        XCTAssertEqual(presentation.middleBackingIndices, Array(0..<8))
+        XCTAssertTrue(presentation.fillsEntireOuterRing)
+    }
+
+    func testFillUnusedSlotsDoesNotManufactureHiddenOuterSurface() {
+        let presentation = RingSurfacePresentation(
+            radii: BandRadii(r0: 10, r1: 20, r2: 30, r3: 40),
+            geometry: .shared(spokeCount: 4),
+            innerItemCount: 1,
+            middleItemCount: 1,
+            isOuterRingVisible: false,
+            fillsUnusedSlots: true
+        )
+
+        XCTAssertFalse(presentation.fillsEntireOuterRing)
+    }
+
+    func testPersistentMaterialStopsAtMiddleEdgeWithoutOuterSurface() {
+        let radii = BandRadii(r0: 10, r1: 20, r2: 30, r3: 40)
+        let presentation = RingSurfacePresentation(radii: radii, isOuterRingVisible: false)
+
+        XCTAssertEqual(presentation.persistentOuterRadius, 30)
+        XCTAssertNil(presentation.localizedOuterInnerRadius)
+        XCTAssertNil(presentation.localizedOuterOuterRadius)
+    }
+
+    func testVisibleOuterSurfaceIsLocalizedFromMiddleToOuterEdge() {
+        let radii = BandRadii(r0: 10, r1: 20, r2: 30, r3: 40)
+        let presentation = RingSurfacePresentation(radii: radii, isOuterRingVisible: true)
+
+        XCTAssertEqual(presentation.persistentOuterRadius, 30)
+        XCTAssertEqual(presentation.localizedOuterInnerRadius, 30)
+        XCTAssertEqual(presentation.localizedOuterOuterRadius, 40)
+    }
+
+    func testEditorGuideSubtlyDescribesEmptyOuterBand() {
+        let radii = BandRadii(r0: 10, r1: 20, r2: 30, r3: 40)
+
+        for visibility in [
+            OuterRingVisibility.alwaysVisible,
+            OuterRingVisibility.revealBeyondInnerRing
+        ] {
+            let guide = EditorOuterRingGuidePresentation(
+                radii: radii,
+                visibility: visibility,
+                hasLocalizedOuterSurface: false
+            )
+
+            XCTAssertTrue(guide.isVisible)
+            XCTAssertEqual(guide.innerRadius, radii.r2)
+            XCTAssertEqual(guide.outerRadius, radii.r3)
+            XCTAssertGreaterThan(guide.fillOpacity, 0)
+            XCTAssertLessThan(guide.fillOpacity, 0.1)
+            XCTAssertGreaterThan(guide.boundaryOpacity, guide.fillOpacity)
+            XCTAssertLessThan(guide.boundaryOpacity, 0.25)
+        }
+    }
+
+    func testEditorGuideNeverCompetesWithPolicyHiddenOrLocalizedOuterSurface() {
+        let radii = BandRadii(r0: 10, r1: 20, r2: 30, r3: 40)
+        let hidden = EditorOuterRingGuidePresentation(
+            radii: radii,
+            visibility: .alwaysHidden,
+            hasLocalizedOuterSurface: false
+        )
+        let populated = EditorOuterRingGuidePresentation(
+            radii: radii,
+            visibility: .alwaysVisible,
+            hasLocalizedOuterSurface: true
+        )
+        let revealed = EditorOuterRingGuidePresentation(
+            radii: radii,
+            visibility: .revealBeyondInnerRing,
+            hasLocalizedOuterSurface: true
+        )
+
+        XCTAssertFalse(hidden.isVisible)
+        XCTAssertFalse(populated.isVisible)
+        XCTAssertFalse(revealed.isVisible)
+    }
+
     func testUprightOrientationNeverRotates() {
         for midpoint in [-450.0, 0, 90, 180, 270, 720] {
             XCTAssertEqual(
@@ -69,6 +181,36 @@ final class WedgePresentationTests: XCTestCase {
         XCTAssertGreaterThan(presentation.emphasisOpacity, 0)
     }
 
+    func testPersistentEditorSelectionIsNeutralUntilActuallyHovered() {
+        let selected = WedgeInteractionPresentation(
+            hovered: false, persistentlySelected: true, offBranch: false, dimOpacity: 0.3
+        )
+        let hovered = WedgeInteractionPresentation(
+            hovered: true, persistentlySelected: true, offBranch: false, dimOpacity: 0.3
+        )
+
+        XCTAssertEqual(selected.state, .normal)
+        XCTAssertTrue(selected.showsSelectionMarker)
+        XCTAssertEqual(hovered.state, .hovered)
+        XCTAssertTrue(hovered.showsSelectionMarker)
+    }
+
+    func testHoverEmphasisPreservesResolvedWedgeAndIconColors() {
+        let wedge = HUDColor(red: 0.12, green: 0.34, blue: 0.56)
+        let icon = HUDColor(red: 0.93, green: 0.82, blue: 0.71)
+        let normal = WedgePresentation(
+            wedgeColor: wedge, iconColor: icon, labelColor: icon, state: .normal
+        )
+        let hovered = WedgePresentation(
+            wedgeColor: wedge, iconColor: icon, labelColor: icon, state: .hovered
+        )
+
+        XCTAssertEqual(normal.wedgeColor, hovered.wedgeColor)
+        XCTAssertEqual(normal.iconColor, hovered.iconColor)
+        XCTAssertEqual(normal.labelColor, hovered.labelColor)
+        XCTAssertGreaterThan(hovered.emphasisOpacity, normal.emphasisOpacity)
+    }
+
     private func rotation(_ orientation: IconOrientation, _ degrees: Double) -> Double {
         OrientedHUDIcon.rotationDegrees(
             orientation: orientation,
@@ -82,6 +224,137 @@ final class WedgePresentationTests: XCTestCase {
             iconColor: .white,
             labelColor: .white,
             state: state
+        )
+    }
+
+    // MARK: - LabelPresentation
+
+    func testUprightLabelNeverRotatesAtAnyWedgeAngle() {
+        for midpoint in [-450.0, 0, 45, 90, 135, 180, 225, 270, 315, 359, 720] {
+            XCTAssertEqual(labelRotation(.upright, midpoint), 0)
+        }
+    }
+
+    func testRadialLabelMatchesIconMidpointWithinTheReadableHalf() {
+        // Within [0, 90] ∪ [270, 360) the base radial rotation already reads
+        // upright, so it must match `OrientedHUDIcon`'s own radial rotation
+        // exactly — no flip applied.
+        XCTAssertEqual(labelRotation(.radial, 0), 0)
+        XCTAssertEqual(labelRotation(.radial, 45), 45)
+        XCTAssertEqual(labelRotation(.radial, 89), 89)
+        XCTAssertEqual(labelRotation(.radial, 271), 271)
+        XCTAssertEqual(labelRotation(.radial, 315), 315)
+        XCTAssertEqual(labelRotation(.radial, 359), 359)
+    }
+
+    func testRadialLabelFlipsOnlyStrictlyBetweenTheBoundaryAngles() {
+        // 90° and 270° are this policy's flip boundary: the boundary angles
+        // themselves render sideways, not upside down, so they stay
+        // unflipped, matching `OrientedHUDIcon`'s own boundary treatment.
+        XCTAssertEqual(labelRotation(.radial, 90), 90)
+        XCTAssertEqual(labelRotation(.radial, 270), 270)
+
+        // Just past each boundary the base rotation would read upside down,
+        // so the policy flips it back into the readable half.
+        XCTAssertEqual(labelRotation(.radial, 91), 271)
+        XCTAssertEqual(labelRotation(.radial, 180), 0)
+        XCTAssertEqual(labelRotation(.radial, 269), 89)
+    }
+
+    func testRadialLabelIsReadableAllTheWayAroundTheFullCircle() {
+        var angle = 0.0
+        while angle < 360 {
+            let rotation = labelRotation(.radial, angle)
+            XCTAssertTrue(
+                rotation <= 90 || rotation >= 270,
+                "radial label at \(angle)° resolved an upside-down rotation of \(rotation)°"
+            )
+            angle += 1
+        }
+    }
+
+    func testTangentialLabelFlipsAtItsOwnQuarterTurnOffsetBoundaries() {
+        // Tangential is the icon's own quarter-turn-from-midpoint base
+        // rotation, so its flip boundaries land at wedge angles 0° and 180°
+        // (where that base rotation crosses 90°/270°) rather than at the
+        // wedge angles themselves.
+        XCTAssertEqual(labelRotation(.tangential, 0), 90)
+        XCTAssertEqual(labelRotation(.tangential, 180), 270)
+        XCTAssertEqual(labelRotation(.tangential, 1), 271)
+        XCTAssertEqual(labelRotation(.tangential, 179), 89)
+        XCTAssertEqual(labelRotation(.tangential, 270), 0)
+        XCTAssertEqual(labelRotation(.tangential, 350), 80)
+    }
+
+    func testTangentialLabelIsReadableAllTheWayAroundTheFullCircle() {
+        var angle = 0.0
+        while angle < 360 {
+            let rotation = labelRotation(.tangential, angle)
+            XCTAssertTrue(
+                rotation <= 90 || rotation >= 270,
+                "tangential label at \(angle)° resolved an upside-down rotation of \(rotation)°"
+            )
+            angle += 1
+        }
+    }
+
+    func testLabelPresentationMidpointConvenienceMatchesWedgeAngleRangeMath() {
+        let fromRange = LabelPresentation(
+            accessibilityLabel: "Copy",
+            orientation: .radial,
+            isVisible: true,
+            startAngle: .degrees(80),
+            endAngle: .degrees(100)
+        )
+        let fromMidpoint = LabelPresentation(
+            accessibilityLabel: "Copy",
+            orientation: .radial,
+            isVisible: true,
+            wedgeMidpoint: .degrees(90)
+        )
+
+        XCTAssertEqual(fromRange, fromMidpoint)
+    }
+
+    func testCaptionVisibilityAndOrientationAreIndependentlyConfigurable() {
+        for orientation in LabelOrientation.allCases {
+            let visible = LabelPresentation(
+                accessibilityLabel: "Snap",
+                orientation: orientation,
+                isVisible: true,
+                wedgeMidpoint: .degrees(150)
+            )
+            let hidden = LabelPresentation(
+                accessibilityLabel: "Snap",
+                orientation: orientation,
+                isVisible: false,
+                wedgeMidpoint: .degrees(150)
+            )
+
+            XCTAssertTrue(visible.isCaptionVisible)
+            XCTAssertFalse(hidden.isCaptionVisible)
+            // Hiding the caption must not change its resolved rotation.
+            XCTAssertEqual(visible.rotationDegrees, hidden.rotationDegrees)
+        }
+    }
+
+    func testHiddenCaptionStillProducesAValidAccessibilityName() {
+        let hidden = LabelPresentation(
+            accessibilityLabel: "Copy",
+            orientation: .radial,
+            isVisible: false,
+            wedgeMidpoint: .degrees(200)
+        )
+
+        XCTAssertFalse(hidden.isCaptionVisible)
+        XCTAssertEqual(hidden.accessibilityLabel, "Copy")
+        XCTAssertFalse(hidden.accessibilityLabel.isEmpty)
+    }
+
+    private func labelRotation(_ orientation: LabelOrientation, _ degrees: Double) -> Double {
+        LabelPresentation.resolvedRotationDegrees(
+            orientation: orientation,
+            normalizedMidpointDegrees: degrees
         )
     }
 }

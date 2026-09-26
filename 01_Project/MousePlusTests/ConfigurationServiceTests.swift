@@ -33,6 +33,105 @@ final class ConfigurationServiceTests: XCTestCase {
         }
     }
 
+    func testServicePersistsAppProfilesAndGlobalHUDShortcut() async throws {
+        let service = makeService()
+        let profile = AppHUDProfile(layout: HUDActionLayout(
+            inner: [RingMenuItem(label: "Finder inner", icon: "circle", actionType: .custom)],
+            middle: [RingMenuItem(label: "Finder middle", icon: "square", actionType: .custom)]
+        ))
+        let shortcut = TriggerBinding.keyboard(
+            keyCode: 122,
+            modifiers: 1 << 20,
+            mode: .tapToggle
+        )
+        let configuration = Configuration(
+            triggers: TriggersConfig(globalHUDShortcut: shortcut),
+            appHUDProfiles: ["com.apple.finder": profile]
+        )
+
+        try await service.save(configuration)
+        let reloaded = try await service.loadResult().configuration
+
+        XCTAssertEqual(reloaded.triggers.globalHUDShortcut, shortcut)
+        XCTAssertEqual(reloaded.appHUDProfile(forBundleIdentifier: "com.apple.finder"), profile)
+        XCTAssertEqual(reloaded.validAppHUDProfiles, ["com.apple.finder": profile])
+    }
+
+    func testServicePreservesUnreadableProfileDuringUnrelatedSave() async throws {
+        let service = makeService()
+        let store = await service.store
+        try FileManager.default.createDirectory(
+            at: store.configurationURL.deletingLastPathComponent(),
+            withIntermediateDirectories: true
+        )
+        var source = try XCTUnwrap(
+            JSONSerialization.jsonObject(with: JSONEncoder().encode(Configuration())) as? [String: Any]
+        )
+        let unreadable: [String: Any] = [
+            "layout": ["inner": "invalid", "middle": []],
+            "futurePayload": ["revision": 9, "enabled": true],
+        ]
+        source["appHUDProfiles"] = ["com.apple.finder": unreadable]
+        try JSONSerialization.data(withJSONObject: source).write(to: store.configurationURL)
+
+        var loaded = try await service.loadResult().configuration
+        loaded.behavior.dismissOnClickOutside.toggle()
+        try await service.save(loaded)
+
+        let saved = try XCTUnwrap(
+            JSONSerialization.jsonObject(with: Data(contentsOf: store.configurationURL)) as? [String: Any]
+        )
+        let profiles = try XCTUnwrap(saved["appHUDProfiles"] as? [String: Any])
+        XCTAssertEqual(profiles["com.apple.finder"] as? NSDictionary, unreadable as NSDictionary)
+    }
+
+    func testLegacySampleAppsGroupMigratesToRunningAppsWithoutDroppingPinnedChildren() throws {
+        let child = RingMenuItem(
+            label: "Pinned App", icon: "app.fill", actionType: .appSwitch,
+            actionData: "com.example.Pinned"
+        )
+        let parentID = UUID()
+        let legacyParent = RingMenuItem(
+            id: parentID,
+            label: "Apps",
+            icon: "square.grid.2x2",
+            actionType: .appSwitch,
+            subItems: [child]
+        )
+        let encoded = try JSONEncoder().encode(Configuration(inner: [], middle: [legacyParent]))
+        var object = try XCTUnwrap(JSONSerialization.jsonObject(with: encoded) as? [String: Any])
+        object.removeValue(forKey: "schemaVersion")
+
+        let decoded = try JSONDecoder().decode(
+            Configuration.self,
+            from: JSONSerialization.data(withJSONObject: object)
+        )
+
+        XCTAssertEqual(decoded.middle[0].id, parentID)
+        XCTAssertEqual(decoded.middle[0].dynamicSource, .runningApps)
+        XCTAssertEqual(decoded.middle[0].subItems, [child])
+    }
+
+    func testCurrentStaticAppsGroupIsNotMistakenForLegacySample() throws {
+        let staticParent = RingMenuItem(
+            label: "Apps",
+            icon: "square.grid.2x2",
+            actionType: .appSwitch,
+            subItems: [RingMenuItem(
+                label: "Pinned App", icon: "app.fill", actionType: .appSwitch,
+                actionData: "com.example.Pinned"
+            )]
+        )
+
+        let decoded = try JSONDecoder().decode(
+            Configuration.self,
+            from: JSONEncoder().encode(Configuration(inner: [], middle: [staticParent]))
+        )
+
+        XCTAssertEqual(decoded.middle[0].dynamicSource, .none)
+        XCTAssertEqual(decoded.middle[0].subItems, staticParent.subItems)
+    }
+
     func testLegacyConfigurationReceivesCompatibleHUDDefaults() throws {
         let current = Configuration()
         let encoded = try JSONEncoder().encode(current)
@@ -49,6 +148,124 @@ final class ConfigurationServiceTests: XCTestCase {
         XCTAssertEqual(decoded.middle.map(\.id), current.middle.map(\.id))
         XCTAssertEqual(decoded.triggers, current.triggers)
         XCTAssertEqual(decoded.behavior, current.behavior)
+    }
+
+    func testLegacyMotionSettingsSeedRoleBasedConfiguration() throws {
+        let decoded = try JSONDecoder().decode(
+            Configuration.self,
+            from: fixtureData(named: "legacy-motion-settings")
+        )
+
+        XCTAssertEqual(decoded.appearance.motion.isEnabled, false)
+        XCTAssertEqual(decoded.appearance.motion.baseDuration, 0.42)
+        XCTAssertEqual(decoded.appearance.motion.summon, .fade)
+        XCTAssertEqual(decoded.appearance.motion.hover, .emphasis)
+        XCTAssertEqual(decoded.appearance.motion.outerExpansion, .radialReveal)
+        XCTAssertEqual(decoded.appearance.motion.branchChange, .crossfade)
+        XCTAssertEqual(decoded.appearance.animationEnabled, false)
+        XCTAssertEqual(decoded.appearance.animationDuration, 0.42)
+    }
+
+    func testRoleBasedMotionConfigurationRoundTripsEveryChoice() throws {
+        let expected = HUDMotionConfiguration(
+            isEnabled: true,
+            baseDuration: 0.31,
+            summon: .off,
+            hover: .off,
+            outerExpansion: .off,
+            branchChange: .off
+        )
+        let configuration = Configuration(appearance: AppearanceConfig(motion: expected))
+
+        let data = try JSONEncoder().encode(configuration)
+        let object = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
+        let appearance = try XCTUnwrap(object["appearance"] as? [String: Any])
+        XCTAssertNotNil(appearance["motion"])
+        XCTAssertNil(appearance["animationEnabled"])
+        XCTAssertNil(appearance["animationDuration"])
+
+        let decoded = try JSONDecoder().decode(Configuration.self, from: data)
+        XCTAssertEqual(decoded.appearance.motion, expected)
+    }
+
+    func testEverySummonMotionStyleRoundTripsWithStableRawValue() throws {
+        let expectedRawValues = [
+            "off",
+            "fade",
+            "circularSweep",
+            "irisReveal",
+            "bloom",
+            "staggeredSegments",
+        ]
+
+        XCTAssertEqual(HUDSummonMotionStyle.allCases.map(\.rawValue), expectedRawValues)
+
+        for style in HUDSummonMotionStyle.allCases {
+            let configuration = Configuration(
+                appearance: AppearanceConfig(
+                    motion: HUDMotionConfiguration(summon: style)
+                )
+            )
+
+            let encoded = try JSONEncoder().encode(configuration)
+            let decoded = try JSONDecoder().decode(Configuration.self, from: encoded)
+
+            XCTAssertEqual(decoded.appearance.motion.summon, style)
+        }
+    }
+
+    func testMissingSummonMotionStyleKeepsFadeDefaultAndOtherFields() throws {
+        let json = """
+        {
+          "inner": [],
+          "middle": [],
+          "appearance": {
+            "motion": {
+              "isEnabled": false,
+              "baseDuration": 0.27,
+              "hover": "off",
+              "outerExpansion": "off",
+              "branchChange": "off"
+            }
+          }
+        }
+        """
+
+        let decoded = try JSONDecoder().decode(Configuration.self, from: Data(json.utf8))
+
+        XCTAssertEqual(decoded.appearance.motion.summon, .fade)
+        XCTAssertEqual(decoded.appearance.motion.isEnabled, false)
+        XCTAssertEqual(decoded.appearance.motion.baseDuration, 0.27)
+        XCTAssertEqual(decoded.appearance.motion.hover, .off)
+        XCTAssertEqual(decoded.appearance.motion.outerExpansion, .off)
+        XCTAssertEqual(decoded.appearance.motion.branchChange, .off)
+    }
+
+    func testMalformedMotionFieldsFallBackIndependently() throws {
+        let json = """
+        {
+          "inner": [],
+          "middle": [],
+          "appearance": {
+            "motion": {
+              "isEnabled": false,
+              "baseDuration": 0.27,
+              "summon": "futureSummon",
+              "hover": "off",
+              "outerExpansion": 17,
+              "branchChange": "crossfade"
+            }
+          }
+        }
+        """
+
+        let decoded = try JSONDecoder().decode(Configuration.self, from: Data(json.utf8))
+        XCTAssertEqual(decoded.appearance.motion.isEnabled, false)
+        XCTAssertEqual(decoded.appearance.motion.baseDuration, 0.27)
+        XCTAssertEqual(decoded.appearance.motion.summon, .fade)
+        XCTAssertEqual(decoded.appearance.motion.hover, .off)
+        XCTAssertEqual(decoded.appearance.motion.outerExpansion, .radialReveal)
+        XCTAssertEqual(decoded.appearance.motion.branchChange, .crossfade)
     }
 
     func testMalformedHUDFieldsPreserveKnownConfigurationAndUnknownAction() throws {
@@ -392,7 +609,10 @@ final class ConfigurationServiceTests: XCTestCase {
         )
         XCTAssertEqual(
             Set(object.keys),
-            Set(["inner", "middle", "triggers", "appearance", "behavior", "hudCustomization"]),
+            Set([
+                "schemaVersion", "inner", "middle", "triggers", "appearance", "behavior",
+                "hudCustomization", "appHUDProfiles",
+            ]),
             "\(fixtureName) must encode only the canonical top-level shape",
             file: file,
             line: line

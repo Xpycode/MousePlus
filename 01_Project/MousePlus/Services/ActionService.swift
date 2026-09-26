@@ -70,6 +70,10 @@ protocol ActionWindowSnapping: Sendable {
 
 extension WindowService: ActionWindowSnapping {}
 
+protocol ActionExecuting: Sendable {
+    func execute(_ item: RingMenuItem, context: ActionContext) async -> ActionExecutionResult
+}
+
 /// Executes actions without knowing how their results will be presented.
 actor ActionService {
     private let processRunner: any ActionProcessRunning
@@ -137,6 +141,8 @@ actor ActionService {
         return description.isEmpty ? "The action could not be completed." : description
     }
 }
+
+extension ActionService: ActionExecuting {}
 
 enum ActionServiceError: LocalizedError, Equatable {
     case applicationNotFound(String)

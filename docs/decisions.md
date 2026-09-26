@@ -4,6 +4,326 @@ This file tracks the WHY behind technical and design decisions.
 
 ---
 
+## 2026-09-13 - Unused HUD slots use transparent backing with an optional complete-ring treatment
+
+**Context:** Fixed inner and middle slot counts preserve angular positions when fewer items are
+configured, and localized outer branches intentionally occupy only part of the outer circumference.
+Removing material from unconfigured regions made those gaps accurately reveal the desktop, but a
+complete circular silhouette is a legitimate visual preference. Outer visibility controls when an
+outer branch exists; it should not also encode this independent appearance choice.
+
+**Options:** Always leave unused regions transparent; always restore full material disks; add
+per-ring controls; overload Always/Reveal outer visibility; or provide one shared menu appearance
+choice for transparent versus complete backing.
+
+**Decision:** Keep unused backing transparent by default and add one shared, persisted `Fill unused
+slots` checkbox under Menu customization. When enabled, material completes reserved inner and middle
+rings and any currently visible outer ring. The setting changes backing only: unconfigured regions
+never gain wedge content, hit targets, actions, or accessibility elements. Keep outer visibility as
+the separate Always/Reveal/Hidden policy. Place the hidden-submenu warning immediately below that
+visibility control so its conditional appearance does not move the scope selector.
+
+**Rationale:** A single menu-level choice matches the user's intent—complete versus incomplete ring
+silhouettes—without multiplying controls or conflating presentation with outer-ring lifecycle.
+Transparent-by-default preserves the accepted spatial clarity, while the opt-in restores the
+continuous shape preferred by some users.
+
+**Consequences:** `HUDCustomization` gains a tolerant Boolean field defaulting to false for existing
+files. Runtime and editor preview share the same backing policy and motion. Geometry, selection,
+commit behavior, and accessibility remain unchanged across both appearances.
+
+---
+
+## 2026-09-11 - App-specific HUDs use complete action layouts and explicit Global routing
+
+**Context:** MousePlus currently loads one Global inner/middle action layout for every application.
+An older planned app-aware command-ring design kept Rings 1 and 2 global and changed only a curated
+outer ring. The user instead wants the HUD itself to adapt to the frontmost application while
+retaining an immediate, dependable route back to the familiar Global HUD. The existing runtime
+already captures the frontmost PID before showing its non-activating panel, and the unified Settings
+workspace already owns safe configuration writes, so this can extend established seams rather than
+introduce another window or persistence writer.
+
+**Options:** Keep only the outer ring app-aware; apply sparse per-slot overrides to Global; switch a
+complete saved configuration per app; or give each app a complete action layout while keeping
+presentation, behavior, and trigger policy global. For navigation, add permanent Global/App wedges,
+overload the center, use a hidden modifier convention, persist a mode, or provide explicit
+Contextual and Global invocation routes.
+
+**Decision:** Each configured bundle identifier owns one complete, independently editable inner and
+middle action layout. Creating it copies the current Global layout once; later edits do not propagate
+between them. The existing `Configuration.inner`/`middle` remain Global for backward compatibility.
+Geometry, menu/ring appearance, motion, behavior, and ordinary trigger policy remain global;
+item-level overrides stay with the copied items. Exact bundle-ID resolution occurs from an immutable
+frontmost-app snapshot at invocation, with MousePlus, missing IDs, missing profiles, and unavailable
+profiles falling back to Global.
+
+Existing keyboard and mouse HUD triggers are Contextual routes. A separate recordable Global HUD
+keyboard shortcut, unbound by default and usable through BetterMouse mapping, always bypasses app
+resolution. Either route can replace the other in the visible panel without moving it. Replacement
+clears selection and expansion and transfers gesture ownership, so releasing an older Hold-release
+trigger cannot commit an item from the new layout. The center communicates the resolved context but
+keeps its single native Settings action and drag behavior. Finder is the first live acceptance target;
+MousePlus does not ship a hard-coded Finder profile.
+
+**Rationale:** Complete action layouts provide a clear mental model and meaningful contextual HUD
+without duplicating unrelated settings. Sparse overrides appear economical but make reorder,
+deletion, inheritance, reset, and recovery ambiguous. Explicit routes are discoverable and work with
+the user's supported BetterMouse-to-keyboard setup; permanent navigation wedges consume scarce
+radial slots, center overloading conflicts with its Settings role, and persistent modes are easy to
+forget. Keeping existing fields as Global makes old configurations migrate without user choices.
+
+**Consequences:** Configuration gains lossless bundle-ID-keyed profile storage and an unbound Global
+shortcut. Runtime context must carry both durable bundle identity and transient target PID, remain
+frozen per invocation, and reject stale releases after a route switch. The existing Settings
+coordinator must edit, reset, back up, and restore the selected profile through its one safe writer.
+The prior app-aware command-ring decision is narrowed: menu browsing, search, pagination, and pinning
+remain valid future features, but its always-global Rings 1/2 assumption does not govern app-specific
+HUDs. Sparse inheritance, per-app presentation, multiple profiles per app, and a second direct Global
+mouse slot are outside v1.
+
+---
+
+### 2026-09-04 - HUD motion is role-based and presentation-only
+
+**Context:** MousePlus already applies one configurable spring to both active selection and expanded
+parent changes, and inserts the outer band with a parent-anchored scale plus opacity transition. That
+proves animation works inside the non-activating AppKit/SwiftUI overlay, but a single broad spring does
+not distinguish fast pointer feedback from submenu expansion, dynamic branch replacement, or initial
+summon. Animating actual target geometry would also let the visible wedge lag behind the hit-testing
+model during rapid movement.
+
+**Options:** Keep the existing global spring; add decorative animation ad hoc at each call site;
+animate the complete panel and interactive geometry; or define semantic motion roles whose visual
+effects remain separate from the immediate interaction state machine.
+
+**Decision:** Use semantic roles for summon, hover feedback, outer-ring expansion, and branch change.
+Logical geometry, hit testing, selection, expansion, commits, actions, and dismissal update
+immediately; only the rendered presentation interpolates. Extend the existing Ring Appearance
+Animation section with a master switch, speed, and per-role controls instead of adding another
+Settings destination. Expose only implemented effects, while keeping the persisted model extensible.
+
+macOS Reduce Motion overrides app-selected transform and geometry motion. Under Reduce Motion,
+MousePlus uses a short opacity transition or an instant update. Direct-action dismissal remains
+instant and never waits for animation completion.
+
+**Rationale:** The ring is a speed- and muscle-memory-driven pointer interface. Short semantic effects
+can clarify hover, parent/child relationships, and dynamic replacement without moving the target the
+user is aiming at. Role-specific policy also allows future styles without returning to a global
+animation that unintentionally affects the whole view tree.
+
+**Consequences:** Replace broad container animation with scoped role-specific presentation. Preserve
+legacy `animationEnabled` and `animationDuration` values through tolerant decoding. Keep the editor's
+embedded ring animation-free unless a dedicated replay control can be added without reintroducing its
+previous spring/scale layout jump. Live verification must cover both trigger modes, twelve running
+apps, rapid Apps↔Snap re-pointing, VoiceOver, and macOS Reduce Motion.
+
+---
+
+### 2026-09-04 - Running apps use the full outer circumference
+
+**Context:** The first dynamic App Switcher reused the localized submenu arc. With roughly twelve
+running apps, that concentrated icons and long tangential labels into one sector even though an app
+switcher is a peer collection rather than a parent-owned command submenu.
+
+**Options:** Keep the localized arc; open a rectangular dock-like pane; add a second detached circle;
+or preserve the concentric HUD and distribute running apps around the complete outer band.
+
+**Decision:** A `.runningApps` parent uses a full-circle outer-ring layout. Its first item is centered
+on the expanded Apps wedge so pointer direction remains meaningful. Static submenus continue using
+their localized parent-centered arc. Outer labels remain independently configurable and may be hidden
+for an icon-only switcher.
+
+**Rationale:** The full circumference gives the existing pointer-centered interface substantially
+more room without introducing another interaction model. Keeping static submenus localized preserves
+their visible parent relationship, while the dynamic-source distinction makes the geometry rule
+explicit and testable.
+
+**Consequences:** Rendering, hit testing, centroids, preview selection, and accessibility share an
+`OuterRingLayout` value. Running-app enumeration excludes the captured frontmost process so the first
+MRU alternative occupies the parent-aligned slot. The user signed-live verified the 360° layout and
+confirmed that disabling Outer “Show label” produces the intended icon-only presentation.
+
+---
+
+### 2026-09-04 - Native AppKit mouse-up owns tap-toggle commits
+
+**Context:** The ring's SwiftUI hover and selection state updated inside its non-activating
+`NSPanel`, and native AppKit controls such as the center Settings button received clicks, but
+`DragGesture.onEnded` did not reliably arrive for wedge clicks. As a result, both static App
+Switcher items and dynamically populated running-app items could highlight without committing.
+Direct `NSRunningApplication.activate()` checks succeeded, ruling out bundle identifiers and the
+activation service.
+
+**Options:** Make the panel activating; replace wedge interaction with AppKit controls; add a
+second action-specific activation path; or keep SwiftUI responsible for selection while forwarding
+the primary-button release from the hosting `NSView` into the existing authoritative hit-test and
+commit path.
+
+**Decision:** Keep the non-activating HUD. `RingHostingView` forwards native primary mouse-up
+coordinates and the live view center to `RingViewModel.commit(at:center:)` for tap-toggle
+invocations. Runtime SwiftUI pointer-release commits are disabled to prevent double execution;
+hold-release retains its existing trigger-event commit path.
+
+**Rationale:** This preserves no-focus-steal behavior and one action-dispatch pipeline. The native
+view is the reliable event boundary, while `RingViewModel` remains the single authority for final
+geometry, expansion, dismissal, and action execution.
+
+**Consequences:** Any future click-to-commit interaction hosted in this non-activating panel must
+be verified through the native event boundary, not assumed from SwiftUI gesture callbacks. A
+regression test synthesizes `mouseUp` at `RingHostingView` and asserts that final coordinates are
+forwarded. Signed live testing confirmed both a static inner Safari item and the dynamic outer
+Safari item activate and dismiss the HUD.
+
+---
+
+### 2026-09-04 - Dynamic parents are read-only in Selected Item
+
+**Context:** The running-apps parent is a runtime-populated container, but the generic Selected Item
+inspector still presented it as a direct App Switcher action with a single-app chooser, Test Action,
+and editable legacy children. Changing the displayed action did not clear `dynamicSource`, so the
+editor could claim one behavior while runtime continued opening running apps. Creation and deletion
+were also split between the bottom and top of the same inspector.
+
+**Options:** Keep the generic editor and add explanatory text; make action changes convert the
+dynamic parent into a static item; or present dynamic parents as fixed, read-only runtime sources
+while keeping their appearance and item lifecycle editable.
+
+**Decision:** Present a dynamic parent as a read-only source in Selected Item. Hide its inactive
+preserved children and direct-action controls, but keep those children encoded so migration remains
+lossless. Ring-specific setup owns creation (`Menu & Rings` → Inner/Middle/Outer); Selected Item owns
+appearance, ordering, and deletion. Use “Outer items” consistently and keep Move/Delete together in
+the inspector footer.
+
+**Consequences:** The editor can no longer advertise a single-app payload or action change that
+runtime ignores. The future Action choice grid applies to static items, not fixed dynamic sources.
+Returning users keep recoverable legacy pinned-app data, and deleting the dynamic parent remains an
+explicit user action.
+
+---
+
+### 2026-09-04 - Migrate only the legacy sample Apps wedge
+
+**Context:** App Switcher Wave 4 changed the default Apps wedge from fixed child apps to the
+`.runningApps` dynamic source, but returning users load their saved configuration instead of the
+new sample defaults. Broadly rewriting every static `.appSwitch` container would also reinterpret
+user-created pinned-app groups and could destroy their intended structure.
+
+**Options:** Leave existing configurations unchanged; migrate every static App Switcher container;
+replace the old sample and discard its children; or version the configuration and migrate only the
+recognizable legacy sample shape while retaining its previous children.
+
+**Decision:** Add a top-level configuration schema version. When decoding a pre-versioned file,
+upgrade only the legacy sample-shaped Apps parent (`Apps` / `square.grid.2x2` / empty parent payload /
+static app children) to `.runningApps`. Retain its static children as inactive preserved data. Never
+apply this migration to a current-schema configuration.
+
+**Consequences:** Returning users receive the dynamic App Switcher without resetting their menu or
+losing customized pinned-app payloads. A deliberately created current static Apps group remains
+static, and future migrations have an explicit version boundary.
+
+### 2026-09-04 - Show available wedge actions as a choice grid
+
+**Context:** The Action section currently uses a pop-up menu, which hides the supported choices and
+lets a preserved unavailable action dominate the editor with repeated unavailable/coming-soon
+messaging. The selector changes the wedge's persisted action and may clear type-specific payload,
+so it should read as a configuration choice rather than lightweight navigation.
+
+**Options:** Keep the pop-up menu; replace it with literal tabs or a segmented tab strip; or show
+the available action types as an icon-and-label choice grid above the selected action's controls.
+
+**Decision:** Replace the pop-up with a compact two-column, single-selection choice grid showing
+all actions available in the current version. Keep the selected action visually explicit and show
+its type-specific configuration directly below. When a wedge contains a preserved unavailable
+action, present that state in a separate compact notice and let the grid offer supported
+replacements; do not represent the action choices as tabs.
+
+**Rationale:** The grid makes the four current choices discoverable at a glance, communicates a
+persisted selection more accurately than tabs, and can wrap as the action catalog grows. Separating
+the unavailable-state notice removes the misleading appearance that an unavailable item is an
+ordinary selectable option while preserving its saved value and payload until replacement.
+
+## 2026-09-04 - Reveal supports direct entry; ring setup owns item creation
+
+**Context:** The editor and live HUD exposed two related interaction problems. Reveal could miss an
+expandable middle wedge when event coalescing delivered its first hover sample outside the inner
+boundary. The Menu Items editor also placed an Inner/Middle selector and Add button above the
+preview; hiding it while editing an item made the preview visibly re-center, while leaving it
+visible confused its purpose.
+
+**Decision:** Treat every HUD invocation as beginning at the pointer-centered inner boundary, so a
+direct hover or click of an expandable middle wedge may reveal its outer arc. Remove the preview
+toolbar. Inner and Middle setup tabs own their respective add actions; the Outer tab adds to the
+currently selected static Middle parent and explains when no eligible parent is selected.
+
+**Consequences:** Reveal no longer depends on delivery of an intermediate hover event. The preview
+has one stable frame across Menu & Rings and Selected Item modes. Item creation is placed with the
+ring it affects; outer items retain their explicit parent relationship and cannot be added to a
+dynamic source such as Apps.
+
+---
+
+## 2026-09-04 - Reveal and hold-release use pointer intent, not callback timing
+
+**Context:** Signed testing showed that conditional outer items remained click-dependent because
+the natural center-to-parent crossing occurred before parent expansion. Under a held auxiliary
+mouse trigger, macOS delivered drag events instead of ordinary hover events, and trigger-up could
+arrive before SwiftUI published its final hover selection.
+
+**Decision:** Treat Reveal traversal and its latch as invocation-wide. In Reveal mode, hovering an
+expandable middle parent after the outward crossing opens its outer arc without committing an
+action; the arc stays visible until dismissal and may switch to another hovered expandable parent.
+Always retains click/release expansion and Hidden remains unavailable. Track auxiliary-button drag
+events explicitly, and commit hold-release from the trigger event's captured pointer position after
+converting it into live HUD coordinates.
+
+**Consequences:** Reveal now matches its label in both trigger modes without destabilizing travel
+toward outer children. Hold-release no longer depends on SwiftUI callback ordering or requires a
+second click. The trigger event stream carries pointer positions, and runtime hit testing remains
+the single authority for the action under the release point.
+
+---
+
+## 2026-09-03 - Runtime geometry and lifecycle closure invariants
+
+**Context:** Adversarial review of the sustained-use HUD remediation found that the overlay panel
+remained sized for the default outer radius even when customization increased `r3`, and that Quit
+could terminate during the Settings coordinator's debounced save. Translucent wedge contrast was
+also calculated against a deterministic backdrop while SwiftUI rendered the requested alpha color
+over context-dependent material.
+
+**Decision:** Derive each HUD panel's square size from the live configured `r3`; route every visible
+Quit action through the Settings coordinator's durability barrier and refuse termination when a
+pending save fails; draw the same composited wedge color used by foreground contrast resolution.
+
+**Consequences:** Custom-size HUD geometry, clipping, dismissal, and display clamping share one live
+radius. Quit/relaunch cannot silently discard a pending edit. Preview and runtime use deterministic
+wedge pixels and their icon/label contrast claims match the actual drawn base color. Material remains
+the backing surface but no longer changes translucent configured wedge colors by host context.
+
+---
+
+## 2026-09-03 - HUD remediation interaction and presentation boundaries
+
+**Context:** Signed review exposed four related ambiguities: transparent corners of the square panel
+did not count as outside the circular HUD; hidden outer rings retained a misleading backing surface;
+editor selection reused runtime hover styling and obscured configured colors; and the HUD lacked a
+safe move gesture or visible Quit path when the status item was unavailable.
+
+**Decision:** Local panel clicks use the circular `r3` boundary while global clicks continue to
+represent other applications. Outer visibility controls hit testing, wedges, and localized backing
+through one shared policy transition. Persistent editor selection is a neutral marker independent
+of hover and color resolution. Wave 3 will use a 4 pt threshold on the existing center Settings
+control for tap-toggle dragging, and General will expose a native Quit MousePlus button.
+
+**Consequences:** Clicks exactly on `r3` remain inside; only transparent corners beyond it dismiss.
+Hidden outer branches leave no visual or interactive surface. Preview selection no longer alters
+the color being compared with runtime. Center clicks must still open Settings, drags must never
+execute wedges, hold-release stays pointer-anchored, and panel movement must clamp to the active
+screen. Quitting remains available even if status-item rendering fails.
+
+---
+
 ## 2026-09-02 - Sustained-use HUD customization contracts
 
 **Context:** MousePlus had become useful for one established workflow, but its fixed shared-spoke

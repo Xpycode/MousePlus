@@ -1,6 +1,6 @@
 # Project State
 
-**Last updated:** 2026-09-03
+**Last updated:** 2026-09-26
 
 ## Identity
 
@@ -11,37 +11,41 @@
 
 ## Now
 
-- **Phase:** HUD redesign live-verification remediation planned. <!-- Phase changed: 2026-09-03 -->
-- **Focus:** Fix signed-test failures in circular reorder, dismissal, preview fidelity, outer visibility, movement, and lifecycle access.
-- **Blocker:** Advanced Logitech-button support is paused until raw MX4/MX3S captures resolve the HID++ strategy decision.
-- **Next:** Confirm the proposed center-drag and General-pane Quit placements, then execute `IMPLEMENTATION_PLAN.md` Wave 1.
+- **Phase:** Implementation — recorder/preview recovery accepted. <!-- Phase changed: 2026-09-11 -->
+- **Focus:** User confirmed permission behavior, usual HUD triggering, and Global preview/layout parity pass in the corrected installed signed build. MousePlus was left running.
+- **Blocker:** None for this acceptance task. The original system-dialog loop cause remains unestablished.
+- **Next:** Select the next backlog task. User subsequently authorized committing and pushing the accepted work.
 
 ## Recent
 
-- **2026-09-03:** Signed user testing confirmed direct MousePlus mouse binding works without the BetterMouse shortcut beep, and exposed six closure issues: reorder does not wrap, transparent-corner clicks do not dismiss, preview selection distorts color comparison, outer visibility leaves misleading geometry, HUD movement lacks a safe interaction, and quitting is inaccessible when the status item is invisible. A focused four-wave remediation plan now replaces the completed implementation plan.
-- **2026-09-03:** Live Wave 7 review reshaped Menu Items into a compact tabbed inspector, made deletion and action testing discoverable, preserved wedge selection, removed ambiguous preview-add hotspots, and deferred clearer per-ring/label controls.
-- **2026-09-03:** Wrapped HUD redesign Waves 5–6 with atomic reset/recovery, complete accessibility and migration coverage, shared runtime presentation resolution, and a clean 180-test/build gate.
-- **2026-09-02:** Completed HUD redesign Wave 6; five migration fixtures and editor-to-runtime coverage now validate canonical persistence, unknown actions, geometry, visibility, orientation, colors, retry behavior, and preview safety. The clean gate passed 180/180 tests and a Debug build with no new HUD warnings or forbidden controls.
-- **2026-09-02:** Completed HUD redesign Wave 5; reset/undo/backup restore now atomically preserve full HUD customization, and runtime/editor accessibility exposes configured visible wedges while omitting empty and policy-hidden positions. The 24 focused tests and signed Debug build passed.
+- **2026-09-26:** Verified plain/modifier recording, fixed preview dimensions, and passed 11 focused tests. Cleared a stuck macOS permission dialog; corrected signed build passed user-confirmed permission, trigger, and preview/layout acceptance.
+- **2026-09-25:** Exported a Developer ID-signed Release 0.1.0 (1) from the current working tree; Apple accepted notarization, and the stapled ZIP passed signature and Gatekeeper checks. Local artifact only.
+- **2026-09-17:** App-specific HUD acceptance passed through post-delete relaunch; a signed Release 0.1.0 (1) build was installed and launched from `/Applications` on M1-Max.
+- **2026-09-13:** Signed-live Finder/Global checks passed through action targeting; saved the remaining persistence/deletion handoff and quit the test build for session close.
+- **2026-09-13:** Made unused slot backing transparent by default with a persisted complete-ring option, kept empty regions inert, and stabilized the hidden-submenu warning layout; 134 focused regressions and the Debug build pass, and both appearances are signed-live accepted.
 
 ## Progress
 
 - **Unified Settings workspace:** 8/8 waves complete; automated, adversarial, accessibility, signed-build, and user-driven checks passed.
 - **Send Keystroke:** Complete; automated coverage and signed live verification passed.
 - **Ring UI:** Complete and live-verified.
-- **HUD actions:** Window snapping and keystroke delivery work; menu-bar mirror, app switching, system toggles, and screenshots remain.
+- **Ring-controls reorganization (Menu/Inner/Middle/Outer tabs + per-ring labels):** 4/4 waves complete; automated, adversarial, signed-build, and user-driven checks passed.
+- **HUD actions:** Window snapping and keystroke delivery work; App Switcher v1 is complete and signed-live verified, including MRU order and rapid re-point safety; menu-bar mirror, system toggles, and screenshots remain.
+- **HUD Motion v1:** 5/5 waves complete; automated checks and independent review passed, with overall signed-live acceptance from the user.
+- **HUD Opening Styles:** 7/7 tasks complete and signed-live verified on the supported BetterMouse-to-keyboard route. VoiceOver, direct MousePlus mouse triggering and the broad device/geometry performance matrix are deferred before release and remain untested.
+- **App-specific HUDs:** 5/5 implementation waves and signed-live Finder/Global acceptance complete on the supported BetterMouse-to-keyboard route.
 - **Trigger backend:** Keyboard and standard mouse paths work; advanced Logitech HID++ support remains undecided.
-- **Task tracker:** 0/4 current sprint; 12/17 tracked items complete overall (71%).
+- **Task tracker:** 1/1 current acceptance tasks complete; 44/49 tracked items complete overall (90%), with five backlog items.
 
 ## Risks and Backlog
 
 - Fresh installs ship without a default trigger; onboarding is required before clean-install or public-release testing.
 - Capture the alternate MX4 vendor interface and re-capture the MX3S with the current inspector before choosing accept-limitation, HID++ implementation, or Options+ coexistence.
-- The menu-bar status icon remains invisible on the M1 Max; the global Settings shortcut is the current workaround.
+- The menu-bar status icon and General Settings Quit fallback are signed-live verified on the M1 Max.
 - Settings writers may still replace a corrupt configuration with defaults; the full deferred-risk list is in `MENU_EDITOR_REVIEW.md`.
 - Consider screenshots next if onboarding is deferred; it is the smallest unfinished HUD action and establishes dismiss-before-action behavior.
 - Longer-term work includes the menu-bar mirror, recent-app switcher, system toggles, app-aware command rings, and alternative menu layouts.
-- Clarify HUD customization scope with Menu/Inner/Middle/Outer subtabs; add per-ring label visibility and optional readable label orientation.
+- HUD motion must remain presentation-only: rapid pointer interaction, native mouse-up commits, action timing, and accessibility semantics cannot depend on animation completion.
 
 ## Infrastructure
 
@@ -55,14 +59,19 @@
 - Product and engineering rationale: `decisions.md`
 - Session history and handoffs: `sessions/_index.md`
 - Current tracker and backlog: `TASKS.md`
+- App-specific HUD signed-live completion: `sessions/2026-09-17.md`
 - Unified Settings specification: `../specs/unified-settings-workspace.md`
 - Sustained-use HUD redesign specification: `../specs/sustained-use-hud-redesign.md`
-- Sustained-use HUD redesign implementation plan: `../IMPLEMENTATION_PLAN.md`
 - HUD action roadmap: `HUD_ACTIONS_PLAN.md`
+- App menu-bar mirror (Feature A) implementation plan: `APP_COMMANDS_PLAN.md`
+- Dynamic app switcher (Feature C) implementation plan: `APP_SWITCHER_PLAN.md`
+- HUD Motion v1 completion and pre-clear handoff: `sessions/2026-09-05.md`
+- Completed opening-styles implementation plan: `plans/hud-opening-styles-implementation.md`
+- Opening-styles behavior, preview, and acceptance criteria: `../specs/hud-opening-styles.md`
+- App-specific HUD behavior, fallback, switching, and acceptance criteria: `../specs/app-specific-huds.md`
+- Completed app-specific HUD implementation plan: `plans/app-specific-huds-implementation.md`
+- System toggles (Feature D) implementation plan: `SYSTEM_TOGGLES_PLAN.md`
+- Help/Feedback/Tip/Appearance Settings plan: `APP_CHROME_SETTINGS_PLAN.md`
 - Send Keystroke implementation record: `SEND_KEYSTROKE_PLAN.md`
 - Menu-editor findings and deferred risks: `MENU_EDITOR_REVIEW.md`
 - HID captures and evidence: `fixtures/`
-
-## Resume
-
-Confirm the Wave 3 UI placements, then continue at `IMPLEMENTATION_PLAN.md` Wave 1. Preserve the passing redesign contracts and clean automated baseline while fixing the signed-test findings before repeating user-driven verification.

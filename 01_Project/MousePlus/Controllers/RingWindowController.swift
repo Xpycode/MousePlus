@@ -1,6 +1,46 @@
 import AppKit
 import SwiftUI
 
+/// Binds native pointer sequences to the HUD invocation in which they began.
+/// An in-place profile replacement keeps the same hosting view, so callbacks
+/// alone cannot distinguish a stale release/drag from input for new content.
+struct HUDNativeInputOwnership {
+    private var generation = 0
+    private var primaryDownGeneration: Int?
+    private var auxiliaryDownGenerations: [Int: Int] = [:]
+    private var acceptsUntrackedAuxiliaryDrag = true
+
+    mutating func beginReplacement(adoptingAuxiliaryButton buttonNumber: Int? = nil) {
+        generation &+= 1
+        acceptsUntrackedAuxiliaryDrag = false
+        if let buttonNumber {
+            auxiliaryDownGenerations[buttonNumber] = generation
+        }
+    }
+
+    mutating func primaryDown() {
+        primaryDownGeneration = generation
+    }
+
+    mutating func consumePrimaryUp() -> Bool {
+        defer { primaryDownGeneration = nil }
+        return primaryDownGeneration == generation
+    }
+
+    mutating func auxiliaryDown(buttonNumber: Int) {
+        auxiliaryDownGenerations[buttonNumber] = generation
+    }
+
+    func ownsAuxiliaryDrag(buttonNumber: Int) -> Bool {
+        acceptsUntrackedAuxiliaryDrag
+            || auxiliaryDownGenerations[buttonNumber] == generation
+    }
+
+    mutating func auxiliaryUp(buttonNumber: Int) {
+        auxiliaryDownGenerations[buttonNumber] = nil
+    }
+}
+
 /// An `NSHostingView` subclass that accepts the first mouse click.
 ///
 /// The ring overlay lives in a non-activating panel, so without this the very
@@ -8,38 +48,142 @@ import SwiftUI
 /// be swallowed before SwiftUI ever sees it (see `IMPLEMENTATION_PLAN.md` §6
 /// "NSPanel first-click swallowed"). Returning `true` makes that first click a
 /// real event the ring can act on.
-private final class FirstMouseHostingView<Content: View>: NSHostingView<Content> {
+final class RingHostingView<Content: View>: NSHostingView<Content> {
+    var onPrimaryMouseUp: ((CGPoint, CGPoint) -> Void)?
+    var onOtherMouseDragged: ((CGPoint, CGPoint) -> Void)?
+    private var pointerTrackingArea: NSTrackingArea?
+    private var inputOwnership = HUDNativeInputOwnership()
+
     override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
+
+    override func mouseDown(with event: NSEvent) {
+        inputOwnership.primaryDown()
+        super.mouseDown(with: event)
+    }
+
+    /// SwiftUI's `DragGesture.onEnded` is not reliably delivered inside the
+    /// tested non-activating panel. Forward the native primary-button
+    /// release so tap-toggle commits still use RingViewModel's authoritative
+    /// final-position hit test.
+    override func mouseUp(with event: NSEvent) {
+        super.mouseUp(with: event)
+        guard inputOwnership.consumePrimaryUp(), let onPrimaryMouseUp else { return }
+        let point = convert(event.locationInWindow, from: nil)
+        let center = CGPoint(x: bounds.midX, y: bounds.midY)
+        onPrimaryMouseUp(point, center)
+    }
+
+    override func updateTrackingAreas() {
+        super.updateTrackingAreas()
+        if let pointerTrackingArea { removeTrackingArea(pointerTrackingArea) }
+        let next = NSTrackingArea(
+            rect: bounds,
+            options: [.activeAlways, .mouseEnteredAndExited, .enabledDuringMouseDrag, .inVisibleRect],
+            owner: self,
+            userInfo: nil
+        )
+        addTrackingArea(next)
+        pointerTrackingArea = next
+    }
+
+    override func otherMouseDragged(with event: NSEvent) {
+        guard inputOwnership.ownsAuxiliaryDrag(buttonNumber: event.buttonNumber),
+              let onOtherMouseDragged else {
+            super.otherMouseDragged(with: event)
+            return
+        }
+        let point = convert(event.locationInWindow, from: nil)
+        let center = CGPoint(x: bounds.midX, y: bounds.midY)
+        onOtherMouseDragged(point, center)
+    }
+
+    override func otherMouseDown(with event: NSEvent) {
+        inputOwnership.auxiliaryDown(buttonNumber: event.buttonNumber)
+        super.otherMouseDown(with: event)
+    }
+
+    override func otherMouseUp(with event: NSEvent) {
+        inputOwnership.auxiliaryUp(buttonNumber: event.buttonNumber)
+        super.otherMouseUp(with: event)
+    }
+
+    func beginReplacement(adoptingAuxiliaryButton buttonNumber: Int?) {
+        inputOwnership.beginReplacement(adoptingAuxiliaryButton: buttonNumber)
+    }
 }
 
 /// Manages the ring menu overlay panel.
 @MainActor
 final class RingWindowController {
     private var panel: NSPanel?
-    private var hostingView: FirstMouseHostingView<AnyView>?
-
-    /// Side length of the (square) overlay panel.
-    ///
-    /// Derived from the outermost band radius (`r3`) so the full ring — plus a
-    /// little breathing room for shadow/hover affordances — always fits:
-    /// `side = 2 * r3 + pad` (`IMPLEMENTATION_PLAN.md` §2.1). With the default
-    /// `BandRadii` (`r3 = 224`) and `pad = 24` this is `472pt`.
-    private let panelSide: CGFloat = {
-        let pad: CGFloat = 24
-        return 2 * BandRadii().r3 + pad
-    }()
+    private var hostingView: RingHostingView<AnyView>?
 
     var isVisible: Bool {
         panel?.isVisible ?? false
     }
 
-    func show<Content: View>(at point: NSPoint, content: Content) {
-        let panel = createPanel()
-        let side = panelSide
+    /// Converts an authoritative global trigger-event position into the same
+    /// local point/center pair used by `RingMenuView` hit testing.
+    func hitTestCoordinates(forScreenPoint screenPoint: CGPoint) -> (point: CGPoint, center: CGPoint)? {
+        guard let panel, let hostingView else { return nil }
+        let windowPoint = panel.convertPoint(fromScreen: screenPoint)
+        let point = hostingView.convert(windowPoint, from: nil)
+        let center = CGPoint(x: hostingView.bounds.midX, y: hostingView.bounds.midY)
+        return (point, center)
+    }
+
+    /// Returns whether a local mouse-down targets this panel outside the HUD's
+    /// circular outer edge. The square panel includes transparent padding and
+    /// corners, so panel-frame containment alone is insufficient.
+    func shouldDismiss(forLocalMouseDown event: NSEvent, outerRadius: CGFloat) -> Bool {
+        guard let panel, let hostingView, event.window === panel else { return false }
+        let point = hostingView.convert(event.locationInWindow, from: nil)
+        let center = CGPoint(x: hostingView.bounds.midX, y: hostingView.bounds.midY)
+        return HUDDismissalGeometry.isOutsideHUD(
+            point: point,
+            center: center,
+            outerRadius: outerRadius
+        )
+    }
+
+    /// Classifies a local click while the HUD is visible. Clicks in another
+    /// MousePlus window (notably Settings) are outside the HUD too, but must be
+    /// preserved so the control the user clicked still receives its event.
+    func localMouseDownDisposition(
+        for event: NSEvent,
+        outerRadius: CGFloat
+    ) -> HUDLocalMouseDownDisposition {
+        guard let panel, hostingView != nil else { return .ignore }
+        let eventBelongsToPanel = event.window === panel
+        let isOutsideHUD = eventBelongsToPanel
+            && shouldDismiss(forLocalMouseDown: event, outerRadius: outerRadius)
+        return .resolve(
+            eventBelongsToPanel: eventBelongsToPanel,
+            isOutsideHUD: isOutsideHUD
+        )
+    }
+
+    func show<Content: View>(
+        at point: NSPoint,
+        outerRadius: CGFloat,
+        content: Content,
+        onPrimaryMouseUp: ((CGPoint, CGPoint) -> Void)? = nil,
+        onOtherMouseDragged: ((CGPoint, CGPoint) -> Void)? = nil
+    ) {
+        let side = HUDPanelGeometry.squareSide(outerRadius: outerRadius)
+        let panel = createPanel(side: side)
         let squareSize = NSSize(width: side, height: side)
 
-        let hostingView = FirstMouseHostingView(rootView: AnyView(content))
+        let hostingView = RingHostingView(rootView: AnyView(
+            content.frame(width: side, height: side)
+        ))
+        // The controller owns the padded panel frame. Hosting's default size
+        // constraints otherwise resize it to the smaller ring after mounting,
+        // moving the center under a stationary pointer and selecting a wedge.
+        hostingView.sizingOptions = []
         hostingView.frame = NSRect(origin: .zero, size: squareSize)
+        hostingView.onPrimaryMouseUp = onPrimaryMouseUp
+        hostingView.onOtherMouseDragged = onOtherMouseDragged
 
         panel.contentView = hostingView
         self.hostingView = hostingView
@@ -60,6 +204,48 @@ final class RingWindowController {
         panel?.orderOut(nil)
         panel = nil
         hostingView = nil
+    }
+
+    /// Replaces a visible invocation without ordering the panel out or changing
+    /// its anchor. The caller supplies a renderer with opening playback disabled,
+    /// so remounting updates mode-specific center/native-event behavior without
+    /// replaying summon motion.
+    func replaceContent<Content: View>(
+        outerRadius: CGFloat,
+        content: Content,
+        onPrimaryMouseUp: ((CGPoint, CGPoint) -> Void)?,
+        onOtherMouseDragged: ((CGPoint, CGPoint) -> Void)?,
+        adoptingAuxiliaryButton: Int? = nil
+    ) {
+        guard let panel, let hostingView else { return }
+        let side = HUDPanelGeometry.squareSide(outerRadius: outerRadius)
+        let center = CGPoint(x: panel.frame.midX, y: panel.frame.midY)
+        let size = CGSize(width: side, height: side)
+        let proposed = CGPoint(x: center.x - side / 2, y: center.y - side / 2)
+        let screen = panel.screen ?? NSScreen.screens.first { $0.frame.contains(center) } ?? NSScreen.main
+        let origin = screen.map {
+            HUDPanelGeometry.clampedOrigin(proposed, size: size, in: $0.visibleFrame)
+        } ?? proposed
+        panel.setFrame(CGRect(origin: origin, size: size), display: true)
+        hostingView.beginReplacement(adoptingAuxiliaryButton: adoptingAuxiliaryButton)
+        hostingView.rootView = AnyView(content.frame(width: side, height: side))
+        hostingView.frame = CGRect(origin: .zero, size: size)
+        hostingView.onPrimaryMouseUp = onPrimaryMouseUp
+        hostingView.onOtherMouseDragged = onOtherMouseDragged
+    }
+
+    /// Moves the current HUD by a global-coordinate delta while keeping the
+    /// complete square inside the visible frame of the screen under the pointer.
+    func movePanel(by delta: CGSize) {
+        guard let panel else { return }
+        let proposed = CGPoint(x: panel.frame.origin.x + delta.width,
+                               y: panel.frame.origin.y + delta.height)
+        let screen = NSScreen.screens.first { $0.frame.contains(NSEvent.mouseLocation) }
+            ?? panel.screen ?? NSScreen.main
+        let origin = screen.map {
+            HUDPanelGeometry.clampedOrigin(proposed, size: panel.frame.size, in: $0.visibleFrame)
+        } ?? proposed
+        panel.setFrameOrigin(origin)
     }
 
     /// Computes the panel origin (bottom-left, global screen coords) for a square
@@ -90,9 +276,9 @@ final class RingWindowController {
         return origin
     }
 
-    private func createPanel() -> NSPanel {
+    private func createPanel(side: CGFloat) -> NSPanel {
         let panel = NSPanel(
-            contentRect: NSRect(origin: .zero, size: NSSize(width: panelSide, height: panelSide)),
+            contentRect: NSRect(origin: .zero, size: NSSize(width: side, height: side)),
             styleMask: [.borderless, .nonactivatingPanel],
             backing: .buffered,
             defer: false
@@ -114,5 +300,43 @@ final class RingWindowController {
         panel.acceptsMouseMovedEvents = true
 
         return panel
+    }
+}
+
+/// Pure boundary math shared by runtime dismissal and focused unit tests.
+enum HUDDismissalGeometry {
+    static func isOutsideHUD(point: CGPoint, center: CGPoint, outerRadius: CGFloat) -> Bool {
+        hypot(point.x - center.x, point.y - center.y) > outerRadius
+    }
+}
+
+enum HUDLocalMouseDownDisposition: Equatable {
+    case ignore
+    case dismissPreservingEvent
+    case dismissConsumingEvent
+
+    static func resolve(eventBelongsToPanel: Bool, isOutsideHUD: Bool) -> Self {
+        guard eventBelongsToPanel else { return .dismissPreservingEvent }
+        return isOutsideHUD ? .dismissConsumingEvent : .ignore
+    }
+}
+
+enum HUDPanelGeometry {
+    /// Full HUD diameter plus breathing room for shadows and hover affordances.
+    static func squareSide(outerRadius: CGFloat, padding: CGFloat = 24) -> CGFloat {
+        max(0, 2 * outerRadius + padding)
+    }
+
+    static func clampedOrigin(_ origin: CGPoint, size: CGSize, in visibleFrame: CGRect) -> CGPoint {
+        CGPoint(
+            x: clamped(origin.x, extent: size.width, min: visibleFrame.minX, max: visibleFrame.maxX),
+            y: clamped(origin.y, extent: size.height, min: visibleFrame.minY, max: visibleFrame.maxY)
+        )
+    }
+
+    private static func clamped(_ value: CGFloat, extent: CGFloat,
+                                min minimum: CGFloat, max maximum: CGFloat) -> CGFloat {
+        guard maximum - minimum >= extent else { return minimum }
+        return Swift.min(Swift.max(value, minimum), maximum - extent)
     }
 }

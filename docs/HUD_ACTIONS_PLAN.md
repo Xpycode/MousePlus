@@ -193,6 +193,9 @@ otherwise — good *first* build (no async-expand, no icons).
 
 ## Feature C — Dynamic App Switcher
 
+**Full phased execute-wave plan: `docs/APP_SWITCHER_PLAN.md`** (2026-09-04) — reconciled against
+the current `ActionService`/`RingViewModel` code, not just this sketch.
+
 **Goal.** A middle wedge "Apps" that expands the outer ring to **currently running apps**
 (real icons + names); commit switches to it. Commit reuses the existing, working
 `.appSwitch` path — only the *population* is new.
@@ -231,6 +234,9 @@ alphabetical. Strict-concurrency: reading `NSWorkspace` in an actor may warn →
 ---
 
 ## Feature D — System Toggles
+
+**Full phased execute-wave plan: `docs/SYSTEM_TOGGLES_PLAN.md`** (2026-09-04) — reconciled against
+the current `ActionService`/`ActionType` code, not just this sketch.
 
 **Goal.** A set of one-shot system actions, best as **inner-ring** symbol-only quick toggles.
 
