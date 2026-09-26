@@ -10,7 +10,7 @@
 
 | Date | Focus | Outcome | Log |
 |------|-------|---------|-----|
-| 2026-09-26 | Recorder, preview, and permission-dialog recovery | Recorder verified; preview dimensions fixed; 11 tests pass. Stuck macOS dialog cleared; corrected signed app passed user-confirmed permission, trigger, and preview/layout acceptance. No commit or push. | [Log](2026-09-26.md) |
+| 2026-09-26 | Recorder, preview, and permission-dialog recovery | Recorder verified; preview dimensions fixed; 11 tests pass. Stuck macOS dialog cleared; corrected signed app passed permission, trigger, and layout acceptance. Merged and pushed to main; next: scope trigger onboarding. | [Log](2026-09-26.md) |
 | 2026-09-25 | Export a notarized MousePlus app | Release 0.1.0 (1) archived with Developer ID and hardened runtime; Apple accepted notarization. Stapled ZIP passed extraction, signature, and Gatekeeper checks. Local artifact only; next: acceptance testing and release prerequisites. | [→](2026-09-25.md) |
 | 2026-09-17 | Complete Finder/Global acceptance and install a versioned build | E1/AC19 passed and the plan was archived. Developer ID-signed Release 0.1.0 (1) was installed and launched from `/Applications` on M1-Max; local build is unnotarized. | [→](2026-09-17.md) |
 | 2026-09-13 | HUD appearance options and Finder/Global live acceptance | Transparent/complete backing accepted; recorded 134 tests. Fresh signed build and live checks through action targeting pass. Next: relaunch persistence, deletion, and post-delete fallback. Test app quit; commit/push requested for all pending work. | [→](2026-09-13.md) |

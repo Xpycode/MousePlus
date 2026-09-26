@@ -30,12 +30,6 @@
 <!-- Active work. Populated by /plan or /execute. Keep focused (3-7 tasks). -->
 <!-- When done: /log moves to tasks-archive.md -->
 
-- [x] Verify the corrected signed build has no recurring permission dialog, then compare saved
-  preview dimensions with the live HUD. Recorder A/original-chord acceptance already passed.
-  Startup permission requests succeeded and no dialog helper recurred during observation.
-  User confirmed permission behavior, usual HUD triggering, and Global preview/layout parity pass
-  on 2026-09-26. App left running; no commit or push. Recovery and backup details:
-  [2026-09-26 handoff](sessions/2026-09-26.md).
 
 ---
 

@@ -11,14 +11,14 @@
 
 ## Now
 
-- **Phase:** Implementation — recorder/preview recovery accepted. <!-- Phase changed: 2026-09-11 -->
-- **Focus:** User confirmed permission behavior, usual HUD triggering, and Global preview/layout parity pass in the corrected installed signed build. MousePlus was left running.
+- **Phase:** Implementation — next task selection. <!-- Phase changed: 2026-09-11 -->
+- **Focus:** Ready to choose the next task on main; the accepted installed MousePlus build remains running.
 - **Blocker:** None for this acceptance task. The original system-dialog loop cause remains unestablished.
-- **Next:** Select the next backlog task. User subsequently authorized committing and pushing the accepted work.
+- **Next:** Recommended: scope first-run trigger onboarding before clean-install release testing. No implementation plan is approved yet.
 
 ## Recent
 
-- **2026-09-26:** Verified plain/modifier recording, fixed preview dimensions, and passed 11 focused tests. Cleared a stuck macOS permission dialog; corrected signed build passed user-confirmed permission, trigger, and preview/layout acceptance.
+- **2026-09-26:** Verified plain/modifier recording, fixed preview dimensions, and passed 11 focused tests. Cleared a stuck macOS permission dialog; corrected signed build passed user-confirmed permission, trigger, and preview/layout acceptance. Changes merged and pushed to main.
 - **2026-09-25:** Exported a Developer ID-signed Release 0.1.0 (1) from the current working tree; Apple accepted notarization, and the stapled ZIP passed signature and Gatekeeper checks. Local artifact only.
 - **2026-09-17:** App-specific HUD acceptance passed through post-delete relaunch; a signed Release 0.1.0 (1) build was installed and launched from `/Applications` on M1-Max.
 - **2026-09-13:** Signed-live Finder/Global checks passed through action targeting; saved the remaining persistence/deletion handoff and quit the test build for session close.
@@ -35,7 +35,7 @@
 - **HUD Opening Styles:** 7/7 tasks complete and signed-live verified on the supported BetterMouse-to-keyboard route. VoiceOver, direct MousePlus mouse triggering and the broad device/geometry performance matrix are deferred before release and remain untested.
 - **App-specific HUDs:** 5/5 implementation waves and signed-live Finder/Global acceptance complete on the supported BetterMouse-to-keyboard route.
 - **Trigger backend:** Keyboard and standard mouse paths work; advanced Logitech HID++ support remains undecided.
-- **Task tracker:** 1/1 current acceptance tasks complete; 44/49 tracked items complete overall (90%), with five backlog items.
+- **Task tracker:** no current sprint tasks; 44/49 tracked items complete overall (90%), with five backlog items.
 
 ## Risks and Backlog
 
