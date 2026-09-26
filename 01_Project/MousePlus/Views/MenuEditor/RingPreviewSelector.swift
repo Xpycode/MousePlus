@@ -158,6 +158,7 @@ struct RingAccessibilitySnapshot {
 @MainActor
 struct RingPreviewSelector: View {
     @Bindable var model: MenuEditorModel
+    var appearance: AppearanceConfig = .default
     @State private var preview = RingViewModel()
     private let canvasSide: CGFloat = 448
 
@@ -200,12 +201,19 @@ struct RingPreviewSelector: View {
         .frame(width: side, height: side)
         .scaleEffect(scale)
         .frame(width: canvasSide, height: canvasSide)
-        .onAppear { syncPreview() }
-        .onChange(of: model.inner) { _, _ in syncPreview() }
-        .onChange(of: model.middle) { _, _ in syncPreview() }
-        .onChange(of: model.hudCustomization) { _, _ in syncPreview() }
+        .onChange(of: previewContent, initial: true) { _, content in
+            preview.load(from: content.configuration)
+            syncPreview()
+        }
         .onChange(of: model.selection) { _, _ in syncPreview() }
         .transaction { $0.animation = nil }
+    }
+
+    private var previewContent: MenuEditorPreviewContent {
+        MenuEditorPreviewContent(
+            inner: model.inner, middle: model.middle,
+            hudCustomization: model.hudCustomization, appearance: appearance
+        )
     }
 
     private var outerRingGuidePresentation: EditorOuterRingGuidePresentation {
@@ -311,5 +319,19 @@ struct RingPreviewSelector: View {
               let index = model.middle.firstIndex(where: { $0.id == id }),
               model.middle[index].hasSubItems else { return nil }
         return (model.middle[index], index)
+    }
+}
+
+/// One observed snapshot includes both the editable profile and shared geometry.
+/// Loading it uses the same configuration path as the live HUD.
+struct MenuEditorPreviewContent: Equatable {
+    let inner: [RingMenuItem]
+    let middle: [RingMenuItem]
+    let hudCustomization: HUDCustomization
+    let appearance: AppearanceConfig
+
+    var configuration: Configuration {
+        Configuration(inner: inner, middle: middle, appearance: appearance,
+                      hudCustomization: hudCustomization)
     }
 }

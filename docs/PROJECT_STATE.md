@@ -1,6 +1,6 @@
 # Project State
 
-**Last updated:** 2026-09-13
+**Last updated:** 2026-09-26
 
 ## Identity
 
@@ -11,19 +11,18 @@
 
 ## Now
 
-- **Phase:** Implementation — app-specific HUDs. <!-- Phase changed: 2026-09-11 -->
-- **Focus:** Complete signed-live Finder and Global HUD acceptance for app-specific HUDs.
-- **Blocker:** none for implementation. The remaining signed-live Finder acceptance is an external completion gate; advanced Logitech support and Leave-a-Tip retain their separate dependencies.
-- **Next:** Finish E1 relaunch persistence, profile deletion, and post-delete Global fallback.
-- **Execution:** `../IMPLEMENTATION_PLAN.md` remains active; Waves 1–5 are implemented. E1 awaits the remaining live acceptance checks; switching, release isolation, center interactions, Reduce Motion, fallback, and action targeting passed.
+- **Phase:** Implementation — recorder/preview recovery accepted. <!-- Phase changed: 2026-09-11 -->
+- **Focus:** User confirmed permission behavior, usual HUD triggering, and Global preview/layout parity pass in the corrected installed signed build. MousePlus was left running.
+- **Blocker:** None for this acceptance task. The original system-dialog loop cause remains unestablished.
+- **Next:** Select the next backlog task. User subsequently authorized committing and pushing the accepted work.
 
 ## Recent
 
+- **2026-09-26:** Verified plain/modifier recording, fixed preview dimensions, and passed 11 focused tests. Cleared a stuck macOS permission dialog; corrected signed build passed user-confirmed permission, trigger, and preview/layout acceptance.
+- **2026-09-25:** Exported a Developer ID-signed Release 0.1.0 (1) from the current working tree; Apple accepted notarization, and the stapled ZIP passed signature and Gatekeeper checks. Local artifact only.
+- **2026-09-17:** App-specific HUD acceptance passed through post-delete relaunch; a signed Release 0.1.0 (1) build was installed and launched from `/Applications` on M1-Max.
 - **2026-09-13:** Signed-live Finder/Global checks passed through action targeting; saved the remaining persistence/deletion handoff and quit the test build for session close.
 - **2026-09-13:** Made unused slot backing transparent by default with a persisted complete-ring option, kept empty regions inert, and stabilized the hidden-submenu warning layout; 134 focused regressions and the Debug build pass, and both appearances are signed-live accepted.
-- **2026-09-11:** E1 setup and trigger-collision acceptance passed; handled shortcuts no longer beep, duplicate bindings retain the saved shortcut and explain the collision inline, and the fresh signed build remains running.
-- **2026-09-11:** Completed Wave 5 integration and adversarial closure; 158 focused and 377 complete tests pass, and the fresh Developer ID build is running for E1 acceptance.
-- **2026-09-11:** Completed Wave 4 native center context presentation; 45 focused regressions and the Debug build pass after independent review, and the fresh artifact is running from DerivedData.
 
 ## Progress
 
@@ -34,8 +33,9 @@
 - **HUD actions:** Window snapping and keystroke delivery work; App Switcher v1 is complete and signed-live verified, including MRU order and rapid re-point safety; menu-bar mirror, system toggles, and screenshots remain.
 - **HUD Motion v1:** 5/5 waves complete; automated checks and independent review passed, with overall signed-live acceptance from the user.
 - **HUD Opening Styles:** 7/7 tasks complete and signed-live verified on the supported BetterMouse-to-keyboard route. VoiceOver, direct MousePlus mouse triggering and the broad device/geometry performance matrix are deferred before release and remain untested.
+- **App-specific HUDs:** 5/5 implementation waves and signed-live Finder/Global acceptance complete on the supported BetterMouse-to-keyboard route.
 - **Trigger backend:** Keyboard and standard mouse paths work; advanced Logitech HID++ support remains undecided.
-- **Task tracker:** no current sprint tasks; 43/48 tracked items complete overall (90%), with five backlog items.
+- **Task tracker:** 1/1 current acceptance tasks complete; 44/49 tracked items complete overall (90%), with five backlog items.
 
 ## Risks and Backlog
 
@@ -59,7 +59,7 @@
 - Product and engineering rationale: `decisions.md`
 - Session history and handoffs: `sessions/_index.md`
 - Current tracker and backlog: `TASKS.md`
-- App-specific HUD Wave 5 closure and next-session handoff: `sessions/2026-09-11.md`
+- App-specific HUD signed-live completion: `sessions/2026-09-17.md`
 - Unified Settings specification: `../specs/unified-settings-workspace.md`
 - Sustained-use HUD redesign specification: `../specs/sustained-use-hud-redesign.md`
 - HUD action roadmap: `HUD_ACTIONS_PLAN.md`
@@ -69,7 +69,7 @@
 - Completed opening-styles implementation plan: `plans/hud-opening-styles-implementation.md`
 - Opening-styles behavior, preview, and acceptance criteria: `../specs/hud-opening-styles.md`
 - App-specific HUD behavior, fallback, switching, and acceptance criteria: `../specs/app-specific-huds.md`
-- Active app-specific HUD implementation plan: `../IMPLEMENTATION_PLAN.md`
+- Completed app-specific HUD implementation plan: `plans/app-specific-huds-implementation.md`
 - System toggles (Feature D) implementation plan: `SYSTEM_TOGGLES_PLAN.md`
 - Help/Feedback/Tip/Appearance Settings plan: `APP_CHROME_SETTINGS_PLAN.md`
 - Send Keystroke implementation record: `SEND_KEYSTROKE_PLAN.md`

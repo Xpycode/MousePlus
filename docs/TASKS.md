@@ -10,7 +10,7 @@
   inside its existing Browse popover. Requested during app-specific HUD E1 acceptance on 2026-09-11;
   placement and exact catalog scope still need confirmation under the UI-change protocol.
 
-- [ ] Scope the next MousePlus App Switcher increment beyond the live-verified full-circle running-app ring: compare window switching, recent apps, search, grouping/paging, and keyboard/pointer hybrids. Complete app-specific HUDs are now scoped separately in the active plan.
+- [ ] Scope the next MousePlus App Switcher increment beyond the live-verified full-circle running-app ring: compare window switching, recent apps, search, grouping/paging, and keyboard/pointer hybrids. Complete app-specific HUDs are finished separately.
 
 - [ ] Center outer-ring labels beneath their icons when an expansion chevron is present. A
   2026-09-11 user screenshot shows the `Apps` and `Snap` labels centered under the combined
@@ -29,6 +29,13 @@
 ## Current Sprint
 <!-- Active work. Populated by /plan or /execute. Keep focused (3-7 tasks). -->
 <!-- When done: /log moves to tasks-archive.md -->
+
+- [x] Verify the corrected signed build has no recurring permission dialog, then compare saved
+  preview dimensions with the live HUD. Recorder A/original-chord acceptance already passed.
+  Startup permission requests succeeded and no dialog helper recurred during observation.
+  User confirmed permission behavior, usual HUD triggering, and Global preview/layout parity pass
+  on 2026-09-26. App left running; no commit or push. Recovery and backup details:
+  [2026-09-26 handoff](sessions/2026-09-26.md).
 
 ---
 

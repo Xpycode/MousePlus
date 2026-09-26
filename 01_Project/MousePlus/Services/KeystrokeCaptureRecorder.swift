@@ -1,6 +1,7 @@
 import AppKit
 import CoreGraphics
 import Observation
+import OSLog
 
 enum KeystrokeCaptureDisposition: Equatable {
     case passThrough
@@ -158,7 +159,12 @@ final class SystemKeystrokeCaptureTap: KeystrokeCaptureTapping {
 
     func stop() {
         if let source { CFRunLoopRemoveSource(CFRunLoopGetMain(), source, .commonModes) }
-        if let port { CGEvent.tapEnable(tap: port, enable: false) }
+        if let port {
+            CGEvent.tapEnable(tap: port, enable: false)
+            // Disabling leaves the connection registered with WindowServer.
+            // Invalidate before releasing it so repeated recordings do not leak taps.
+            CFMachPortInvalidate(port)
+        }
         source = nil
         port = nil
         handler = nil
@@ -187,6 +193,10 @@ final class SystemKeystrokeCaptureTap: KeystrokeCaptureTapping {
 @MainActor
 @Observable
 final class KeystrokeCaptureRecorder {
+    private static let logger = Logger(subsystem: "com.xpycode.MousePlus", category: "KeystrokeRecorder")
+    private var keyDownCount = 0
+    private var keyUpCount = 0
+    private var disabledCount = 0
     enum Outcome: Equatable {
         case captured(KeystrokePayload)
         case cancelled
@@ -216,10 +226,20 @@ final class KeystrokeCaptureRecorder {
     func record() {
         stopInfrastructure()
         outcome = nil
+        keyDownCount = 0
+        keyUpCount = 0
+        disabledCount = 0
         reducer.start()
         do {
             try tap.start { [weak self] event in
                 guard let self else { return .passThrough }
+                switch event {
+                case .keyDown: self.keyDownCount += 1
+                case .keyUp: self.keyUpCount += 1
+                case .tapDisabled:
+                    self.disabledCount += 1
+                    Self.logger.notice("Recording tap disabled; requesting re-enable")
+                }
                 let transition = self.reducer.reduce(event)
                 if transition.shouldReenableTap { self.tap.reenable() }
                 if let completion = transition.completion {
@@ -235,6 +255,7 @@ final class KeystrokeCaptureRecorder {
             return
         }
         isRecording = true
+        Self.logger.notice("Keystroke recording started")
         timeoutTask = Task { [weak self] in
             guard let self else { return }
             do { try await sleeper.sleep(for: timeout) } catch { return }
@@ -244,6 +265,7 @@ final class KeystrokeCaptureRecorder {
 
     func cancel() {
         guard isRecording else { return }
+        Self.logger.notice("Keystroke recording cancelled")
         reducer.cancel()
         stopInfrastructure()
         isRecording = false
@@ -255,13 +277,18 @@ final class KeystrokeCaptureRecorder {
         stopInfrastructure()
         isRecording = false
         switch completion {
-        case .captured(let payload): outcome = .captured(payload)
-        case .cancelled: outcome = .cancelled
+        case .captured(let payload):
+            Self.logger.notice("Keystroke recording captured a key")
+            outcome = .captured(payload)
+        case .cancelled:
+            Self.logger.notice("Keystroke recording cancelled with Escape")
+            outcome = .cancelled
         }
     }
 
     private func timeoutReached() {
         guard isRecording else { return }
+        Self.logger.notice("Keystroke recording timed out: down=\(self.keyDownCount), up=\(self.keyUpCount), disabled=\(self.disabledCount)")
         reducer.cancel()
         stopInfrastructure()
         isRecording = false

@@ -1,6 +1,6 @@
 # App-Specific HUDs Specification
 
-**Status:** Automated implementation complete — signed-live AC19 pending
+**Status:** Complete — AC1–AC19 passed; signed-live Finder/Global acceptance closed 2026-09-17 on the supported BetterMouse-to-keyboard route.
 **Created:** 2026-09-11
 **Last Updated:** 2026-09-11
 
@@ -208,7 +208,7 @@ a hard-coded Finder profile to existing or new users.
   selection alone does not dirty or save configuration.
 - [x] **AC18 — Reduce Motion:** Given Reduce Motion is enabled, when a visible HUD changes profile,
   then no spatial profile-change motion occurs and interaction remains immediate.
-- [ ] **AC19 — Live Finder proof:** Given a signed fresh build and a user-created Finder profile with
+- [x] **AC19 — Live Finder proof:** Given a signed fresh build and a user-created Finder profile with
   at least one changed inner and middle action, when the user alternates Finder and an unconfigured
   app and exercises both invocation routes, then Finder/Global selection, in-place switching,
   fallback, action targeting, save, and relaunch persistence all match this specification.
@@ -288,7 +288,7 @@ without changing profile selection, fallback, trigger, or accessibility semantic
 
 ## Related
 
-- [Implementation plan](../IMPLEMENTATION_PLAN.md)
+- [Completed implementation plan](../docs/plans/app-specific-huds-implementation.md)
 - [Current project state](../docs/PROJECT_STATE.md)
 - [Discovery handoff](../docs/sessions/2026-09-11.md)
 - [Older app-aware command-ring plan](../docs/APP_COMMANDS_PLAN.md)

@@ -170,6 +170,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var configuration = Configuration()
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        // App-hosted unit tests must not start production event taps or request
+        // TCC access under the Debug signing identity. Each test owns its own
+        // services and fixtures; launching the real app here queues system
+        // permission dialogs alongside the installed Developer ID build.
+        guard NSClassFromString("XCTestCase") == nil else { return }
         setupMenuBar()
         loadConfiguration()
 

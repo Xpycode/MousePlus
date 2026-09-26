@@ -10,6 +10,7 @@ import SwiftUI
 /// Reusable, persistence-neutral editor composition embedded in Settings.
 struct MenuEditorWorkspace<ActionAccessory: View, MenuAccessory: View>: View {
     @Bindable var model: MenuEditorModel
+    var appearance: AppearanceConfig = .default
     var onReset: () -> Void
     @ViewBuilder var actionAccessory: () -> ActionAccessory
     @ViewBuilder var menuAccessory: () -> MenuAccessory
@@ -26,7 +27,7 @@ struct MenuEditorWorkspace<ActionAccessory: View, MenuAccessory: View>: View {
                 // The default ring is 448pt square. A stable 480pt column leaves
                 // breathing room without coupling its position to the form.
                 VStack(spacing: 8) {
-                    RingPreviewSelector(model: model)
+                    RingPreviewSelector(model: model, appearance: appearance)
                         .frame(maxHeight: .infinity)
                 }
                 .frame(width: 480)

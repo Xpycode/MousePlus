@@ -24,6 +24,11 @@ struct ActionDataEditor: View {
     @State private var keystrokeCaptureMessage: String?
     private let keystrokeConflicts = KeystrokeConflictChecker()
 
+    init(item: Binding<RingMenuItem>, recorder: KeystrokeCaptureRecorder? = nil) {
+        _item = item
+        _keystrokeRecorder = State(initialValue: recorder ?? KeystrokeCaptureRecorder())
+    }
+
     private var offeredActionTypes: [ActionType] {
         item.actionType.isSelectable
             ? ActionType.selectableCases

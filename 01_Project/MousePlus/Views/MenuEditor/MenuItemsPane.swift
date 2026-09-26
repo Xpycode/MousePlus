@@ -29,6 +29,7 @@ struct MenuItemsPane: View {
 
             MenuEditorWorkspace(
                 model: coordinator.menuEditorModel,
+                appearance: coordinator.configuration.appearance,
                 onReset: resetMenuItems,
                 actionAccessory: {
                     if let selectedItem {
