@@ -33,13 +33,18 @@
   branch/configuration combinations, and smoothness on other supported Macs. Explicitly deferred
   by the user on 2026-09-11; untested, not failed.
 
+- [ ] Show a visible cue when MousePlus is suspended after a permission loss it could not relaunch
+  from (rate-limited, failed flush or failed launch): for example a status-item tooltip or menu
+  line pointing to Restart. Raised by the permission-loss R5 review on 2026-11-13
+  ([report](plans/permission-loss-wave4-report.md)). New UI: needs the UI-change protocol and approval.
+
 Color-well remediation moved into the active plan as R2 on 2026-11-07;
 automated checks and November 7 live confirmation passed; onboarding E1 remains separate.
 
 ## Active plan
 
-[Permission-loss remediation, revision 2](plans/permission-loss-implementation.md): R0–R3 done,
-G1 passed; R4 and R5 ready. Plan owns status/evidence. Original onboarding E1 below remains failed/open;
+[Permission-loss remediation, revision 2](plans/permission-loss-implementation.md): R0–R5 done,
+G1 passed; R6 ready. Plan owns status/evidence. Original onboarding E1 below remains failed/open;
 its historical checkbox is retained, not counted as remediation progress.
 
 ## Current Sprint

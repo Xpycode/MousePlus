@@ -11,13 +11,15 @@
 
 ## Now
 
-- **Phase:** Build — permission-loss remediation executing; Waves 1–3 complete. <!-- Phase changed: 2026-11-13 -->
+- **Phase:** Build — permission-loss remediation executing; Waves 1–4 complete. <!-- Phase changed: 2026-11-13 -->
 - **Focus:** Permission-loss remediation revision 2: remove all taps and self-relaunch on loss, decided by user. Detection by TCC notification plus tap probe. Permission reported ON; no further live permission-toggle tests.
-- **Blocker:** Onboarding E1 permission restoration FAILED November 13. The input hang matches documented macOS behaviour for a live active tap in an untrusted process; a runtime shutdown path (R3) is now implemented and fake-validated, unreviewed and unverified under real revocation. Fresh-install deferred; VoiceOver excluded. Settings dragging remains unresolved.
-- **Next:** Wave 4: R4 (full headless matrix + authoritative build) and R5 (independent lifecycle review) are ready, report-only. No live permission toggles; VoiceOver excluded.
-- **Execution:** [Permission-loss remediation, revision 2](plans/permission-loss-implementation.md) — Waves 1–3 complete (R0–R3; 117/117 headless tests, test build succeeded, no launch); Wave 4 (R4, R5) ready. E1 open; onboarding E1 remains FAILED/open. Current handoff: [2026-11-13 Wave 3 Resume](sessions/2026-11-13.md#wave-3-resume).
+- **Blocker:** Onboarding E1 permission restoration FAILED November 13. The input hang matches documented macOS behaviour for a live active tap in an untrusted process; a runtime shutdown path (R3) is implemented, fake-validated and independently reviewed (no blocker; three should-fix items open for R6), still unverified under real revocation. Fresh-install deferred; VoiceOver excluded. Settings dragging remains unresolved.
+- **Next:** Wave 5: R6 resolves review findings S1 (invalidate all ports before any tap-disable IPC), S2 (deadline on flush/launch), S3 (test the AppDelegate latch guards) and decides notes N1, N3–N7. No live permission toggles; VoiceOver excluded.
+- **Execution:** [Permission-loss remediation, revision 2](plans/permission-loss-implementation.md) — Waves 1–4 complete (R0–R5; 117/117 headless tests, Debug build succeeded, no launch; review found no blocker, 3 should-fix); Wave 5 (R6) ready. E1 open; onboarding E1 remains FAILED/open. Evidence: [Wave 4 report](plans/permission-loss-wave4-report.md). Current handoff: [2026-11-13 Wave 4 Resume](sessions/2026-11-13.md#wave-4-resume).
 
 ## Recent
+
+- **2026-11-13 Wave 4 (R4, R5):** 117 headless tests pass and the Debug build succeeds (not launched). The independent review found no blocker: every tap is registered, torn down before any wait and refused after loss. It raised three should-fix items for R6 and kept all four deferred items deferred. A suspended-state cue went to the backlog. Not pushed.
 
 - **2026-11-13 Wave 3 (R3):** Loss now removes every tap at once, blocks new ones, closes the HUD, saves settings and relaunches (at most once a minute; otherwise stays alive without taps). 117 headless tests pass, test build succeeded, no launch. Not pushed.
 
@@ -26,8 +28,6 @@
 - **2026-11-13 Wave 1 (R0):** Headless SwiftPM harness added (`01_Project/Package.swift`, `scripts/test-input-safety.sh`, `docs/testing/input-safety-harness.md`); 43 tests pass, isolated build-only check succeeded, no launch. Committed in the G1 checkpoint.
 
 - **2026-11-13 planning and review:** Remediation plan created with three agents, then reviewed with three more plus direct source reads. Hang found documented (Apple forums 844416, 735204); plan rewritten as revision 2 with self-relaunch on loss. Documents only; no source, build, tests or app control.
-
-- **2026-11-13:** Permission revocation reproduced stuck HUD and broad input failure; Exposé restored clicking, permission now on. Further live testing stopped; investigation/planning with agents, web and similar-app research next.
 
 ## Progress
 
@@ -40,7 +40,7 @@
 - **HUD Opening Styles:** 7/7 tasks complete and signed-live verified on the supported BetterMouse-to-keyboard route. VoiceOver, direct MousePlus mouse triggering and the broad device/geometry performance matrix are deferred before release and remain untested.
 - **App-specific HUDs:** 5/5 implementation waves and signed-live Finder/Global acceptance complete on the supported BetterMouse-to-keyboard route.
 - **Trigger backend:** Keyboard and standard mouse paths work; advanced Logitech HID++ support remains undecided.
-- **Selected plan:** Permission-loss remediation revision 2: 4/7 implementation/verification tasks complete (R0–R3), G1 passed, E1 open. Prior onboarding: 7/7 implementation/remediation tasks complete, E1 FAILED/open. Six backlog items preserved.
+- **Selected plan:** Permission-loss remediation revision 2: 6/7 implementation/verification tasks complete (R0–R5), G1 passed, E1 open. Prior onboarding: 7/7 implementation/remediation tasks complete, E1 FAILED/open. Six backlog items preserved.
 
 ## Risks and Backlog
 

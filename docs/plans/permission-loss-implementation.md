@@ -1,8 +1,8 @@
 # Permission-loss remediation — Implementation Plan (revision 2)
 
 **Created:** 2026-11-13. **Revised:** 2026-11-13 after plan review.
-**Status:** Executing — Waves 1–3 (R0–R3) complete 2026-11-13; G1 passed; Wave 4 (R4, R5) ready.
-**Progress:** 4/7 implementation and verification tasks complete; external acceptance E1 open.
+**Status:** Executing — Waves 1–4 (R0–R5) complete 2026-11-13; G1 passed; Wave 5 (R6) ready.
+**Progress:** 6/7 implementation and verification tasks complete; external acceptance E1 open.
 **Task states:** unchecked = pending unless a gate is named. This plan owns task status/evidence.
 Revision 1 (latch until manual restart, tasks P1–P7) is retained unchanged as
 [permission-loss-implementation.v1-superseded.md](permission-loss-implementation.v1-superseded.md).
@@ -176,7 +176,8 @@ Interfaces fixed before dispatch:
 
 ### Wave 4 — verification and review (parallel, disjoint)
 
-- [ ] **R4: Full headless matrix and authoritative build**
+- [x] **R4: Full headless matrix and authoritative build** — done 2026-11-13, 117/117, build
+  succeeded ([Wave 4 report](permission-loss-wave4-report.md#r4--full-headless-matrix-and-authoritative-build))
   - Depends on: R3. External gates: none.
   - Owns: validation report only.
   - Success: all harness suites pass; related onboarding, routing, recorder and keystroke
@@ -184,7 +185,8 @@ Interfaces fixed before dispatch:
     app-hosted runs. Build-only succeeds. No launch handoff.
   - Backpressure: `scripts/test-input-safety.sh --all`; the build command above.
 
-- [ ] **R5: Independent lifecycle review and deferred-scope decision**
+- [x] **R5: Independent lifecycle review and deferred-scope decision** — done 2026-11-13, no
+  blocker, S1–S3 should-fix to R6 ([Wave 4 report](permission-loss-wave4-report.md#r5--independent-lifecycle-review))
   - Depends on: R3. External gates: none.
   - Owns: review report only; findings return to the owning task.
   - Success: independently trace every tap creation and re-enable site to the registry, the
@@ -247,6 +249,27 @@ Interfaces fixed before dispatch:
 - The relaunch shows the system permission prompt, as any untrusted launch does.
 
 ## Execution log
+
+### Wave 4 — R4, R5 (2026-11-13, M1 Max)
+
+- **Assignment:** R5 to one fresh-context read-only reviewer agent; R4 run by the coordinator in
+  parallel (a few commands, and builds/tests keep one writer for `build/`). Coordinator
+  spot-checked S1 and S2 against source. Evidence: [Wave 4 report](permission-loss-wave4-report.md).
+- **R4:** `scripts/test-input-safety.sh --all` → exit 0, `Executed 117 tests, with 0 failures`
+  (14 suites). `xcodebuild … -configuration Debug -derivedDataPath build/wave4-build-check build`
+  → `BUILD SUCCEEDED`, no warnings in touched files, no script build phases. Artifact
+  `build/wave4-build-check/Build/Products/Debug/MousePlus.app` 0.1.0 (1), not launched or handed
+  off. Related out-of-harness suites listed as gaps (onboarding, routing, lifecycle, dismissal,
+  editor, ShortcutKit adapter); no app-hosted substitution. The running process is the older
+  November 10 Release build, which predates the fix; it was not touched.
+- **R5:** no blocker. Tap inventory complete (two `tapCreate` sites), teardown precedes every
+  `await`, single-fire holds, no re-arm path while latched. Should-fix for R6: **S1** two-pass
+  teardown (invalidate ports before any `tapEnable` IPC); **S2** deadline on flush and launch;
+  **S3** tests for the four AppDelegate latch guards. Notes N1–N7 (N4, a probe-only false positive
+  looping relaunches, is the most consequential; OS behaviour unverified). All four deferred
+  revision-1 items: keep deferred. Suspended-state status-item cue → backlog (new UI, needs approval).
+- **Commit:** Wave 4 report and plan/state, documents only. Not pushed.
+- **Next:** Wave 5, R6: resolve S1–S3, decide N1, N3–N7 dispositions, rerun affected suites and build.
 
 ### Wave 3 — R3 (2026-11-13, M1 Max)
 
