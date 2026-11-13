@@ -1,8 +1,8 @@
 # Permission-loss remediation — Implementation Plan (revision 2)
 
 **Created:** 2026-11-13. **Revised:** 2026-11-13 after plan review.
-**Status:** Executing — Waves 1–2 (R0, R1, R2) complete 2026-11-13; G1 passed; Wave 3 (R3) ready.
-**Progress:** 3/7 implementation and verification tasks complete; external acceptance E1 open.
+**Status:** Executing — Waves 1–3 (R0–R3) complete 2026-11-13; G1 passed; Wave 4 (R4, R5) ready.
+**Progress:** 4/7 implementation and verification tasks complete; external acceptance E1 open.
 **Task states:** unchecked = pending unless a gate is named. This plan owns task status/evidence.
 Revision 1 (latch until manual restart, tasks P1–P7) is retained unchanged as
 [permission-loss-implementation.v1-superseded.md](permission-loss-implementation.v1-superseded.md).
@@ -156,7 +156,8 @@ Interfaces fixed before dispatch:
 
 ### Wave 3 — integration (single task: one owner for the shared app file)
 
-- [ ] **R3: Loss path, bounded relaunch and suspended fallback**
+- [x] **R3: Loss path, bounded relaunch and suspended fallback** — done 2026-11-13, commit
+  `4898e28` (see Wave 3 log)
   - Depends on: R1, R2. External gates: G1.
   - Owns: new `Services/RuntimeSafetyCoordinator.swift`, `MousePlusApp.swift`, new
     `RuntimeSafetyCoordinatorTests.swift`.
@@ -246,6 +247,55 @@ Interfaces fixed before dispatch:
 - The relaunch shows the system permission prompt, as any untrusted launch does.
 
 ## Execution log
+
+### Wave 3 — R3 (2026-11-13, M1 Max)
+
+- **Assignment:** one fresh-context developer agent in the main checkout (single-task wave, no
+  concurrent writer). Coordinator reviewed the full diff and reran every check itself.
+- **Scope correction (coordinator, before dispatch):** ownership extended to
+  `Services/InputTapRegistry.swift`, `Services/KeystrokeCaptureRecorder.swift`,
+  `Services/TriggerRecorderService.swift`, `Package.swift` and the harness script. Reason: both
+  recorders are SwiftUI `@State` objects that `AppDelegate` cannot reach, and nothing stopped a new
+  tap being created after loss (pressing Record in Settings while suspended would install a tap in
+  an untrusted process). Within approved scope; no product decision.
+- **Implemented:** `Services/RuntimeSafetyCoordinator.swift` (`@MainActor`; `RuntimeTrustSensing`
+  protocol, `RuntimeTrustMonitor` conforms; states running/relaunching/suspended, `isLatched`).
+  Loss entry `handleLoss(cause:)` fires once: latches, then synchronously teardownAll (seals),
+  trigger service + Settings hotkey stop, `teardownAllLive()` on both recorder classes (also clears
+  the static pass-through flags), non-committing `closeRing`, monitor stop; then a task flushes,
+  checks the 60 s limit, writes the timestamp, launches, terminates. Registry seal: `isSealed`,
+  `seal()`, `teardownAll()` seals; `SystemEventTapHandle.create` returns nil before `tapCreate` when
+  sealed; `register` invalidates instead of storing. Faults: burst (>3 in 10 s) and trust-read
+  false → loss synchronously; else probe → resume or loss; install failure → probe only.
+  `KeystrokeCaptureRecorder.faultReporter` static closure carries recorder faults. AppDelegate
+  wires effects and adds latched guards to `applyRuntimeConfiguration` (after storing the config),
+  `handleTriggerEvent`, `showRing`, `applySettingsHotkey`; monitor starts at the end of the first
+  unlatched runtime apply. 24 coordinator tests, fakes only.
+- **Decisions recorded:** rate-limited loss still flushes, then suspends. Timestamp
+  `RuntimeSafety.lastSafetyRelaunchAt` (wall-clock epoch seconds); a failed launch restores the
+  previous value; a stored value up to 60 s in the future counts as recent, further ahead is
+  ignored (worst case about two windows of suppression). Recorder resume is a no-op (a recorder
+  stops its own tap on disable).
+- **Deviation:** relaunch calls `flushPendingSettingsChanges`, `launchNewApplicationInstance` and
+  `NSApp.terminate` directly instead of `performApplicationRestart`, because the rate-limit check
+  must sit between flush and launch. Menu-bar Restart and Quit unchanged.
+- **Audit (no edits):** `tapCreate` exists only in `InputTapRegistry.swift` and the trust probe.
+  `InputRecorderService` and `DismissMonitor` use passive/local NSEvent monitors;
+  `IOHIDDeviceInspector` opens `IOHIDManager` with `kIOHIDOptionsTypeNone` (no seizing);
+  `InputRecorderWindowController` checked by grep only (no `tapCreate`).
+- **Validation (coordinator):** `scripts/test-input-safety.sh --all` → exit 0, `Executed 117 tests,
+  with 0 failures` (93 + 24). `xcodebuild -workspace 01_Project/MousePlus.xcworkspace -scheme
+  MousePlus -configuration Debug -derivedDataPath build/wave3-build-check build-for-testing` → exit
+  0, `TEST BUILD SUCCEEDED`, no warnings in touched files; first compile of the AppDelegate wiring.
+  App-hosted tests compiled, not run. No launch, no handoff. Logs under `build/wave3/`.
+- **Carried to R5 review:** AppDelegate guards are compiled but not exercised by tests (the late
+  `.cancel` test models the guard); teardown can run inside a tap's own callback; repeated
+  teardown via `applicationWillTerminate` after relaunch is untested; a hung flush leaves the
+  process latched in `relaunching` with no timeout; a cancelled terminate stays latched; the seal
+  is permanent per process; a recorder disable while not recording is not reported; a
+  rate-limited loss leaves only the menu-bar Restart as recovery.
+- **Commit:** `4898e28` (R3 code and tests); plan/state committed separately. Not pushed.
+- **Next:** Wave 4, R4 and R5 (parallel, report-only).
 
 ### G1 — checkpoint and base (2026-11-13, M1 Max)
 

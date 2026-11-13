@@ -11,13 +11,15 @@
 
 ## Now
 
-- **Phase:** Build — permission-loss remediation executing; Wave 1 complete. <!-- Phase changed: 2026-11-13 -->
+- **Phase:** Build — permission-loss remediation executing; Waves 1–3 complete. <!-- Phase changed: 2026-11-13 -->
 - **Focus:** Permission-loss remediation revision 2: remove all taps and self-relaunch on loss, decided by user. Detection by TCC notification plus tap probe. Permission reported ON; no further live permission-toggle tests.
-- **Blocker:** Onboarding E1 permission restoration FAILED November 13. Revocation has no runtime shutdown path; the input hang matches documented macOS behaviour for a live active tap in an untrusted process. Fresh-install deferred; VoiceOver excluded. Settings dragging remains unresolved.
-- **Next:** Wave 3: R3 (loss path, bounded self-relaunch, suspended fallback; owns `MousePlusApp.swift`) is ready. No UI change planned. No live permission toggles; VoiceOver excluded.
-- **Execution:** [Permission-loss remediation, revision 2](plans/permission-loss-implementation.md) — Waves 1–2 complete (R0 harness, R1 trust monitor, R2 tap registry; 93/93 headless tests, test build succeeded, no launch); G1 passed; Wave 3 (R3) ready. E1 open; onboarding E1 remains FAILED/open. Current handoff: [2026-11-13 Execution Resume](sessions/2026-11-13.md#execution-resume).
+- **Blocker:** Onboarding E1 permission restoration FAILED November 13. The input hang matches documented macOS behaviour for a live active tap in an untrusted process; a runtime shutdown path (R3) is now implemented and fake-validated, unreviewed and unverified under real revocation. Fresh-install deferred; VoiceOver excluded. Settings dragging remains unresolved.
+- **Next:** Wave 4: R4 (full headless matrix + authoritative build) and R5 (independent lifecycle review) are ready, report-only. No live permission toggles; VoiceOver excluded.
+- **Execution:** [Permission-loss remediation, revision 2](plans/permission-loss-implementation.md) — Waves 1–3 complete (R0–R3; 117/117 headless tests, test build succeeded, no launch); Wave 4 (R4, R5) ready. E1 open; onboarding E1 remains FAILED/open. Current handoff: [2026-11-13 Wave 3 Resume](sessions/2026-11-13.md#wave-3-resume).
 
 ## Recent
+
+- **2026-11-13 Wave 3 (R3):** Loss now removes every tap at once, blocks new ones, closes the HUD, saves settings and relaunches (at most once a minute; otherwise stays alive without taps). 117 headless tests pass, test build succeeded, no launch. Not pushed.
 
 - **2026-11-13 G1 + Wave 2 (R1, R2):** Checkpointed all uncommitted work, merged `main` (code identical; doc conflicts kept newer versions), pushed. Added the permission-loss watcher and a registry that can remove every input tap at once; taps no longer silently re-enable and the keyboard fallback is gone. 93 headless tests pass, test build succeeded, no launch. Wave 2 commits not pushed.
 
@@ -26,8 +28,6 @@
 - **2026-11-13 planning and review:** Remediation plan created with three agents, then reviewed with three more plus direct source reads. Hang found documented (Apple forums 844416, 735204); plan rewritten as revision 2 with self-relaunch on loss. Documents only; no source, build, tests or app control.
 
 - **2026-11-13:** Permission revocation reproduced stuck HUD and broad input failure; Exposé restored clicking, permission now on. Further live testing stopped; investigation/planning with agents, web and similar-app research next.
-- **2026-11-10:** Settings access and sidebar app-profile lifecycle passed. App-picker filtering/readable names and changed-shortcut relaunch persistence passed. Dragging recovered after restart; recurrence remains tracked.
-- **2026-11-08:** MousePlus screenshot confirms continuous sidebar/header color and centered title; user explicitly confirms window dragging works. Settings chrome remediation, both trigger modes over Finder, keyboard recording and an additional cross-app check accepted; onboarding E1 remains open.
 
 ## Progress
 
@@ -40,7 +40,7 @@
 - **HUD Opening Styles:** 7/7 tasks complete and signed-live verified on the supported BetterMouse-to-keyboard route. VoiceOver, direct MousePlus mouse triggering and the broad device/geometry performance matrix are deferred before release and remain untested.
 - **App-specific HUDs:** 5/5 implementation waves and signed-live Finder/Global acceptance complete on the supported BetterMouse-to-keyboard route.
 - **Trigger backend:** Keyboard and standard mouse paths work; advanced Logitech HID++ support remains undecided.
-- **Selected plan:** Permission-loss remediation revision 2: 3/7 implementation/verification tasks complete (R0, R1, R2), G1 passed, E1 open. Prior onboarding: 7/7 implementation/remediation tasks complete, E1 FAILED/open. Six backlog items preserved.
+- **Selected plan:** Permission-loss remediation revision 2: 4/7 implementation/verification tasks complete (R0–R3), G1 passed, E1 open. Prior onboarding: 7/7 implementation/remediation tasks complete, E1 FAILED/open. Six backlog items preserved.
 
 ## Risks and Backlog
 

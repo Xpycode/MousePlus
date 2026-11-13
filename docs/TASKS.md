@@ -38,8 +38,8 @@ automated checks and November 7 live confirmation passed; onboarding E1 remains 
 
 ## Active plan
 
-[Permission-loss remediation, revision 2](plans/permission-loss-implementation.md): R0–R2 done,
-G1 passed; R3 ready. Plan owns status/evidence. Original onboarding E1 below remains failed/open;
+[Permission-loss remediation, revision 2](plans/permission-loss-implementation.md): R0–R3 done,
+G1 passed; R4 and R5 ready. Plan owns status/evidence. Original onboarding E1 below remains failed/open;
 its historical checkbox is retained, not counted as remediation progress.
 
 ## Current Sprint
