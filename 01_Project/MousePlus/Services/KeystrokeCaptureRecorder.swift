@@ -220,6 +220,30 @@ final class KeystrokeCaptureRecorder {
     @ObservationIgnored var onDisabled: ((InputTapDisableReason) -> Void)?
     @ObservationIgnored var onInstallFailed: (() -> Void)?
 
+    enum Fault: Equatable {
+        case disabled(InputTapDisableReason)
+        case installFailed
+    }
+
+    /// Reports a tap fault of any live recorder to the runtime-safety owner.
+    /// Instances are created inside SwiftUI views, so the owner cannot set
+    /// per-instance callbacks.
+    static var faultReporter: ((Fault) -> Void)?
+
+    private final class WeakRecorder {
+        weak var recorder: KeystrokeCaptureRecorder?
+        init(_ recorder: KeystrokeCaptureRecorder) { self.recorder = recorder }
+    }
+    private static var liveRecorders: [WeakRecorder] = []
+
+    /// Tears down every live recorder (view-owned, unreachable otherwise).
+    /// Safe with none alive and when repeated.
+    static func teardownAllLive() {
+        let live = liveRecorders.compactMap(\.recorder)
+        liveRecorders.removeAll()
+        for recorder in live { recorder.teardown() }
+    }
+
     private let tap: any KeystrokeCaptureTapping
     private let timeout: Duration
     private let sleeper: any KeystrokeCaptureSleeping
@@ -234,6 +258,8 @@ final class KeystrokeCaptureRecorder {
         self.tap = tap ?? SystemKeystrokeCaptureTap()
         self.timeout = timeout
         self.sleeper = sleeper
+        Self.liveRecorders.removeAll { $0.recorder == nil }
+        Self.liveRecorders.append(WeakRecorder(self))
     }
 
     func record() {
@@ -259,6 +285,7 @@ final class KeystrokeCaptureRecorder {
                     self.isRecording = false
                     self.outcome = .cancelled
                     self.onDisabled?(reason)
+                    Self.faultReporter?(.disabled(reason))
                     return .passThrough
                 }
                 let transition = self.reducer.reduce(event)
@@ -273,6 +300,7 @@ final class KeystrokeCaptureRecorder {
             outcome = .failed(error.localizedDescription)
             tap.stop()
             onInstallFailed?()
+            Self.faultReporter?(.installFailed)
             return
         }
         isRecording = true

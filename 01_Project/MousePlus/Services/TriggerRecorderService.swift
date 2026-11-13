@@ -44,6 +44,22 @@ final class TriggerRecorderService {
     private(set) static var isRecordingKeyboardShortcut = false
     private(set) static var isRecordingMouseButton = false
 
+    private final class WeakRecorder {
+        weak var recorder: TriggerRecorderService?
+        init(_ recorder: TriggerRecorderService) { self.recorder = recorder }
+    }
+    private static var liveRecorders: [WeakRecorder] = []
+
+    /// Tears down every live recorder (view-owned, unreachable otherwise) and
+    /// clears the static pass-through flags even when none is alive.
+    static func teardownAllLive() {
+        let live = liveRecorders.compactMap(\.recorder)
+        liveRecorders.removeAll()
+        for recorder in live { recorder.teardown() }
+        isRecordingKeyboardShortcut = false
+        isRecordingMouseButton = false
+    }
+
     enum Target: Equatable {
         case keyboard
         case mouseButton
@@ -68,6 +84,8 @@ final class TriggerRecorderService {
 
     init(monitors: (any TriggerRecorderEventMonitoring)? = nil) {
         self.monitors = monitors ?? SystemTriggerRecorderEventMonitor()
+        Self.liveRecorders.removeAll { $0.recorder == nil }
+        Self.liveRecorders.append(WeakRecorder(self))
     }
 
     /// Seconds to wait for a press before declaring `.timedOut`.

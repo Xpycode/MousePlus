@@ -1,5 +1,6 @@
 import CoreGraphics
 import Foundation
+import OSLog
 
 /// Why macOS disabled an event tap. A disabled tap stays disabled until its
 /// owner calls `resume()`; nothing re-enables it implicitly.
@@ -63,12 +64,19 @@ final class SystemEventTapHandle: InputTapHandle {
     }
 
     /// Creates a session-level, head-insert, active tap. Returns nil when
-    /// macOS refuses (no permission).
+    /// macOS refuses (no permission) or when the registry is sealed after a
+    /// trust loss: a fresh tap in an untrusted process can hang system input.
     static func create(
         mask: CGEventMask,
         callback: @escaping CGEventTapCallBack,
-        userInfo: UnsafeMutableRawPointer
+        userInfo: UnsafeMutableRawPointer,
+        registry: InputTapRegistry? = nil
     ) -> (any InputTapHandle)? {
+        let registry = registry ?? .shared
+        guard !registry.isSealed else {
+            InputTapRegistry.log.error("tap creation refused: registry sealed")
+            return nil
+        }
         guard let port = CGEvent.tapCreate(
             tap: .cgSessionEventTap, place: .headInsertEventTap, options: .defaultTap,
             eventsOfInterest: mask, callback: callback, userInfo: userInfo
@@ -87,13 +95,29 @@ typealias InputTapFactory = @MainActor (
 @MainActor
 final class InputTapRegistry {
     static let shared = InputTapRegistry()
+    fileprivate static let log = Logger(subsystem: "com.xpycode.MousePlus", category: "RuntimeSafety")
 
     private var handles: [ObjectIdentifier: any InputTapHandle] = [:]
+
+    /// Set by `seal()` / `teardownAll()` and never cleared: after a trust loss
+    /// this process must not create or keep another system tap.
+    private(set) var isSealed = false
 
     var registeredCount: Int { handles.count }
     var enabledCount: Int { handles.values.filter(\.isEnabled).count }
 
+    func seal() {
+        isSealed = true
+    }
+
     func register(_ handle: any InputTapHandle) {
+        guard !isSealed else {
+            // Defense in depth for factories that bypass `SystemEventTapHandle.create`.
+            Self.log.error("tap registration refused: registry sealed; invalidating handle")
+            handle.setEnabled(false)
+            handle.invalidate()
+            return
+        }
         handles[ObjectIdentifier(handle)] = handle
     }
 
@@ -101,9 +125,11 @@ final class InputTapRegistry {
         handles[ObjectIdentifier(handle)] = nil
     }
 
-    /// Disables and invalidates every registered tap, then forgets them.
-    /// Owners that later call `stop()` find their handle already invalidated.
+    /// Seals the registry, then disables and invalidates every registered tap
+    /// and forgets them. Owners that later call `stop()` find their handle
+    /// already invalidated.
     func teardownAll() {
+        isSealed = true
         let all = Array(handles.values)
         handles.removeAll()
         for handle in all {

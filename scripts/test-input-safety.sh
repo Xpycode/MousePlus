@@ -25,6 +25,7 @@ Included suites (compiled from real sources in place):
   KeystrokePayloadCodingTests
   MouseButtonTriggerMonitorTests
   RadialGeometryTests
+  RuntimeSafetyCoordinatorTests
   RuntimeTrustMonitorTests
   TriggerRecorderServiceTests
   TriggerServiceTests

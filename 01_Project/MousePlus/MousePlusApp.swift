@@ -283,6 +283,31 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         showSettings: { [weak self] in self?.showSettings() }
     ))
 
+    /// Owns the response to losing Accessibility trust at runtime. All decisions live
+    /// in the coordinator; this only supplies the effects.
+    private lazy var safetyCoordinator = RuntimeSafetyCoordinator(
+        monitor: RuntimeTrustMonitor(),
+        effects: .init(
+            teardownTaps: { InputTapRegistry.shared.teardownAll() },
+            stopTriggerServices: { [weak self] in
+                self?.triggerService?.stop()
+                self?.settingsHotkeyMonitor?.stop()
+            },
+            teardownRecorders: {
+                KeystrokeCaptureRecorder.teardownAllLive()
+                TriggerRecorderService.teardownAllLive()
+            },
+            closeHUD: { [weak self] in self?.closeRing() },
+            flush: { await Self.flushPendingSettingsChanges?() ?? true },
+            launch: { await Self.launchNewApplicationInstance() },
+            terminate: { NSApp.terminate(nil) },
+            resumeTaps: { [weak self] in
+                self?.triggerService?.resume()
+                self?.settingsHotkeyMonitor?.resume()
+            }
+        )
+    )
+
     override init() { super.init() }
 
     /// Inject lifecycle effects without starting real monitors, windows, or TCC prompts.
@@ -323,6 +348,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         Self.accessibilityPermissionGranted = { [weak self] in
             self?.triggerOnboardingPermissionGranted()
+        }
+        // Recorders live inside SwiftUI views; their tap faults reach the coordinator here.
+        KeystrokeCaptureRecorder.faultReporter = { [weak self] fault in
+            switch fault {
+            case .disabled(let reason):
+                self?.safetyCoordinator.reportDisabled(source: "keystroke-recorder", reason: reason)
+            case .installFailed:
+                self?.safetyCoordinator.reportInstallFailure(source: "keystroke-recorder")
+            }
         }
         beginTriggerOnboarding(accessibilityGranted: permissionsService.isGranted)
     }
@@ -444,6 +478,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private func setupTriggers() {
         guard triggerService == nil else { return }
         let service = TriggerService()
+        service.onDisabled = { [weak self] reason in
+            self?.safetyCoordinator.reportDisabled(source: "trigger-service", reason: reason)
+        }
+        service.onInstallFailed = { [weak self] in
+            self?.safetyCoordinator.reportInstallFailure(source: "trigger-service")
+        }
         triggerService = service
         ringWindowController = RingWindowController()
 
@@ -459,6 +499,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func handleTriggerEvent(_ event: TriggerEvent) {
+        // Includes the `.cancel` that `TriggerService.stop()` yields asynchronously
+        // during loss teardown; the HUD is already closed.
+        guard !safetyCoordinator.isLatched else { return }
         let effect = invocationOwnership.handle(event)
         switch (effect, event) {
         case (.show, .down(let source, let mode, let pointerLocation)):
@@ -514,14 +557,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func applyRuntimeConfiguration(_ config: Configuration) {
         configuration = config
+        // After a trust loss nothing may start taps again: not a configuration
+        // save, not a permission grant.
+        guard !safetyCoordinator.isLatched else { return }
         if !ringViewModel.isVisible { ringViewModel.load(from: config) }
         if let triggerService { triggerService.updateConfig(config.triggers) }
         else { setupTriggers() }
         applySettingsHotkey(config.triggers.openSettings)
+        safetyCoordinator.startMonitoring()
     }
 
     private func showRing(at pointerLocation: CGPoint, commitsOnPointerRelease: Bool,
                           source: TriggerSource) {
+        guard !safetyCoordinator.isLatched else { return }
         // keyDown repeats while held — without this guard each tick creates a new NSPanel.
         guard let controller = ringWindowController, !controller.isVisible else { return }
 
@@ -817,6 +865,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// Accessibility grant and after a rebind in the Triggers tab — the same pattern
     /// `setupTriggers`/`applyConfiguration` use for the ring triggers.
     private func applySettingsHotkey(_ binding: TriggerBinding) {
+        guard !safetyCoordinator.isLatched else { return }
         settingsHotkeyMonitor?.stop()
         guard case let .keyboard(keyCode, modifiers, _) = binding else {
             settingsHotkeyMonitor = nil
@@ -824,6 +873,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         let monitor = settingsHotkeyMonitor ?? KeyboardTriggerMonitor()
         settingsHotkeyMonitor = monitor
+        monitor.onDisabled = { [weak self] reason in
+            self?.safetyCoordinator.reportDisabled(source: "settings-hotkey", reason: reason)
+        }
+        monitor.onInstallFailed = { [weak self] in
+            self?.safetyCoordinator.reportInstallFailure(source: "settings-hotkey")
+        }
         monitor.start(
             keyCode: keyCode,
             modifiers: modifiers,
