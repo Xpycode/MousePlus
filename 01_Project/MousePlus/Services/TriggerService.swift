@@ -49,6 +49,12 @@ final class TriggerService {
     private var activeGlobalKeyboardSource: TriggerSource?
     private var activeMouseSource: TriggerSource?
 
+    /// A tap was disabled by macOS. The held invocation (if any) has already
+    /// been cancelled; the tap stays disabled until `resume()`.
+    var onDisabled: ((InputTapDisableReason) -> Void)?
+    /// A consuming tap could not be installed. No fallback is installed.
+    var onInstallFailed: (() -> Void)?
+
     init(
         contextualKeyboardMonitor: (any KeyboardTriggerMonitoring)? = nil,
         globalKeyboardMonitor: (any KeyboardTriggerMonitoring)? = nil,
@@ -60,6 +66,48 @@ final class TriggerService {
         self.contextualKeyboardMonitor = contextualKeyboardMonitor ?? KeyboardTriggerMonitor()
         self.globalKeyboardMonitor = globalKeyboardMonitor ?? KeyboardTriggerMonitor()
         self.mouseButtonMonitor = mouseButtonMonitor ?? MouseButtonTriggerMonitor()
+        wireFaultHandlers()
+    }
+
+    private func wireFaultHandlers() {
+        contextualKeyboardMonitor.setFaultHandlers(
+            onDisabled: { [weak self] reason in
+                guard let self else { return }
+                self.cancelHeld(&self.activeContextualKeyboardSource)
+                self.onDisabled?(reason)
+            },
+            onInstallFailed: { [weak self] in self?.onInstallFailed?() }
+        )
+        globalKeyboardMonitor.setFaultHandlers(
+            onDisabled: { [weak self] reason in
+                guard let self else { return }
+                self.cancelHeld(&self.activeGlobalKeyboardSource)
+                self.onDisabled?(reason)
+            },
+            onInstallFailed: { [weak self] in self?.onInstallFailed?() }
+        )
+        mouseButtonMonitor.setFaultHandlers(
+            onDisabled: { [weak self] reason in
+                guard let self else { return }
+                self.cancelHeld(&self.activeMouseSource)
+                self.onDisabled?(reason)
+            },
+            onInstallFailed: { [weak self] in self?.onInstallFailed?() }
+        )
+    }
+
+    private func cancelHeld(_ source: inout TriggerSource?) {
+        if let held = takeActiveSource(&source) {
+            continuation.yield(.cancel(source: held))
+        }
+    }
+
+    /// Re-enables every tap after an explicit decision to continue.
+    func resume() {
+        guard isRunning else { return }
+        contextualKeyboardMonitor.resume()
+        globalKeyboardMonitor.resume()
+        mouseButtonMonitor.resume()
     }
 
     func start(config: TriggersConfig) {
@@ -69,8 +117,10 @@ final class TriggerService {
     }
 
     func updateConfig(_ config: TriggersConfig) {
+        // A stopped service stays stopped (teardown must not be undone by a
+        // later configuration change); the config is applied on the next start.
         guard isRunning else {
-            start(config: config)
+            currentConfig = config
             return
         }
         guard config != currentConfig else { return }
@@ -105,6 +155,9 @@ final class TriggerService {
     func stop() {
         isRunning = false
         stopMonitors()
+        cancelHeld(&activeContextualKeyboardSource)
+        cancelHeld(&activeGlobalKeyboardSource)
+        cancelHeld(&activeMouseSource)
     }
 
     private func stopMonitors() {
@@ -228,9 +281,30 @@ protocol KeyboardTriggerMonitoring: AnyObject {
         onUp: @escaping () -> Void
     )
     func stop()
+    func resume()
+    func setFaultHandlers(
+        onDisabled: @escaping (InputTapDisableReason) -> Void,
+        onInstallFailed: @escaping () -> Void
+    )
 }
 
-extension KeyboardTriggerMonitor: KeyboardTriggerMonitoring {}
+extension KeyboardTriggerMonitoring {
+    func resume() {}
+    func setFaultHandlers(
+        onDisabled: @escaping (InputTapDisableReason) -> Void,
+        onInstallFailed: @escaping () -> Void
+    ) {}
+}
+
+extension KeyboardTriggerMonitor: KeyboardTriggerMonitoring {
+    func setFaultHandlers(
+        onDisabled: @escaping (InputTapDisableReason) -> Void,
+        onInstallFailed: @escaping () -> Void
+    ) {
+        self.onDisabled = onDisabled
+        self.onInstallFailed = onInstallFailed
+    }
+}
 
 @MainActor
 protocol MouseButtonTriggerMonitoring: AnyObject {
@@ -241,6 +315,27 @@ protocol MouseButtonTriggerMonitoring: AnyObject {
         onUp: @escaping (CGPoint) -> Void
     )
     func stop()
+    func resume()
+    func setFaultHandlers(
+        onDisabled: @escaping (InputTapDisableReason) -> Void,
+        onInstallFailed: @escaping () -> Void
+    )
 }
 
-extension MouseButtonTriggerMonitor: MouseButtonTriggerMonitoring {}
+extension MouseButtonTriggerMonitoring {
+    func resume() {}
+    func setFaultHandlers(
+        onDisabled: @escaping (InputTapDisableReason) -> Void,
+        onInstallFailed: @escaping () -> Void
+    ) {}
+}
+
+extension MouseButtonTriggerMonitor: MouseButtonTriggerMonitoring {
+    func setFaultHandlers(
+        onDisabled: @escaping (InputTapDisableReason) -> Void,
+        onInstallFailed: @escaping () -> Void
+    ) {
+        self.onDisabled = onDisabled
+        self.onInstallFailed = onInstallFailed
+    }
+}

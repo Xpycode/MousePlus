@@ -4,57 +4,66 @@ import OSLog
 @MainActor
 protocol MouseButtonTriggerTapping: AnyObject {
     func start(handler: @escaping (CGEventType, CGEvent) -> Bool) throws
+    /// Explicit re-enable after a reported disable; never called implicitly.
     func reenable()
     func stop()
+}
+
+private let mouseTriggerTapCallback: CGEventTapCallBack = { _, type, event, context in
+    guard let context else { return Unmanaged.passUnretained(event) }
+    return MainActor.assumeIsolated {
+        let tap = Unmanaged<SystemMouseButtonTriggerTap>
+            .fromOpaque(context).takeUnretainedValue()
+        return tap.handler?(type, event) == true ? nil : Unmanaged.passUnretained(event)
+    }
 }
 
 /// An active tap is required: NSEvent global monitors cannot prevent the same
 /// forward/back click from also navigating the foreground application.
 @MainActor
 final class SystemMouseButtonTriggerTap: MouseButtonTriggerTapping {
-    private var port: CFMachPort?
-    private var source: CFRunLoopSource?
-    private var handler: ((CGEventType, CGEvent) -> Bool)?
+    private var handle: (any InputTapHandle)?
+    fileprivate var handler: ((CGEventType, CGEvent) -> Bool)?
+    private let registry: InputTapRegistry
+    private let factory: InputTapFactory
+
+    init(
+        registry: InputTapRegistry? = nil,
+        factory: @escaping InputTapFactory = { mask, callback, userInfo in
+            SystemEventTapHandle.create(mask: mask, callback: callback, userInfo: userInfo)
+        }
+    ) {
+        self.registry = registry ?? .shared
+        self.factory = factory
+    }
 
     func start(handler: @escaping (CGEventType, CGEvent) -> Bool) throws {
         stop()
         self.handler = handler
         let mask = [CGEventType.otherMouseDown, .otherMouseDragged, .otherMouseUp]
             .reduce(CGEventMask(0)) { $0 | (CGEventMask(1) << $1.rawValue) }
-        guard let port = CGEvent.tapCreate(
-            tap: .cgSessionEventTap, place: .headInsertEventTap, options: .defaultTap,
-            eventsOfInterest: mask,
-            callback: { _, type, event, context in
-                guard let context else { return Unmanaged.passUnretained(event) }
-                return MainActor.assumeIsolated {
-                    let tap = Unmanaged<SystemMouseButtonTriggerTap>
-                        .fromOpaque(context).takeUnretainedValue()
-                    return tap.handler?(type, event) == true ? nil : Unmanaged.passUnretained(event)
-                }
-            }, userInfo: Unmanaged.passUnretained(self).toOpaque()
+        guard let handle = factory(
+            mask, mouseTriggerTapCallback, Unmanaged.passUnretained(self).toOpaque()
         ) else {
             self.handler = nil
             throw NSError(domain: "MousePlus.MouseButtonTriggerTap", code: 1)
         }
-        let source = CFMachPortCreateRunLoopSource(kCFAllocatorDefault, port, 0)
-        self.port = port
-        self.source = source
-        CFRunLoopAddSource(CFRunLoopGetMain(), source, .commonModes)
-        CGEvent.tapEnable(tap: port, enable: true)
+        self.handle = handle
+        registry.register(handle)
+        handle.setEnabled(true)
     }
 
     func reenable() {
-        if let port { CGEvent.tapEnable(tap: port, enable: true) }
+        handle?.setEnabled(true)
     }
 
     func stop() {
-        if let source { CFRunLoopRemoveSource(CFRunLoopGetMain(), source, .commonModes) }
-        if let port {
-            CGEvent.tapEnable(tap: port, enable: false)
-            CFMachPortInvalidate(port)
+        if let handle {
+            handle.setEnabled(false)
+            handle.invalidate()
+            registry.unregister(handle)
         }
-        source = nil
-        port = nil
+        handle = nil
         handler = nil
     }
 }
@@ -69,6 +78,11 @@ final class MouseButtonTriggerMonitor {
     private var onDown: ((CGPoint) -> Void)?
     private var onDragged: ((CGPoint) -> Void)?
     private var onUp: ((CGPoint) -> Void)?
+
+    /// Called when macOS disables the tap. The monitor does not re-enable it;
+    /// the owner decides between `resume()` and teardown.
+    var onDisabled: ((InputTapDisableReason) -> Void)?
+    var onInstallFailed: (() -> Void)?
 
     init(tap: (any MouseButtonTriggerTapping)? = nil) {
         self.tap = tap ?? SystemMouseButtonTriggerTap()
@@ -96,7 +110,13 @@ final class MouseButtonTriggerMonitor {
             Logger(subsystem: "com.xpycode.MousePlus", category: "MouseTrigger")
                 .error("Could not install consuming mouse trigger tap: \(error.localizedDescription)")
             stop()
+            onInstallFailed?()
         }
+    }
+
+    /// Re-enables a tap that was reported disabled.
+    func resume() {
+        tap.reenable()
     }
 
     func stop() {
@@ -108,8 +128,9 @@ final class MouseButtonTriggerMonitor {
     }
 
     private func handle(type: CGEventType, event: CGEvent) -> Bool {
-        if type == .tapDisabledByTimeout || type == .tapDisabledByUserInput {
-            tap.reenable()
+        if let reason = InputTapDisableReason(eventType: type) {
+            isPressed = false
+            onDisabled?(reason)
             return false
         }
         guard event.getIntegerValueField(.mouseEventButtonNumber) == buttonNumber else { return false }

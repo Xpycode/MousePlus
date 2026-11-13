@@ -28,18 +28,46 @@ final class MouseButtonTriggerMonitorTests: XCTestCase {
     }
 
     @MainActor
-    func testReenablesTapAndStopsCleanly() async throws {
+    func testDisableClearsPressedStateReportsReasonAndDoesNotReenable() async throws {
+        for (type, reason) in [(CGEventType.tapDisabledByTimeout, InputTapDisableReason.timeout),
+                               (.tapDisabledByUserInput, .userInput)] {
+            let tap = FakeMouseTriggerTap()
+            let monitor = MouseButtonTriggerMonitor(tap: tap)
+            var received: [String] = []
+            var reasons: [InputTapDisableReason] = []
+            monitor.onDisabled = { reasons.append($0) }
+            monitor.start(buttonNumber: 2, onDown: { _ in received.append("down") },
+                          onDragged: { _ in }, onUp: { _ in received.append("up") })
+            XCTAssertTrue(try tap.send(.otherMouseDown, button: 2))
+            XCTAssertFalse(try tap.send(type, button: 2))
+            XCTAssertEqual(reasons, [reason])
+            XCTAssertEqual(tap.reenableCount, 0, "a disabled tap must not be re-enabled implicitly")
+            XCTAssertFalse(try tap.send(.otherMouseUp, button: 2), "pressed state must be cleared")
+            XCTAssertEqual(received, ["down"])
+            monitor.stop()
+            XCTAssertNil(tap.handler)
+        }
+    }
+
+    @MainActor
+    func testResumeReenablesTap() async {
         let tap = FakeMouseTriggerTap()
         let monitor = MouseButtonTriggerMonitor(tap: tap)
         monitor.start(buttonNumber: 2, onDown: { _ in }, onDragged: { _ in }, onUp: { _ in })
-        XCTAssertFalse(try tap.send(.tapDisabledByTimeout, button: 2))
+        monitor.resume()
         XCTAssertEqual(tap.reenableCount, 1)
-        XCTAssertTrue(try tap.send(.otherMouseDown, button: 2))
         monitor.stop()
-        XCTAssertNil(tap.handler)
-        monitor.start(buttonNumber: 2, onDown: { _ in }, onDragged: { _ in }, onUp: { _ in })
-        XCTAssertFalse(try tap.send(.otherMouseUp, button: 2))
-        monitor.stop()
+    }
+
+    @MainActor
+    func testInstallFailureIsReported() async {
+        let tap = FakeMouseTriggerTap()
+        tap.failStart = true
+        let monitor = MouseButtonTriggerMonitor(tap: tap)
+        var failures = 0
+        monitor.onInstallFailed = { failures += 1 }
+        monitor.start(buttonNumber: 4, onDown: { _ in }, onDragged: { _ in }, onUp: { _ in })
+        XCTAssertEqual(failures, 1)
     }
 
     @MainActor
@@ -54,7 +82,7 @@ final class MouseButtonTriggerMonitorTests: XCTestCase {
 
     @MainActor
     func testMouseRecorderFlagClearsOnCancel() async {
-        let recorder = TriggerRecorderService()
+        let recorder = TriggerRecorderService(monitors: FakeRecorderEventMonitor())
         recorder.record(.mouseButton)
         XCTAssertTrue(TriggerRecorderService.isRecordingMouseButton)
         recorder.cancel()
@@ -67,7 +95,7 @@ final class MouseButtonTriggerMonitorTests: XCTestCase {
         let monitor = MouseButtonTriggerMonitor(tap: tap)
         monitor.start(buttonNumber: 4, onDown: { _ in XCTFail("Recorder must own press") },
                       onDragged: { _ in XCTFail() }, onUp: { _ in XCTFail() })
-        let recorder = TriggerRecorderService()
+        let recorder = TriggerRecorderService(monitors: FakeRecorderEventMonitor())
         recorder.record(.mouseButton)
         defer { recorder.cancel(); monitor.stop() }
         XCTAssertFalse(try tap.send(.otherMouseDown, button: 4))

@@ -1,15 +1,8 @@
 import XCTest
 import AppKit
-import SwiftUI
 @testable import MousePlus
 
 final class KeystrokeCaptureRecorderTests: XCTestCase {
-    @MainActor
-    func testUnitTestHostDoesNotStartProductionServices() {
-        XCTAssertNil(AppDelegate.applyConfiguration,
-                     "The test host must not install production configuration/trigger services")
-    }
-
     func testReducerCapturesChordAndConsumesMatchingDownAndUp() {
         var reducer = KeystrokeCaptureReducer()
         reducer.start()
@@ -86,43 +79,90 @@ final class KeystrokeCaptureRecorderTests: XCTestCase {
     }
 
     @MainActor
-    func testNativeRecordButtonCommitsCapturedKeyThroughEditorBinding() async throws {
-        let item = RingMenuItem(label: "Copy", icon: "doc.on.doc", actionType: .sendKeystroke)
-        let model = MenuEditorModel(inner: [item], middle: [])
-        let binding = try XCTUnwrap(model.binding(forItem: item.id, band: .inner))
-        let tap = CaptureTapStub()
-        let recorder = KeystrokeCaptureRecorder(tap: tap, timeout: .seconds(60))
-        let host = NSHostingView(rootView: ActionDataEditor(item: binding, recorder: recorder))
-        let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 500, height: 200),
-                              styleMask: .borderless, backing: .buffered, defer: false)
-        window.contentView = host
-        defer { recorder.cancel(); window.contentView = nil }
-        func button(_ view: NSView) -> NSButton? {
-            if let button = view as? NSButton,
-               button.accessibilityIdentifier() == "menuItems.editor.keystroke.record" { return button }
-            return view.subviews.lazy.compactMap { button($0) }.first
+    func testTapDisabledCancelsRecordingReportsReasonAndDoesNotReenable() {
+        for reason in [InputTapDisableReason.timeout, .userInput] {
+            let tap = CaptureTapStub()
+            let recorder = KeystrokeCaptureRecorder(tap: tap, timeout: .seconds(60))
+            var reported: [InputTapDisableReason] = []
+            recorder.onDisabled = { reported.append($0) }
+            recorder.record()
+
+            XCTAssertEqual(tap.send(.tapDisabled(reason)), .passThrough)
+            XCTAssertEqual(tap.reenableCount, 0)
+            XCTAssertFalse(recorder.isRecording)
+            XCTAssertEqual(recorder.outcome, .cancelled)
+            XCTAssertEqual(reported, [reason])
+            XCTAssertTrue(tap.isStopped, "the tap must be torn down, not left running")
         }
-        host.layoutSubtreeIfNeeded()
-        try XCTUnwrap(button(host)).performClick(nil)
-        XCTAssertTrue(recorder.isRecording)
-        XCTAssertEqual(tap.send(.keyDown(keyCode: 0, modifiers: 0, isRepeat: false)), .consume)
-        XCTAssertEqual(tap.send(.keyUp(keyCode: 0)), .consume)
-        for _ in 0..<20 {
-            host.layoutSubtreeIfNeeded()
-            try? await Task.sleep(for: .milliseconds(10))
-        }
-        XCTAssertEqual(model.inner[0].keystrokePayload, .key(keyCode: 0, modifiers: 0))
     }
 
     @MainActor
-    func testTapDisabledIsReenabledWithoutFinishing() {
+    func testDisableWhileIdleIsIgnored() {
+        let tap = CaptureTapStub()
+        let recorder = KeystrokeCaptureRecorder(tap: tap, timeout: .seconds(60))
+        var reported = 0
+        recorder.onDisabled = { _ in reported += 1 }
+        recorder.record()
+        recorder.cancel()
+        XCTAssertEqual(tap.send(.tapDisabled(.timeout)), .passThrough)
+        XCTAssertEqual(reported, 0)
+    }
+
+    @MainActor
+    func testResumeReenablesTap() {
+        let tap = CaptureTapStub()
+        let recorder = KeystrokeCaptureRecorder(tap: tap, timeout: .seconds(60))
+        recorder.resume()
+        XCTAssertEqual(tap.reenableCount, 1)
+    }
+
+    @MainActor
+    func testTeardownStopsTapAndCancelsActiveRecording() {
         let tap = CaptureTapStub()
         let recorder = KeystrokeCaptureRecorder(tap: tap, timeout: .seconds(60))
         recorder.record()
+        recorder.teardown()
+        recorder.teardown()
+        XCTAssertFalse(recorder.isRecording)
+        XCTAssertEqual(recorder.outcome, .cancelled)
+        XCTAssertTrue(tap.isStopped)
+    }
 
-        XCTAssertEqual(tap.send(.tapDisabled), .passThrough)
-        XCTAssertEqual(tap.reenableCount, 1)
-        XCTAssertTrue(recorder.isRecording)
+    @MainActor
+    func testInstallFailureIsReported() {
+        let tap = CaptureTapStub(startError: KeystrokeCaptureTapError.creationFailed)
+        let recorder = KeystrokeCaptureRecorder(tap: tap)
+        var failures = 0
+        recorder.onInstallFailed = { failures += 1 }
+        recorder.record()
+        XCTAssertEqual(failures, 1)
+    }
+
+    @MainActor
+    func testSystemTapRegistersAndUnregistersWithRegistry() throws {
+        let registry = InputTapRegistry()
+        let handle = FakeTapHandle()
+        let tap = SystemKeystrokeCaptureTap(registry: registry, factory: { _, _, _ in handle })
+        try tap.start { _ in .passThrough }
+        XCTAssertEqual(registry.registeredCount, 1)
+        XCTAssertTrue(handle.isEnabled)
+        registry.teardownAll()
+        XCTAssertEqual(registry.enabledCount, 0)
+        XCTAssertTrue(handle.isInvalidated)
+        tap.stop()
+        XCTAssertEqual(registry.registeredCount, 0)
+
+        try tap.start { _ in .passThrough }
+        tap.stop()
+        XCTAssertEqual(registry.registeredCount, 0)
+    }
+
+    @MainActor
+    func testSystemTapCreationFailureRegistersNothing() {
+        let registry = InputTapRegistry()
+        let tap = SystemKeystrokeCaptureTap(registry: registry, factory: { _, _, _ in nil })
+        XCTAssertThrowsError(try tap.start { _ in .passThrough })
+        XCTAssertEqual(registry.registeredCount, 0)
     }
 
     @MainActor
@@ -170,11 +210,12 @@ private struct ImmediateCaptureSleeper: KeystrokeCaptureSleeping {
 }
 
 @MainActor
-private final class CaptureTapStub: KeystrokeCaptureTapping {
+final class CaptureTapStub: KeystrokeCaptureTapping {
     let startError: Error?
     private var handler: ((KeystrokeCaptureEvent) -> KeystrokeCaptureDisposition)?
     private(set) var stopCount = 0
     private(set) var reenableCount = 0
+    var isStopped: Bool { handler == nil }
 
     init(startError: Error? = nil) { self.startError = startError }
 

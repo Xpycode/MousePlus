@@ -337,8 +337,8 @@ final class HUDTriggerRoutingTests: XCTestCase {
         XCTAssertEqual(tap.send(.keyUp(keyCode: 96)), .passThrough)
         XCTAssertEqual(upCount, 1)
 
-        XCTAssertEqual(tap.send(.tapDisabled), .passThrough)
-        XCTAssertEqual(tap.reenableCount, 1)
+        XCTAssertEqual(tap.send(.tapDisabled(.timeout)), .passThrough)
+        XCTAssertEqual(tap.reenableCount, 0, "a disabled tap must not be re-enabled implicitly")
     }
 
     func testKeyboardRecorderTakesPriorityOverActiveTriggerTap() {

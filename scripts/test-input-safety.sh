@@ -7,13 +7,6 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 OUT="$ROOT/build/test-input-safety"
 
-# Test methods excluded by --skip. Each installs live NSEvent local/global
-# monitors via TriggerRecorderService (no seam yet; re-admitted by task R2/R3).
-SKIPPED_TESTS=(
-  "MouseButtonTriggerMonitorTests/testMouseRecorderFlagClearsOnCancel"
-  "MouseButtonTriggerMonitorTests/testExistingBindingPassesToRecorderWithoutOpeningHUD"
-)
-
 usage() {
   echo "usage: $(basename "$0") --all | --suite <Name> [--suite <Name> ...] | --list" >&2
   exit 2
@@ -26,21 +19,20 @@ Included suites (compiled from real sources in place):
   HUDColorResolverTests
   HUDCustomizationCodingTests
   HUDMotionPolicyTests
+  InputTapRegistryTests
+  KeyboardTriggerMonitorTests
+  KeystrokeCaptureRecorderTests    (headless-safe reducer/recorder tests only)
   KeystrokePayloadCodingTests
-  MouseButtonTriggerMonitorTests   (minus the two skipped tests below)
+  MouseButtonTriggerMonitorTests
   RadialGeometryTests
   RuntimeTrustMonitorTests
-
-Excluded tests (skipped via --skip, still compiled):
-  MouseButtonTriggerMonitorTests/testMouseRecorderFlagClearsOnCancel
-      TriggerRecorderService.record installs live NSEvent local+global monitors (unseamed).
-  MouseButtonTriggerMonitorTests/testExistingBindingPassesToRecorderWithoutOpeningHUD
-      Same: TriggerRecorderService.record installs live NSEvent monitors (unseamed).
+  TriggerRecorderServiceTests
+  TriggerServiceTests
 
 Excluded suites (not compiled; source closure not headless-safe or needs app target):
-  KeystrokeCaptureRecorderTests  references AppDelegate (MousePlusApp.swift, @main) and
+  KeystrokeCaptureEditorTests    references AppDelegate (MousePlusApp.swift, @main) and
                                  ActionDataEditor/MenuEditorModel (SwiftUI, MacUIKitSettings)
-  HUDTriggerRoutingTests         needs TriggerService, ConfigurationService, keyboard monitor, etc.
+  HUDTriggerRoutingTests         needs ConfigurationService, SettingsWorkspaceCoordinator, etc.
   All other suites in 01_Project/MousePlusTests (not yet audited for headless closure)
 LIST
 }
@@ -69,6 +61,5 @@ args=(test
 if [[ "$mode" == suite ]]; then
   for s in "${suites[@]}"; do args+=(--filter "^MousePlusTests\\.${s}/"); done
 fi
-for t in "${SKIPPED_TESTS[@]}"; do args+=(--skip "^MousePlusTests\\.${t}\$"); done
 
 exec swift "${args[@]}"

@@ -1,5 +1,29 @@
 import AppKit
 
+/// Installs and removes the NSEvent monitors the recorder listens through.
+/// Tests substitute a fake so no live monitor is ever created.
+@MainActor
+protocol TriggerRecorderEventMonitoring: AnyObject {
+    func addLocal(matching mask: NSEvent.EventTypeMask, handler: @escaping (NSEvent) -> NSEvent?) -> Any?
+    func addGlobal(matching mask: NSEvent.EventTypeMask, handler: @escaping (NSEvent) -> Void) -> Any?
+    func remove(_ monitor: Any)
+}
+
+@MainActor
+final class SystemTriggerRecorderEventMonitor: TriggerRecorderEventMonitoring {
+    func addLocal(matching mask: NSEvent.EventTypeMask, handler: @escaping (NSEvent) -> NSEvent?) -> Any? {
+        NSEvent.addLocalMonitorForEvents(matching: mask, handler: handler)
+    }
+
+    func addGlobal(matching mask: NSEvent.EventTypeMask, handler: @escaping (NSEvent) -> Void) -> Any? {
+        NSEvent.addGlobalMonitorForEvents(matching: mask, handler: handler)
+    }
+
+    func remove(_ monitor: Any) {
+        NSEvent.removeMonitor(monitor)
+    }
+}
+
 /// One-shot "press the trigger you want" recorder for the Triggers settings tab.
 ///
 /// Unlike `InputRecorderService` (a running diagnostic that logs a history), this
@@ -40,6 +64,11 @@ final class TriggerRecorderService {
     private var globalMonitor: Any?
     private var timeoutTask: Task<Void, Never>?
     private var target: Target = .keyboard
+    @ObservationIgnored private let monitors: any TriggerRecorderEventMonitoring
+
+    init(monitors: (any TriggerRecorderEventMonitoring)? = nil) {
+        self.monitors = monitors ?? SystemTriggerRecorderEventMonitor()
+    }
 
     /// Seconds to wait for a press before declaring `.timedOut`.
     private let timeout: Duration = .seconds(4)
@@ -56,13 +85,13 @@ final class TriggerRecorderService {
             ? [.keyDown]
             : [.otherMouseDown]
 
-        localMonitor = NSEvent.addLocalMonitorForEvents(matching: mask) { [weak self] event in
+        localMonitor = monitors.addLocal(matching: mask) { [weak self] event in
             Task { @MainActor in self?.handle(event) }
             // Swallow the event locally so the recorded key/click doesn't also act on
             // the Settings window (e.g. Return triggering a default button).
             return nil
         }
-        globalMonitor = NSEvent.addGlobalMonitorForEvents(matching: mask) { [weak self] event in
+        globalMonitor = monitors.addGlobal(matching: mask) { [weak self] event in
             Task { @MainActor in self?.handle(event) }
         }
 
@@ -78,6 +107,19 @@ final class TriggerRecorderService {
     func cancel() {
         guard isRecording else { return }
         finish(.cancelled)
+    }
+
+    /// Stops listening, cancels any active recording and clears the static
+    /// flags that make persistent trigger taps pass events through. Safe to
+    /// call when idle.
+    func teardown() {
+        stopMonitors()
+        if isRecording {
+            isRecording = false
+            outcome = .cancelled
+        }
+        Self.isRecordingKeyboardShortcut = false
+        Self.isRecordingMouseButton = false
     }
 
     private func handle(_ event: NSEvent) {
@@ -115,7 +157,7 @@ final class TriggerRecorderService {
     private func stopMonitors() {
         timeoutTask?.cancel()
         timeoutTask = nil
-        if let m = localMonitor { NSEvent.removeMonitor(m); localMonitor = nil }
-        if let m = globalMonitor { NSEvent.removeMonitor(m); globalMonitor = nil }
+        if let m = localMonitor { monitors.remove(m); localMonitor = nil }
+        if let m = globalMonitor { monitors.remove(m); globalMonitor = nil }
     }
 }

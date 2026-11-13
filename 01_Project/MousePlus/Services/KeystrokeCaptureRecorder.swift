@@ -11,7 +11,7 @@ enum KeystrokeCaptureDisposition: Equatable {
 enum KeystrokeCaptureEvent: Equatable {
     case keyDown(keyCode: UInt16, modifiers: UInt, isRepeat: Bool)
     case keyUp(keyCode: UInt16)
-    case tapDisabled
+    case tapDisabled(InputTapDisableReason)
 }
 
 struct KeystrokeCaptureReducer {
@@ -23,7 +23,6 @@ struct KeystrokeCaptureReducer {
     struct Transition: Equatable {
         var disposition: KeystrokeCaptureDisposition
         var completion: Completion?
-        var shouldReenableTap = false
     }
 
     private(set) var isRecording = false
@@ -47,7 +46,10 @@ struct KeystrokeCaptureReducer {
 
         switch event {
         case .tapDisabled:
-            return .init(disposition: .passThrough, shouldReenableTap: true)
+            isRecording = false
+            swallowedKeyCode = nil
+            pendingCompletion = nil
+            return .init(disposition: .passThrough, completion: .cancelled)
 
         case let .keyDown(keyCode, modifiers, isRepeat):
             if let swallowedKeyCode {
@@ -87,6 +89,7 @@ protocol KeystrokeCaptureTapping: AnyObject {
     func start(
         handler: @escaping (KeystrokeCaptureEvent) -> KeystrokeCaptureDisposition
     ) throws
+    /// Explicit re-enable after a reported disable; never called implicitly.
     func reenable()
     func stop()
 }
@@ -112,13 +115,34 @@ struct ContinuousKeystrokeCaptureSleeper: KeystrokeCaptureSleeping {
     }
 }
 
-/// Temporary active session tap used only while the Send Keystroke editor is recording.
-/// Returning nil from its callback consumes the chord before Carbon global hotkeys.
+private let keystrokeCaptureTapCallback: CGEventTapCallBack = { _, type, event, context in
+    guard let context else { return Unmanaged.passUnretained(event) }
+    return MainActor.assumeIsolated {
+        let tap = Unmanaged<SystemKeystrokeCaptureTap>
+            .fromOpaque(context).takeUnretainedValue()
+        return tap.handle(type: type, event: event)
+    }
+}
+
+/// Active session tap shared by the Send Keystroke recorder and the keyboard
+/// trigger monitors. Returning nil from its callback consumes the chord before
+/// Carbon global hotkeys.
 @MainActor
 final class SystemKeystrokeCaptureTap: KeystrokeCaptureTapping {
-    private var port: CFMachPort?
-    private var source: CFRunLoopSource?
+    private var handle: (any InputTapHandle)?
     private var handler: ((KeystrokeCaptureEvent) -> KeystrokeCaptureDisposition)?
+    private let registry: InputTapRegistry
+    private let factory: InputTapFactory
+
+    init(
+        registry: InputTapRegistry? = nil,
+        factory: @escaping InputTapFactory = { mask, callback, userInfo in
+            SystemEventTapHandle.create(mask: mask, callback: callback, userInfo: userInfo)
+        }
+    ) {
+        self.registry = registry ?? .shared
+        self.factory = factory
+    }
 
     func start(
         handler: @escaping (KeystrokeCaptureEvent) -> KeystrokeCaptureDisposition
@@ -127,54 +151,38 @@ final class SystemKeystrokeCaptureTap: KeystrokeCaptureTapping {
         self.handler = handler
         let mask = CGEventMask(1 << CGEventType.keyDown.rawValue)
             | CGEventMask(1 << CGEventType.keyUp.rawValue)
-        let context = Unmanaged.passUnretained(self).toOpaque()
-        guard let port = CGEvent.tapCreate(
-            tap: .cgSessionEventTap,
-            place: .headInsertEventTap,
-            options: .defaultTap,
-            eventsOfInterest: mask,
-            callback: { _, type, event, context in
-                guard let context else { return Unmanaged.passUnretained(event) }
-                return MainActor.assumeIsolated {
-                    let tap = Unmanaged<SystemKeystrokeCaptureTap>
-                        .fromOpaque(context).takeUnretainedValue()
-                    return tap.handle(type: type, event: event)
-                }
-            },
-            userInfo: context
+        guard let handle = factory(
+            mask, keystrokeCaptureTapCallback, Unmanaged.passUnretained(self).toOpaque()
         ) else {
             self.handler = nil
             throw KeystrokeCaptureTapError.creationFailed
         }
-        let source = CFMachPortCreateRunLoopSource(kCFAllocatorDefault, port, 0)
-        self.port = port
-        self.source = source
-        CFRunLoopAddSource(CFRunLoopGetMain(), source, .commonModes)
-        CGEvent.tapEnable(tap: port, enable: true)
+        self.handle = handle
+        registry.register(handle)
+        handle.setEnabled(true)
     }
 
     func reenable() {
-        if let port { CGEvent.tapEnable(tap: port, enable: true) }
+        handle?.setEnabled(true)
     }
 
     func stop() {
-        if let source { CFRunLoopRemoveSource(CFRunLoopGetMain(), source, .commonModes) }
-        if let port {
-            CGEvent.tapEnable(tap: port, enable: false)
-            // Disabling leaves the connection registered with WindowServer.
-            // Invalidate before releasing it so repeated recordings do not leak taps.
-            CFMachPortInvalidate(port)
+        if let handle {
+            handle.setEnabled(false)
+            handle.invalidate()
+            registry.unregister(handle)
         }
-        source = nil
-        port = nil
+        handle = nil
         handler = nil
     }
 
-    private func handle(type: CGEventType, event: CGEvent) -> Unmanaged<CGEvent>? {
+    fileprivate func handle(type: CGEventType, event: CGEvent) -> Unmanaged<CGEvent>? {
         let input: KeystrokeCaptureEvent
         switch type {
-        case .tapDisabledByTimeout, .tapDisabledByUserInput:
-            input = .tapDisabled
+        case .tapDisabledByTimeout:
+            input = .tapDisabled(.timeout)
+        case .tapDisabledByUserInput:
+            input = .tapDisabled(.userInput)
         case .keyDown:
             input = .keyDown(
                 keyCode: UInt16(event.getIntegerValueField(.keyboardEventKeycode)),
@@ -207,6 +215,11 @@ final class KeystrokeCaptureRecorder {
     private(set) var isRecording = false
     private(set) var outcome: Outcome?
 
+    /// Called after the recording was cancelled because macOS disabled the tap.
+    /// The recorder never re-enables the tap by itself.
+    @ObservationIgnored var onDisabled: ((InputTapDisableReason) -> Void)?
+    @ObservationIgnored var onInstallFailed: (() -> Void)?
+
     private let tap: any KeystrokeCaptureTapping
     private let timeout: Duration
     private let sleeper: any KeystrokeCaptureSleeping
@@ -236,12 +249,19 @@ final class KeystrokeCaptureRecorder {
                 switch event {
                 case .keyDown: self.keyDownCount += 1
                 case .keyUp: self.keyUpCount += 1
-                case .tapDisabled:
+                case .tapDisabled(let reason):
                     self.disabledCount += 1
-                    Self.logger.notice("Recording tap disabled; requesting re-enable")
+                    Self.logger.notice("Recording tap disabled; cancelling recording")
+                    // Synchronous: the tap must stop being a live consumer now.
+                    guard self.isRecording else { return .passThrough }
+                    self.reducer.cancel()
+                    self.stopInfrastructure()
+                    self.isRecording = false
+                    self.outcome = .cancelled
+                    self.onDisabled?(reason)
+                    return .passThrough
                 }
                 let transition = self.reducer.reduce(event)
-                if transition.shouldReenableTap { self.tap.reenable() }
                 if let completion = transition.completion {
                     Task { @MainActor [weak self] in self?.finish(completion) }
                 }
@@ -252,6 +272,7 @@ final class KeystrokeCaptureRecorder {
             isRecording = false
             outcome = .failed(error.localizedDescription)
             tap.stop()
+            onInstallFailed?()
             return
         }
         isRecording = true
@@ -270,6 +291,22 @@ final class KeystrokeCaptureRecorder {
         stopInfrastructure()
         isRecording = false
         outcome = .cancelled
+    }
+
+    /// Stops the tap and clears recording state without publishing an outcome
+    /// when nothing was recording. Safe to call repeatedly.
+    func teardown() {
+        if isRecording {
+            reducer.cancel()
+            isRecording = false
+            outcome = .cancelled
+        }
+        stopInfrastructure()
+    }
+
+    /// Explicit re-enable of the tap after a reported disable.
+    func resume() {
+        tap.reenable()
     }
 
     private func finish(_ completion: KeystrokeCaptureReducer.Completion) {

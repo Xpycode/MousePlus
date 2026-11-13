@@ -22,23 +22,24 @@ scripts/test-input-safety.sh --list                                  # included/
 The script runs `swift test --package-path 01_Project` with scratch, cache, config and security
 paths under `build/test-input-safety/`, so `01_Project/.build` and `.swiftpm` are never created.
 
-## Included suites (55 tests, all pass)
+## Included suites (93 tests, all pass)
 
 ActionTypeCodingTests (4), HUDColorResolverTests (7), HUDCustomizationCodingTests (8),
-HUDMotionPolicyTests (4), KeystrokePayloadCodingTests (7), MouseButtonTriggerMonitorTests (3 of 5),
-RadialGeometryTests (10), RuntimeTrustMonitorTests (12, injected fakes only).
+HUDMotionPolicyTests (4), InputTapRegistryTests (6), KeyboardTriggerMonitorTests (5),
+KeystrokeCaptureRecorderTests (14, headless-safe subset), KeystrokePayloadCodingTests (7),
+MouseButtonTriggerMonitorTests (7), RadialGeometryTests (10), RuntimeTrustMonitorTests (12,
+injected fakes only), TriggerRecorderServiceTests (3), TriggerServiceTests (6). No per-test
+exclusions remain: `TriggerRecorderService` takes an injectable `TriggerRecorderEventMonitoring`,
+so its tests never install live `NSEvent` monitors; system taps take an injectable
+`InputTapFactory`, so tests never create a live `CGEventTap`.
 
 ## Excluded
 
-- `MouseButtonTriggerMonitorTests/testMouseRecorderFlagClearsOnCancel` and
-  `.../testExistingBindingPassesToRecorderWithoutOpeningHUD`: `TriggerRecorderService.record`
-  installs live `NSEvent` local and global monitors with no seam. Skipped by the script's `--skip`
-  list (still compiled). Re-admit after the recorder gains a seam (plan task R2/R3).
-- `KeystrokeCaptureRecorderTests`: references `AppDelegate` (`MousePlusApp.swift`) and
-  `ActionDataEditor`/`MenuEditorModel` (SwiftUI, `MacUIKitSettings`); the file cannot compile
-  headless without editing it.
-- `HUDTriggerRoutingTests`: needs `TriggerService`, `ConfigurationService`, keyboard monitor and
-  more of the Services closure.
+- `KeystrokeCaptureEditorTests` (split from `KeystrokeCaptureRecorderTests`): references
+  `AppDelegate` (`MousePlusApp.swift`) and `ActionDataEditor`/`MenuEditorModel` (SwiftUI,
+  `MacUIKitSettings`); stays app-hosted/Xcode-only.
+- `HUDTriggerRoutingTests`: needs `ConfigurationService`, the settings workspace and more of the
+  app closure.
 - All other suites: not audited for a headless closure.
 
 Safety audit of included suites: no test creates a live event tap (the monitor tests use a fake

@@ -1,6 +1,6 @@
 import AppKit
 
-/// Watches global + local keyboard events for one keyboard trigger binding.
+/// Watches keyboard events (through one active event tap) for one keyboard trigger binding.
 /// Calls `onDown` when the configured keyCode + normalized chord modifiers are
 /// pressed exactly. `onUp` is emitted only for a press this monitor actually
 /// accepted; modifiers are ignored on release so any release order closes it.
@@ -9,13 +9,16 @@ import AppKit
 @MainActor
 final class KeyboardTriggerMonitor {
     private let eventTap: any KeystrokeCaptureTapping
-    private var globalMonitor: Any?
-    private var localMonitor: Any?
     private var keyCode: UInt16 = 0
     private var modifiers: UInt = 0
     private var onDown: (() -> Void)?
     private var onUp: (() -> Void)?
     private var isPressed = false
+
+    /// Called when macOS disables the tap. The monitor does not re-enable it;
+    /// the owner decides between `resume()` and teardown.
+    var onDisabled: ((InputTapDisableReason) -> Void)?
+    var onInstallFailed: (() -> Void)?
 
     init(eventTap: (any KeystrokeCaptureTapping)? = nil) {
         self.eventTap = eventTap ?? SystemKeystrokeCaptureTap()
@@ -39,31 +42,21 @@ final class KeyboardTriggerMonitor {
                 guard let self else { return .passThrough }
                 return self.handle(event)
             }
-            return
         } catch {
-            // Preserve trigger functionality if the consumable tap cannot be
-            // installed. The Settings permission UI already explains how to
-            // restore Accessibility access; this fallback may not suppress the
-            // active application's alert sound.
+            // No passive NSEvent fallback: it would run without consuming the
+            // chord and continue to act after permission is lost.
+            stop()
+            onInstallFailed?()
         }
+    }
 
-        let mask: NSEvent.EventTypeMask = [.keyDown, .keyUp, .flagsChanged]
-
-        globalMonitor = NSEvent.addGlobalMonitorForEvents(matching: mask) { [weak self] event in
-            MainActor.assumeIsolated { _ = self?.handle(event) }
-        }
-        localMonitor = NSEvent.addLocalMonitorForEvents(matching: mask) { [weak self] event in
-            let shouldConsume = MainActor.assumeIsolated {
-                self?.handle(event) == .consume
-            }
-            return shouldConsume ? nil : event
-        }
+    /// Re-enables a tap that was reported disabled.
+    func resume() {
+        eventTap.reenable()
     }
 
     func stop() {
         eventTap.stop()
-        if let m = globalMonitor { NSEvent.removeMonitor(m); globalMonitor = nil }
-        if let m = localMonitor { NSEvent.removeMonitor(m); localMonitor = nil }
         onDown = nil
         onUp = nil
         isPressed = false
@@ -89,15 +82,18 @@ final class KeyboardTriggerMonitor {
 
     @discardableResult
     private func handle(_ event: KeystrokeCaptureEvent) -> KeystrokeCaptureDisposition {
+        if case let .tapDisabled(reason) = event {
+            isPressed = false
+            onDisabled?(reason)
+            return .passThrough
+        }
+
         if TriggerRecorderService.isRecordingKeyboardShortcut {
             isPressed = false
             return .passThrough
         }
 
         switch event {
-        case .tapDisabled:
-            eventTap.reenable()
-            return .passThrough
 
         case let .keyDown(eventKeyCode, eventModifiers, isRepeat) where HUDTriggerRouting.keyboardEventMatches(
             keyCode: eventKeyCode,
