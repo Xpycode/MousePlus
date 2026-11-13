@@ -58,6 +58,8 @@ struct TriggersSettingsView: View {
                 postEventPermissionRow
             }
 
+            onboardingGuidance
+
             Section("Keyboard Trigger") {
                 bindingRow(slot: .keyboard, binding: triggerBinding(\.keyboard))
             }
@@ -78,7 +80,7 @@ struct TriggersSettingsView: View {
 
             Section("Open Settings Shortcut") {
                 bindingRow(slot: .openSettings, binding: triggerBinding(\.openSettings))
-                Text("Opens this Settings window from anywhere — a reliable way in when the menu bar icon isn't showing. Defaults to ⌥⌘,.")
+                Text(guidance.settingsAccess)
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -111,11 +113,41 @@ struct TriggersSettingsView: View {
         }
         .onAppear {
             permissions.startPolling()
+            if permissions.isGranted { AppDelegate.accessibilityPermissionGranted?() }
             postEventPermissions.refresh()
+        }
+        .onChange(of: permissions.isGranted) { _, granted in
+            if granted { AppDelegate.accessibilityPermissionGranted?() }
         }
         .onDisappear {
             permissions.stopPolling()
             recorder.cancel()
+        }
+    }
+
+    private var guidance: TriggerOnboardingGuidance {
+        TriggerOnboardingGuidance(
+            savedTriggers: coordinator.isLoaded ? coordinator.savedTriggers : nil,
+            accessibilityGranted: permissions.isGranted
+        )
+    }
+
+    private var onboardingGuidance: some View {
+        Section(guidance.title) {
+            WorkspaceStatusView(status: coordinator.status) {
+                Task { await coordinator.retry() }
+            }
+            Text(guidance.instructions)
+                .font(.callout)
+                .accessibilityIdentifier("triggers.onboarding.instructions")
+            if coordinator.dirtyFields.contains(.triggers) {
+                Text("Trigger changes are not saved yet. Guidance uses the last saved binding.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            Text(guidance.settingsAccess)
+                .font(.caption)
+                .foregroundStyle(.secondary)
         }
     }
 
@@ -365,5 +397,46 @@ private struct TriggerCollisionAppKitLabel: NSViewRepresentable {
         label.textColor = .systemOrange
         label.setAccessibilityLabel(text)
         label.setAccessibilityIdentifier("triggers.globalHUDShortcut.conflict")
+    }
+}
+
+/// Presentation uses only a durable snapshot; recording and pending edits cannot
+/// claim a newly configured trigger or silently change trial instructions.
+struct TriggerOnboardingGuidance: Equatable {
+    let title: String
+    let instructions: String
+    let settingsAccess: String
+
+    init(savedTriggers: TriggersConfig?, accessibilityGranted: Bool) {
+        if let savedTriggers, case .keyboard = savedTriggers.openSettings {
+            settingsAccess = "Return through the MousePlus menu-bar icon → Settings, or press "
+                + savedTriggers.openSettings.displayString + "."
+        } else {
+            settingsAccess = "Return through the MousePlus menu-bar icon → Settings."
+        }
+        guard let savedTriggers else {
+            title = "Trigger setup"
+            instructions = "Load your configuration before choosing a trigger. If loading failed, use Retry."
+            return
+        }
+        guard let selected = TriggerOnboardingPolicy.eligibleRingBindings(in: savedTriggers).first else {
+            title = "Choose how to open MousePlus"
+            instructions = "Use Record below to choose a keyboard shortcut or mouse button, then choose its mode. "
+                + "Wait for Saved before trying it."
+            return
+        }
+        title = "Try your saved trigger"
+        let target = selected.slot == .globalHUD ? "the Global HUD" : "MousePlus"
+        let trial: String
+        switch selected.binding.mode {
+        case .holdRelease:
+            trial = "Over another app, hold \(selected.binding.displayString) to open \(target). "
+                + "Keep the pointer in the center, away from slices, and press Escape before releasing."
+        case .tapToggle:
+            trial = "Over another app, tap \(selected.binding.displayString) to open \(target). "
+                + "Keep the pointer away from slices and press Escape to dismiss without choosing an action."
+        }
+        instructions = accessibilityGranted ? trial
+            : "Saved: \(selected.binding.displayString). Restore Accessibility permission above before trying it. " + trial
     }
 }

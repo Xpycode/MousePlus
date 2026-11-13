@@ -4,6 +4,32 @@ This file tracks the WHY behind technical and design decisions.
 
 ---
 
+## 2026-11-13 - Self-relaunch when the Accessibility-type permission is lost at runtime
+
+**Context:** On November 13 the user revoked the permission while MousePlus ran; the HUD stranded
+and input became unresponsive system-wide. The first remediation plan proposed staying alive in a
+suspended state until the user restarted manually. Plan review found the failure documented for
+exactly this tap configuration (Apple Developer Forums 844416 and 735204) and found that
+alt-tab-macos and LinearMouse both relaunch themselves on loss.
+
+**Options:** (1) Tear down and stay alive suspended until a manual restart. (2) Tear down and quit.
+(3) Tear down and relaunch into the existing permission-setup path.
+
+**Decision:** Option 3, decided by the user. On loss: remove every event tap and close the HUD
+without committing, flush settings, launch a new instance, terminate. At most one safety relaunch
+per 60 seconds; otherwise, or if flush or launch fails, stay alive with no taps and no re-arm.
+
+**Rationale:** The hazard is a live active tap owned by an untrusted process, and per-process
+permission state stays stale until relaunch. Process exit is the only reported recovery, and Apple
+DTS advises accepting the quit and relaunch. Relaunch also puts the user in front of the existing
+setup window instead of a banner inside closed Settings.
+
+**Consequences:** Loss detection cannot rely on `AXIsProcessTrusted` alone. Real revocation remains
+untested under the current no-toggle limit. Detail and sources:
+`plans/permission-loss-implementation.md`, `plans/permission-loss-investigation.md`.
+
+---
+
 ## 2026-09-13 - Unused HUD slots use transparent backing with an optional complete-ring treatment
 
 **Context:** Fixed inner and middle slot counts preserve angular positions when fewer items are

@@ -68,6 +68,105 @@ struct HUDInvocationOwnership: Equatable {
     }
 }
 
+/// Lifecycle adapter shared by production callbacks and tests. It owns no files or
+/// event taps; effects run only after a real load outcome and permission grant.
+@MainActor
+@Observable
+final class TriggerOnboardingLaunch {
+    struct Effects {
+        var applyRuntime: (Configuration) -> Void
+        var showPermission: () -> Void
+        var showTriggers: () -> Void
+        var showSettings: () -> Void
+    }
+
+    private var policy = TriggerOnboardingPolicy()
+    private var loadState: TriggerOnboardingPolicy.LoadState = .loading
+    private var loadedConfiguration: Configuration?
+    private var accessibilityGranted = false
+    private var runtimeApplied = false
+    private var receivedSavedConfiguration = false
+    private let effects: Effects
+
+    init(effects: Effects) { self.effects = effects }
+
+    var continuationTitle: String {
+        switch loadState {
+        case .loading: "Continue"
+        case .missingFile: "Choose a Trigger"
+        case .failed: "Open Settings"
+        case .loaded(let triggers):
+            TriggerOnboardingPolicy.hasRingBinding(in: triggers) ? "Open Settings" : "Choose a Trigger"
+        }
+    }
+
+    func begin(accessibilityGranted: Bool) {
+        self.accessibilityGranted = accessibilityGranted
+        evaluate()
+    }
+
+    func permissionGranted() {
+        accessibilityGranted = true
+        evaluate()
+    }
+
+    func continueFromPermission() {
+        evaluate(continueFromPermission: true)
+    }
+
+    func configurationLoaded(_ result: Result<ConfigurationService.LoadResult, Error>) {
+        guard !receivedSavedConfiguration else { return }
+        switch result {
+        case .success(let outcome):
+            loadedConfiguration = outcome.configuration
+            switch outcome {
+            case .defaults: loadState = .missingFile
+            case .loaded(let config): loadState = .loaded(config.triggers)
+            }
+        case .failure:
+            loadState = .failed
+            loadedConfiguration = nil
+        }
+        evaluate()
+    }
+
+    func configurationSaved(_ configuration: Configuration) {
+        receivedSavedConfiguration = true
+        loadedConfiguration = configuration
+        loadState = .loaded(configuration.triggers)
+        runtimeApplied = false
+        evaluate()
+    }
+
+    func recoverLoadedSettingsConfiguration(_ configuration: Configuration) {
+        guard !receivedSavedConfiguration else { return }
+        switch loadState {
+        case .loading, .failed:
+            configurationSaved(configuration)
+        case .loaded, .missingFile:
+            break
+        }
+    }
+
+    private func evaluate(continueFromPermission: Bool = false) {
+        if accessibilityGranted, !runtimeApplied, let loadedConfiguration {
+            runtimeApplied = true
+            effects.applyRuntime(loadedConfiguration)
+        }
+        let decision = policy.evaluate(configuration: loadState,
+                                       accessibilityGranted: accessibilityGranted,
+                                       continueFromPermission: continueFromPermission)
+        switch decision.action {
+        case .none: break
+        case .showPermissionSetup: effects.showPermission()
+        case .showTriggerSetup: effects.showTriggers()
+        case .showSettings:
+            if decision.status == .loadFailure { effects.showTriggers() }
+            else { effects.showSettings() }
+        }
+    }
+}
+
 @main
 struct MousePlusApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
@@ -92,6 +191,11 @@ struct MousePlusApp: App {
         AppDelegate.openSettingsAction = { [self] in
             openSettings()
         }
+        AppDelegate.openTriggersSettingsAction = { [self] in
+            settingsSelection = .triggers
+            requestedMenuItemID = nil
+            openSettings()
+        }
         AppDelegate.openMenuItemsSettingsAction = { [self] in
             settingsSelection = .menuItems
             requestedMenuItemID = nil
@@ -111,6 +215,9 @@ struct MousePlusApp: App {
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
     static var openSettingsAction: (() -> Void)?
+    static var openTriggersSettingsAction: (() -> Void)?
+    static var accessibilityPermissionGranted: (() -> Void)?
+    static var recoverLoadedSettingsConfiguration: ((Configuration) -> Void)?
     static var openSettingsRouteAction: ((ActionSettingsRoute) -> Void)?
     static var openMenuItemsSettingsAction: (() -> Void)?
 
@@ -168,19 +275,56 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     /// Loaded config; drives dismiss behavior. Sensible default until load completes.
     private var configuration = Configuration()
+    private var injectedOnboardingEffects: TriggerOnboardingLaunch.Effects?
+    private lazy var onboardingLaunch = TriggerOnboardingLaunch(effects: injectedOnboardingEffects ?? .init(
+        applyRuntime: { [weak self] config in self?.applyRuntimeConfiguration(config) },
+        showPermission: { [weak self] in self?.showPermissionOnboarding() },
+        showTriggers: { [weak self] in self?.showTriggersSettings() },
+        showSettings: { [weak self] in self?.showSettings() }
+    ))
+
+    override init() { super.init() }
+
+    /// Inject lifecycle effects without starting real monitors, windows, or TCC prompts.
+    init(onboardingEffects: TriggerOnboardingLaunch.Effects) {
+        injectedOnboardingEffects = onboardingEffects
+        super.init()
+    }
+
+    func beginTriggerOnboarding(accessibilityGranted: Bool) {
+        onboardingLaunch.begin(accessibilityGranted: accessibilityGranted)
+    }
+
+    func triggerOnboardingPermissionGranted() { onboardingLaunch.permissionGranted() }
+    func continueTriggerOnboarding() { onboardingLaunch.continueFromPermission() }
+    func triggerOnboardingConfigurationLoaded(_ result: Result<ConfigurationService.LoadResult, Error>) {
+        onboardingLaunch.configurationLoaded(result)
+    }
+    func applySavedConfiguration(_ configuration: Configuration) {
+        onboardingLaunch.configurationSaved(configuration)
+    }
+    func recoverLoadedSettingsConfiguration(_ configuration: Configuration) {
+        onboardingLaunch.recoverLoadedSettingsConfiguration(configuration)
+    }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        // App-hosted unit tests must not start production event taps or request
+        // TCC access under the Debug signing identity. Each test owns its own
+        // services and fixtures; launching the real app here queues system
+        // permission dialogs alongside the installed Developer ID build.
+        guard NSClassFromString("XCTestCase") == nil else { return }
         setupMenuBar()
         loadConfiguration()
 
         Task { await appSwitcherService.startTrackingMRU() }
 
-        if permissionsService.isGranted {
-            setupTriggers()
-            applySettingsHotkey(configuration.triggers.openSettings)  // reliable way into Settings
-        } else {
-            showPermissionOnboarding()
+        permissionsService.onGranted = { [weak self] in
+            self?.triggerOnboardingPermissionGranted()
         }
+        Self.accessibilityPermissionGranted = { [weak self] in
+            self?.triggerOnboardingPermissionGranted()
+        }
+        beginTriggerOnboarding(accessibilityGranted: permissionsService.isGranted)
     }
 
     /// MousePlus is a menu-bar/LSUIElement utility — its real job (the global
@@ -195,16 +339,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let controller = OnboardingWindowController()
         onboardingWindowController = controller
 
-        permissionsService.onGranted = { [weak self] in
-            guard let self else { return }
-            self.setupTriggers()
-            self.applySettingsHotkey(self.configuration.triggers.openSettings)  // re-arm after grant
-        }
-
-        controller.show(service: permissionsService) { [weak self] in
+        controller.show(service: permissionsService, launch: onboardingLaunch) { [weak self] in
             guard let self else { return }
             self.onboardingWindowController = nil
-            self.showSettings()
+            self.continueTriggerOnboarding()
         }
 
         // Force polling so the grant is detected even if the SwiftUI view's
@@ -304,12 +442,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func setupTriggers() {
+        guard triggerService == nil else { return }
         let service = TriggerService()
         triggerService = service
         ringWindowController = RingWindowController()
 
-        // Start from whatever config has loaded so far; `loadConfiguration`'s async
-        // completion calls `updateConfig` once the saved triggers are in hand.
+        // Only called after configuration loading succeeds and permission is granted.
         service.start(config: configuration.triggers)
 
         triggerEventTask = Task { [weak self] in
@@ -353,30 +491,33 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
 
         AppDelegate.applyConfiguration = { [weak self] config in
-            guard let self else { return }
-            self.configuration = config
-            if !self.ringViewModel.isVisible {
-                self.ringViewModel.load(from: config)
-            }
-            self.triggerService?.updateConfig(config.triggers)
-            self.applySettingsHotkey(config.triggers.openSettings)
+            self?.applySavedConfiguration(config)
+        }
+        AppDelegate.recoverLoadedSettingsConfiguration = { [weak self] config in
+            self?.recoverLoadedSettingsConfiguration(config)
         }
 
         // Open the "Identify Input" diagnostic from Settings / menu bar (no longer auto-opened).
         AppDelegate.showIdentifyInput = { [weak self] in self?.showInputRecorder() }
 
         Task {
-            if let config = try? await configService?.load() {
-                configuration = config
-                if !ringViewModel.isVisible {
-                    ringViewModel.load(from: config)
-                }
-                // Now that the saved triggers are loaded, snap the live monitors to them
-                // (setupTriggers may have started with the default before load finished).
-                triggerService?.updateConfig(config.triggers)
-                applySettingsHotkey(config.triggers.openSettings)
+            guard let configService else { return }
+            do {
+                triggerOnboardingConfigurationLoaded(.success(try await configService.loadResult()))
+            } catch {
+                // The Triggers workspace exposes its existing load error and Retry.
+                // No defaults are applied or written after an unreadable file.
+                triggerOnboardingConfigurationLoaded(.failure(error))
             }
         }
+    }
+
+    private func applyRuntimeConfiguration(_ config: Configuration) {
+        configuration = config
+        if !ringViewModel.isVisible { ringViewModel.load(from: config) }
+        if let triggerService { triggerService.updateConfig(config.triggers) }
+        else { setupTriggers() }
+        applySettingsHotkey(config.triggers.openSettings)
     }
 
     private func showRing(at pointerLocation: CGPoint, commitsOnPointerRelease: Bool,
@@ -656,6 +797,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         settingsActionContextProvider.recordFrontmostApplicationBeforeSettingsActivation()
         NSApp.activate(ignoringOtherApps: true)
         Self.openSettingsAction?()
+    }
+
+    private func showTriggersSettings() {
+        settingsActionContextProvider.recordFrontmostApplicationBeforeSettingsActivation()
+        NSApp.activate(ignoringOtherApps: true)
+        Self.openTriggersSettingsAction?()
     }
 
     private func showMenuItemsSettings() {

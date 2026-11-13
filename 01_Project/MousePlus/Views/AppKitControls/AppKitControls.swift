@@ -23,6 +23,8 @@ struct AppKitButton: NSViewRepresentable {
     var accessibilityLabel: String? = nil
     var accessibilityIdentifier: String? = nil
     var accessibilityValue: String? = nil
+    var keyEquivalent: String = ""
+    var keyEquivalentModifierMask: NSEvent.ModifierFlags = []
     let action: @MainActor () -> Void
 
     func makeCoordinator() -> Coordinator { Coordinator(action: action) }
@@ -41,6 +43,8 @@ struct AppKitButton: NSViewRepresentable {
         }
         button.imagePosition = title.isEmpty ? .imageOnly : .imageLeading
         button.isEnabled = isEnabled
+        button.keyEquivalent = keyEquivalent
+        button.keyEquivalentModifierMask = keyEquivalentModifierMask
         configureAccessibility(
             button,
             label: accessibilityLabel ?? title,
@@ -176,14 +180,15 @@ struct AppKitSegmentedControl: NSViewRepresentable {
 }
 
 /// A native color well paired with an explicit inherit/default state.
-/// `nil` represents that state; switching back to Custom restores the last
-/// chosen color. `inheritTitle` lets callers distinguish a menu-root control
+/// `nil` represents that state; requesting Custom opens the color panel and
+/// only an actual color choice creates an override. `inheritTitle` distinguishes a menu-root control
 /// (whose `nil` falls back to the application default, so it reads
 /// "Default") from a ring- or item-level override (whose `nil` reads
 /// "Inherit" because it falls back to its parent scope).
 struct AppKitColorWell: NSViewRepresentable {
     @Binding var color: NSColor?
-    var defaultCustomColor: NSColor = .controlAccentColor
+    // Callers may supply the resolved inherited color; otherwise show an empty swatch.
+    var defaultCustomColor: NSColor = .clear
     var inheritTitle: String = "Inherit"
     var isEnabled = true
     var accessibilityLabel: String
@@ -216,54 +221,70 @@ struct AppKitColorWell: NSViewRepresentable {
         context.coordinator.color = $color
         context.coordinator.defaultCustomColor = defaultCustomColor
         let inherits = color == nil
-        if let color { context.coordinator.lastCustomColor = color }
-        context.coordinator.inheritButton?.state = inherits ? .on : .off
-        context.coordinator.inheritButton?.isEnabled = isEnabled
-        context.coordinator.colorWell?.isEnabled = isEnabled && !inherits
-        context.coordinator.colorWell?.color = color ?? context.coordinator.lastCustomColor
+        context.coordinator.synchronize(isEnabled: isEnabled)
+        context.coordinator.inheritButton?.title = inheritTitle
         configureAccessibility(
             stack,
             label: accessibilityLabel,
             identifier: accessibilityIdentifier,
-            value: inherits ? "Inherit" : "Custom"
+            value: inherits ? inheritTitle : "Custom"
         )
         if let identifier = accessibilityIdentifier {
             context.coordinator.inheritButton?.setAccessibilityIdentifier("\(identifier).inherit")
             context.coordinator.colorWell?.setAccessibilityIdentifier("\(identifier).color")
         }
-        context.coordinator.inheritButton?.setAccessibilityLabel("Inherit \(accessibilityLabel)")
+        context.coordinator.inheritButton?.setAccessibilityLabel("\(inheritTitle) \(accessibilityLabel)")
         context.coordinator.colorWell?.setAccessibilityLabel(accessibilityLabel)
+    }
+
+    static func dismantleNSView(_ stack: NSStackView, coordinator: Coordinator) {
+        // Item controls are recreated by SlotEditorForm's selection identity.
+        // Detach the shared panel before the outgoing control can write again.
+        coordinator.colorWell?.deactivate()
+        coordinator.colorWell?.target = nil
+        coordinator.colorWell?.action = nil
     }
 
     @MainActor final class Coordinator: NSObject {
         var color: Binding<NSColor?>
         var defaultCustomColor: NSColor
-        var lastCustomColor: NSColor
         weak var inheritButton: NSButton?
         weak var colorWell: NSColorWell?
 
         init(color: Binding<NSColor?>, defaultCustomColor: NSColor) {
             self.color = color
             self.defaultCustomColor = defaultCustomColor
-            self.lastCustomColor = color.wrappedValue ?? defaultCustomColor
+        }
+
+        func synchronize(isEnabled: Bool = true) {
+            inheritButton?.state = color.wrappedValue == nil ? .on : .off
+            inheritButton?.isEnabled = isEnabled
+            // An inherited well remains usable so a deliberate choice can create an override.
+            let displayedColor = color.wrappedValue ?? defaultCustomColor
+            if let colorWell, colorWell.isActive,
+               !isEnabled || colorWell.color != displayedColor {
+                // A changed selection/inherited value must not leave its old panel active.
+                colorWell.deactivate()
+            }
+            colorWell?.isEnabled = isEnabled
+            colorWell?.color = displayedColor
         }
 
         @objc func inheritChanged(_ sender: NSButton) {
             if sender.state == .on {
-                if let current = color.wrappedValue { lastCustomColor = current }
+                colorWell?.deactivate()
                 color.wrappedValue = nil
-                colorWell?.isEnabled = false
+                synchronize()
             } else {
-                let restored = lastCustomColor
-                color.wrappedValue = restored
-                colorWell?.color = restored
-                colorWell?.isEnabled = true
+                // Opening (or dismissing) the chooser must not persist its seed color.
+                synchronize()
+                colorWell?.activate(true)
             }
         }
 
         @objc func colorChanged(_ sender: NSColorWell) {
-            lastCustomColor = sender.color
             color.wrappedValue = sender.color
+            inheritButton?.state = .off
         }
     }
 }

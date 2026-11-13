@@ -1,4 +1,5 @@
 import AppKit
+import OSLog
 import ShortcutKit
 import SwiftUI
 
@@ -13,6 +14,9 @@ import SwiftUI
 /// - `.menuBar` / `.systemToggle` / `.screenshot` — disabled "coming soon" placeholder.
 ///
 struct ActionDataEditor: View {
+    /// Temporary capture-commit diagnostics for the keystroke-recorder investigation.
+    private static let diagnostics = Logger(subsystem: "com.xpycode.MousePlus", category: "SettingsWorkspace")
+
     @Binding var item: RingMenuItem
 
     /// Drives the `AppPickerSheet` presentation for `.appSwitch`.
@@ -23,6 +27,11 @@ struct ActionDataEditor: View {
     @State private var recordingItemID: UUID?
     @State private var keystrokeCaptureMessage: String?
     private let keystrokeConflicts = KeystrokeConflictChecker()
+
+    init(item: Binding<RingMenuItem>, recorder: KeystrokeCaptureRecorder? = nil) {
+        _item = item
+        _keystrokeRecorder = State(initialValue: recorder ?? KeystrokeCaptureRecorder())
+    }
 
     private var offeredActionTypes: [ActionType] {
         item.actionType.isSelectable
@@ -149,6 +158,7 @@ struct ActionDataEditor: View {
         recordingItemID = nil
 
         guard armedItemID == item.id, item.actionType == .sendKeystroke else {
+            Self.diagnostics.error("Capture dropped: armedID matches item=\(armedItemID == item.id), actionType=\(item.actionType.displayName, privacy: .public)")
             keystrokeCandidate = nil
             return
         }
@@ -159,8 +169,10 @@ struct ActionDataEditor: View {
             if assessment(for: shortcut)?.severity == .blocked {
                 // Keep the rejected chord visible in the explanatory caption,
                 // but never replace the item's committed payload.
+                Self.diagnostics.notice("Capture rejected as blocked system shortcut")
                 keystrokeCandidate = shortcut
             } else {
+                Self.diagnostics.notice("Capture committed to selected item")
                 item.keystrokePayload = payload
                 keystrokeCandidate = nil
             }

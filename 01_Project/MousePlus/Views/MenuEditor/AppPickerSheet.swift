@@ -97,12 +97,12 @@ struct AppPickerSheet: View {
                 .frame(width: 26, height: 26)
             AppKitSelectableRow(
                 title: entry.name,
-                subtitle: entry.id,
                 isSelected: false,
                 accessibilityLabel: "Choose \(entry.name)"
             ) {
                 pick(entry)
             }
+            .help("\(entry.name) — \(entry.id)")
         }
         .padding(.vertical, 2)
     }
@@ -154,6 +154,9 @@ struct AppPickerSheet: View {
 
         // Helper that builds an entry for a candidate .app URL and records it.
         func add(appURL: URL) {
+            // Running applications also includes XPC services. Apply the same
+            // bundle boundary to both discovery sources, retaining menu-bar apps.
+            guard isApplicationBundle(appURL) else { return }
             guard let bundleID = Bundle(url: appURL)?.bundleIdentifier else { return }
             guard !seen.contains(bundleID) else { return }
             seen.insert(bundleID)
@@ -186,14 +189,15 @@ struct AppPickerSheet: View {
         return result
     }
 
-    /// Returns true when the URL is an application bundle. Prefers the
-    /// `isApplication` resource value, falling back to the `.app` extension.
+    /// Only application bundles belong in the picker, never .xpc/.appex services
+    /// exposed by NSWorkspace alongside running apps.
     private static func isApplicationBundle(_ url: URL) -> Bool {
+        guard url.pathExtension.lowercased() == "app" else { return false }
         if let values = try? url.resourceValues(forKeys: [.isApplicationKey]),
            let isApp = values.isApplication {
             return isApp
         }
-        return url.pathExtension == "app"
+        return Bundle(url: url)?.object(forInfoDictionaryKey: "CFBundlePackageType") as? String == "APPL"
     }
 
     /// Human-readable name for an app URL, with sensible fallbacks.

@@ -70,13 +70,30 @@ final class MenuEditorModel {
     // MARK: State
 
     /// Working copy of the inner ring (symbol-only quick actions).
-    var inner: [RingMenuItem]
+    var inner: [RingMenuItem] {
+        didSet { if inner != oldValue { contentDidChange() } }
+    }
 
     /// Working copy of the middle ring (primary actions, may drill into sub-items).
-    var middle: [RingMenuItem]
+    var middle: [RingMenuItem] {
+        didSet { if middle != oldValue { contentDidChange() } }
+    }
 
     /// Working copy of menu/ring HUD layout and appearance customization.
-    var hudCustomization: HUDCustomization
+    var hudCustomization: HUDCustomization {
+        didSet { if hudCustomization != oldValue { contentDidChange() } }
+    }
+
+    /// The owner receives completed property writes synchronously, independent
+    /// of whether a SwiftUI pane is mounted or has rendered the new value.
+    /// The callback must read content only; it must not mutate this model.
+    @ObservationIgnored var onContentChange: (() -> Void)?
+    @ObservationIgnored private var isLoadingContent = false
+
+    private func contentDidChange() {
+        guard !isLoadingContent else { return }
+        onContentChange?()
+    }
 
     /// The currently selected editor slot, if any.
     var selection: SlotSelection?
@@ -123,6 +140,10 @@ final class MenuEditorModel {
         preservingSelection: Bool = false,
         normalizeStoredValues: Bool = true
     ) {
+        // A profile load replaces all three values as one owner-driven update;
+        // none of its intermediate states represents a user edit.
+        isLoadingContent = true
+        defer { isLoadingContent = false }
         let previousSelection = preservingSelection ? selection : nil
         inner = actionLayout.inner
         middle = actionLayout.middle

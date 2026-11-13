@@ -4,6 +4,7 @@ import SwiftUI
 /// Auto-advances to a "granted" state when `service.isGranted` flips.
 struct PermissionOnboardingView: View {
     @Bindable var service: PermissionsService
+    var launch: TriggerOnboardingLaunch
     var onDone: () -> Void
 
     var body: some View {
@@ -36,14 +37,11 @@ struct PermissionOnboardingView: View {
                 .multilineTextAlignment(.center)
 
             HStack(spacing: 10) {
-                Button("Open System Settings") {
+                AppKitButton(title: "Open System Settings", keyEquivalent: "\r") {
                     service.openAccessibilitySettings()
                 }
-                .buttonStyle(.borderedProminent)
-                .keyboardShortcut(.defaultAction)
 
-                Button("Quit") { NSApp.terminate(nil) }
-                    .keyboardShortcut(.cancelAction)
+                AppKitButton(title: "Quit", keyEquivalent: "\u{1b}") { NSApp.terminate(nil) }
             }
 
             Text("Find MousePlus under Privacy & Security → Accessibility, then toggle it on. This window will update automatically.")
@@ -63,14 +61,12 @@ struct PermissionOnboardingView: View {
             Text("Permission granted")
                 .font(.headline)
 
-            Text("Continue to Settings to choose your trigger — a keyboard shortcut, a mouse button, or both.")
+            Text("Continue to Settings to review your triggers or choose how to open MousePlus.")
                 .font(.body)
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
 
-            Button("Open Settings") { onDone() }
-                .buttonStyle(.borderedProminent)
-                .keyboardShortcut(.defaultAction)
+            AppKitButton(title: launch.continuationTitle, keyEquivalent: "\r") { onDone() }
         }
     }
 }

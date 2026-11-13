@@ -1,6 +1,6 @@
 # Project State
 
-**Last updated:** 2026-09-17
+**Last updated:** 2026-11-13
 
 ## Identity
 
@@ -11,18 +11,21 @@
 
 ## Now
 
-- **Phase:** Implementation — choose the next feature. <!-- Phase changed: 2026-09-11 -->
-- **Focus:** App-specific HUDs are complete and signed-live verified on the supported BetterMouse-to-keyboard route.
-- **Blocker:** none for the completed app-specific HUD work; advanced Logitech support and Leave-a-Tip retain their separate dependencies.
-- **Next:** Choose onboarding for clean installs, or screenshots as the next small HUD action if onboarding is deferred.
+- **Phase:** Build — permission-loss remediation executing; Wave 1 complete. <!-- Phase changed: 2026-11-13 -->
+- **Focus:** Permission-loss remediation revision 2: remove all taps and self-relaunch on loss, decided by user. Detection by TCC notification plus tap probe. Permission reported ON; no further live permission-toggle tests.
+- **Blocker:** Onboarding E1 permission restoration FAILED November 13. Revocation has no runtime shutdown path; the input hang matches documented macOS behaviour for a live active tap in an untrusted process. Fresh-install deferred; VoiceOver excluded. Settings dragging remains unresolved.
+- **Next:** Wave 2: R1 (trust monitor, new files) is ready; R2 needs the G1 decision (checkpoint commit and merge of `origin/main`, or proceed dirty knowingly). No UI change planned. No live permission toggles; VoiceOver excluded.
+- **Execution:** [Permission-loss remediation, revision 2](plans/permission-loss-implementation.md) — Wave 1 complete (R0 headless harness: 43 tests pass, build-only succeeded, uncommitted pending G1); Wave 2 next: R1 ready, R2 blocked on G1. E1 open; onboarding E1 remains FAILED/open. Current handoff: [2026-11-13 Execution Resume](sessions/2026-11-13.md#execution-resume).
 
 ## Recent
 
-- **2026-09-17:** App-specific HUD acceptance passed: Finder/Global edits survived relaunch, deletion fell back to Global, and both deletion and fallback persisted after another relaunch.
-- **2026-09-13:** Signed-live Finder/Global checks passed through action targeting; saved the remaining persistence/deletion handoff and quit the test build for session close.
-- **2026-09-13:** Made unused slot backing transparent by default with a persisted complete-ring option, kept empty regions inert, and stabilized the hidden-submenu warning layout; 134 focused regressions and the Debug build pass, and both appearances are signed-live accepted.
-- **2026-09-11:** E1 setup and trigger-collision acceptance passed; handled shortcuts no longer beep, duplicate bindings retain the saved shortcut and explain the collision inline, and the fresh signed build remains running.
-- **2026-09-11:** Completed Wave 5 integration and adversarial closure; 158 focused and 377 complete tests pass, and the fresh Developer ID build is running for E1 acceptance.
+- **2026-11-13 Wave 1 (R0):** Headless SwiftPM harness added (`01_Project/Package.swift`, `scripts/test-input-safety.sh`, `docs/testing/input-safety-harness.md`); 43 tests pass, isolated build-only check succeeded, no launch. Uncommitted pending G1.
+
+- **2026-11-13 planning and review:** Remediation plan created with three agents, then reviewed with three more plus direct source reads. Hang found documented (Apple forums 844416, 735204); plan rewritten as revision 2 with self-relaunch on loss. Documents only; no source, build, tests or app control.
+
+- **2026-11-13:** Permission revocation reproduced stuck HUD and broad input failure; Exposé restored clicking, permission now on. Further live testing stopped; investigation/planning with agents, web and similar-app research next.
+- **2026-11-10:** Settings access and sidebar app-profile lifecycle passed. App-picker filtering/readable names and changed-shortcut relaunch persistence passed. Dragging recovered after restart; recurrence remains tracked.
+- **2026-11-08:** MousePlus screenshot confirms continuous sidebar/header color and centered title; user explicitly confirms window dragging works. Settings chrome remediation, both trigger modes over Finder, keyboard recording and an additional cross-app check accepted; onboarding E1 remains open.
 
 ## Progress
 
@@ -35,11 +38,12 @@
 - **HUD Opening Styles:** 7/7 tasks complete and signed-live verified on the supported BetterMouse-to-keyboard route. VoiceOver, direct MousePlus mouse triggering and the broad device/geometry performance matrix are deferred before release and remain untested.
 - **App-specific HUDs:** 5/5 implementation waves and signed-live Finder/Global acceptance complete on the supported BetterMouse-to-keyboard route.
 - **Trigger backend:** Keyboard and standard mouse paths work; advanced Logitech HID++ support remains undecided.
-- **Task tracker:** no current sprint tasks; 43/48 tracked items complete overall (90%), with five backlog items.
+- **Selected plan:** Permission-loss remediation revision 2: 1/7 implementation/verification tasks complete (R0), gates G1 and E1 open. Prior onboarding: 7/7 implementation/remediation tasks complete, E1 FAILED/open. Six backlog items preserved.
 
 ## Risks and Backlog
 
-- Fresh installs ship without a default trigger; onboarding is required before clean-install or public-release testing.
+- Fresh installs ship without a default trigger; onboarding is implemented, with signed live acceptance required before public-release testing.
+- Onboarding VoiceOver live acceptance is deferred by user request and remains untested; it is tracked with the Opening Styles accessibility backlog item.
 - Capture the alternate MX4 vendor interface and re-capture the MX3S with the current inspector before choosing accept-limitation, HID++ implementation, or Options+ coexistence.
 - The menu-bar status icon and General Settings Quit fallback are signed-live verified on the M1 Max.
 - Settings writers may still replace a corrupt configuration with defaults; the full deferred-risk list is in `MENU_EDITOR_REVIEW.md`.
@@ -59,6 +63,8 @@
 - Product and engineering rationale: `decisions.md`
 - Session history and handoffs: `sessions/_index.md`
 - Current tracker and backlog: `TASKS.md`
+- First-run trigger onboarding specification: `../specs/first-run-trigger-onboarding.md`
+- First-run trigger onboarding implementation plan: `plans/first-run-trigger-onboarding-implementation.md`
 - App-specific HUD signed-live completion: `sessions/2026-09-17.md`
 - Unified Settings specification: `../specs/unified-settings-workspace.md`
 - Sustained-use HUD redesign specification: `../specs/sustained-use-hud-redesign.md`

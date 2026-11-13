@@ -18,6 +18,7 @@ final class TriggerRecorderService {
     /// keyboard capture. Active bindings must pass through here so recording a
     /// duplicate chord can reach the recorder and produce its validation message.
     private(set) static var isRecordingKeyboardShortcut = false
+    private(set) static var isRecordingMouseButton = false
 
     enum Target: Equatable {
         case keyboard
@@ -49,6 +50,7 @@ final class TriggerRecorderService {
         outcome = nil
         isRecording = true
         Self.isRecordingKeyboardShortcut = target == .keyboard
+        Self.isRecordingMouseButton = target == .mouseButton
 
         let mask: NSEvent.EventTypeMask = target == .keyboard
             ? [.keyDown]
@@ -106,6 +108,7 @@ final class TriggerRecorderService {
         stopMonitors()
         isRecording = false
         Self.isRecordingKeyboardShortcut = false
+        Self.isRecordingMouseButton = false
         self.outcome = outcome
     }
 

@@ -1,5 +1,7 @@
+import AppKit
 import Foundation
 import Observation
+import OSLog
 
 protocol WorkspaceDebounceClock: Sendable {
     func sleep() async throws
@@ -16,6 +18,10 @@ struct ContinuousWorkspaceDebounceClock: WorkspaceDebounceClock {
 @MainActor
 @Observable
 final class SettingsWorkspaceCoordinator {
+    /// Temporary pipeline diagnostics for the live editor-not-saving investigation.
+    /// Logs decisions and outcomes only; never item content or user data.
+    private static let diagnostics = Logger(subsystem: "com.xpycode.MousePlus", category: "SettingsWorkspace")
+
     private enum MenuItemsMergeError: LocalizedError {
         case appProfilesChangedExternally
 
@@ -61,6 +67,8 @@ final class SettingsWorkspaceCoordinator {
     private var intentionallyReplacedUnavailableAppHUDProfiles: Set<String> = []
 
     private(set) var configuration = Configuration()
+    /// Last loaded or successfully persisted bindings; never includes pending edits.
+    private(set) var savedTriggers: TriggersConfig?
     private(set) var status: Status = .idle
     private(set) var dirtyFields: Set<Field> = []
     private(set) var isLoaded = false
@@ -81,6 +89,9 @@ final class SettingsWorkspaceCoordinator {
         self.persistence = persistence
         self.debounceClock = debounceClock
         self.liveApply = liveApply
+        menuEditorModel.onContentChange = { [weak self] in
+            self?.menuItemsDidChange()
+        }
     }
 
     /// Global is always first; app entries have deterministic bundle-ID order.
@@ -88,6 +99,21 @@ final class SettingsWorkspaceCoordinator {
         [.global] + configuration.validAppHUDProfiles.keys.sorted().map {
             .app(bundleIdentifier: $0)
         }
+    }
+
+    func profileTitle(_ profile: HUDProfileReference) -> String {
+        func name(_ profile: HUDProfileReference) -> String {
+            guard case .app(let identifier) = profile else { return "Global" }
+            guard let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: identifier) else {
+                return "Missing App — \(identifier)"
+            }
+            let displayed = FileManager.default.displayName(atPath: url.path)
+            return displayed.hasSuffix(".app") ? String(displayed.dropLast(4)) : displayed
+        }
+        let title = name(profile)
+        guard case .app(let identifier) = profile else { return title }
+        return editableHUDProfiles.contains { $0 != profile && name($0) == title }
+            ? "\(title) — \(identifier)" : title
     }
 
     var selectedAppHUDBundleIdentifier: String? {
@@ -100,6 +126,7 @@ final class SettingsWorkspaceCoordinator {
         status = .loading
         do {
             configuration = try await persistence.loadResult().configuration
+            savedTriggers = configuration.triggers
             menuItemsBaseline = configuration
             normalizeProfileSelection()
             loadSelectedProfileIntoEditor()
@@ -112,16 +139,21 @@ final class SettingsWorkspaceCoordinator {
             status = .saved
             workspaceState.reset = .idle
             workspaceState.durableBackupAvailable = await persistence.hasBackup()
+            Self.diagnostics.notice("Load succeeded; editor ready")
         } catch {
             isLoaded = false
             status = .loadFailed(error.localizedDescription)
+            Self.diagnostics.error("Load failed: \(error.localizedDescription, privacy: .public)")
             workspaceState.durableBackupAvailable = false
         }
     }
 
     /// Applies an edit owned by one or more panes and schedules one serialized save.
     func edit(_ fields: Set<Field>, _ mutation: (inout Configuration) -> Void) {
-        guard isLoaded, !fields.isEmpty else { return }
+        guard isLoaded, !fields.isEmpty else {
+            Self.diagnostics.error("Edit dropped: isLoaded=\(self.isLoaded), fields=\(fields.count, privacy: .public)")
+            return
+        }
         if fields.contains(.menuItems) {
             synchronizeEditorIfNeeded()
         }
@@ -136,12 +168,19 @@ final class SettingsWorkspaceCoordinator {
 
     /// Synchronizes mutations made directly through the workspace-owned editor model.
     func menuItemsDidChange() {
-        guard isLoaded else { return }
+        guard isLoaded else {
+            Self.diagnostics.error("Menu edit dropped: workspace not loaded")
+            return
+        }
         // SwiftUI observation also reports coordinator-driven model loads (initial
         // load, reset, restore). Treat an identical model/config pair as a no-op
         // so merely revealing the pane cannot manufacture a dirty save.
         guard editorDiffersFromSelectedProfile else { return }
-        guard mergeEditorIntoSelectedProfile() else { return }
+        guard mergeEditorIntoSelectedProfile() else {
+            Self.diagnostics.error("Menu edit merge failed; edit not applied")
+            return
+        }
+        Self.diagnostics.notice("Menu edit merged into working config")
         markDirty([.menuItems])
         scheduleSave()
     }
@@ -226,7 +265,16 @@ final class SettingsWorkspaceCoordinator {
 
     @discardableResult
     func retry() async -> Bool {
-        await flush()
+        if !isLoaded {
+            guard case .loadFailed = status else { return false }
+            await load()
+            guard isLoaded else { return false }
+            // Startup may have failed before any configuration reached runtime.
+            liveApply(configuration)
+            return true
+        }
+        // A fresh-base load failure during saving must retain pending edits.
+        return await flush()
     }
 
     /// Close/teardown barrier used by the owning Settings window.
@@ -425,14 +473,22 @@ final class SettingsWorkspaceCoordinator {
             saveTask = nil
             saveTaskID = nil
         }
-        return result
+        guard result else { return false }
+        // Edits arriving during an awaited write must also become durable
+        // before a close/teardown barrier reports success.
+        return dirtyFields.isEmpty ? true : await serializedSave()
     }
 
     private func performSave() async -> Bool {
-        guard isLoaded, !dirtyFields.isEmpty else { return true }
+        guard isLoaded, !dirtyFields.isEmpty else {
+            if !dirtyFields.isEmpty {
+                Self.diagnostics.error("Save skipped while not loaded; \(self.dirtyFields.count, privacy: .public) field(s) stay dirty")
+            }
+            return dirtyFields.isEmpty
+        }
         status = .saving
-
         let fields = dirtyFields
+        Self.diagnostics.notice("Save started: \(self.fieldsLabel(fields), privacy: .public)")
         let savedGenerations = generations
         let edited = configuration
 
@@ -455,9 +511,11 @@ final class SettingsWorkspaceCoordinator {
             // The runtime receives the exact complete snapshot that was made durable,
             // never a field fragment or the still-dirty editor configuration.
             liveApply(merged)
+            savedTriggers = merged.triggers
 
             if dirtyFields.isEmpty {
                 status = .saved
+                Self.diagnostics.notice("Save completed: \(self.fieldsLabel(fields), privacy: .public)")
             } else {
                 scheduleSave()
             }
@@ -466,8 +524,21 @@ final class SettingsWorkspaceCoordinator {
             status = error is DecodingError
                 ? .loadFailed(error.localizedDescription)
                 : .saveFailed(error.localizedDescription)
+            Self.diagnostics.error("Save failed: \(error.localizedDescription, privacy: .public)")
             return false
         }
+    }
+
+    private func fieldsLabel(_ fields: Set<Field>) -> String {
+        let names = fields.map { field in
+            switch field {
+            case .menuItems: "menuItems"
+            case .triggers: "triggers"
+            case .appearance: "appearance"
+            case .behavior: "behavior"
+            }
+        }.sorted()
+        return names.joined(separator: ",")
     }
 
     private func mergingUnsavedFields(
@@ -552,6 +623,7 @@ final class SettingsWorkspaceCoordinator {
 
     private func synchronizeEditorIfNeeded() {
         guard editorDiffersFromSelectedProfile, mergeEditorIntoSelectedProfile() else { return }
+        Self.diagnostics.notice("Synchronized pending editor changes before an explicit edit")
         markDirty([.menuItems])
         scheduleSave()
     }

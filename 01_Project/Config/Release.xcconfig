@@ -4,5 +4,6 @@
 
 #include "Shared.xcconfig"
 
-// No additional release-specific overrides needed
-// All release settings use Xcode project defaults
+// Keep local Release builds consistent with Developer ID archives. This must
+// not depend on remembering a command-line override when replacing the app.
+ENABLE_HARDENED_RUNTIME = YES

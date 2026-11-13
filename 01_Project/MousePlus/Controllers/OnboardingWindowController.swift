@@ -7,14 +7,14 @@ import SwiftUI
 final class OnboardingWindowController {
     private var window: NSWindow?
 
-    func show(service: PermissionsService, onDone: @escaping () -> Void) {
+    func show(service: PermissionsService, launch: TriggerOnboardingLaunch, onDone: @escaping () -> Void) {
         guard window == nil else {
             window?.makeKeyAndOrderFront(nil)
             NSApp.activate(ignoringOtherApps: true)
             return
         }
 
-        let view = PermissionOnboardingView(service: service) { [weak self] in
+        let view = PermissionOnboardingView(service: service, launch: launch) { [weak self] in
             self?.close()
             onDone()
         }

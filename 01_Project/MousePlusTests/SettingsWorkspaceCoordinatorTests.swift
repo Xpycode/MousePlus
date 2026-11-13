@@ -1220,6 +1220,164 @@ final class SettingsWorkspaceCoordinatorTests: XCTestCase {
         }
     }
 
+    func testSavedTriggerSnapshotWaitsForSuccessfulSaveAndClear() async {
+        let persistence = RecordingConfigurationPersistence(Configuration())
+        let recorder = LiveApplyRecorder()
+        let coordinator = makeCoordinator(persistence, recorder: recorder)
+        XCTAssertNil(coordinator.savedTriggers)
+        await coordinator.load()
+        let binding = TriggerBinding.keyboard(keyCode: 40, modifiers: 0, mode: .holdRelease)
+        coordinator.edit([.triggers]) { $0.triggers.keyboard = binding }
+        XCTAssertEqual(coordinator.savedTriggers?.keyboard, TriggerBinding.none)
+        await persistence.setSaveFailure(TestFailure.write)
+        let failed = await coordinator.flush()
+        XCTAssertFalse(failed)
+        XCTAssertEqual(coordinator.savedTriggers?.keyboard, TriggerBinding.none)
+        XCTAssertTrue(recorder.events.isEmpty)
+        await persistence.setSaveFailure(nil)
+        let retried = await coordinator.retry()
+        XCTAssertTrue(retried)
+        XCTAssertEqual(coordinator.savedTriggers?.keyboard, binding)
+        XCTAssertEqual(recorder.events.last?.triggers, coordinator.savedTriggers)
+        coordinator.edit([.triggers]) { $0.triggers.keyboard = .none }
+        XCTAssertEqual(coordinator.savedTriggers?.keyboard, binding)
+        let cleared = await coordinator.flush()
+        XCTAssertTrue(cleared)
+        XCTAssertFalse(TriggerOnboardingPolicy.hasRingBinding(in: coordinator.savedTriggers!))
+    }
+
+    func testRapidTriggerChangesDuringFailedWriteKeepSnapshotUntilLatestRetry() async {
+        var initial = Configuration()
+        initial.triggers.mouseButton = .mouseButton(buttonNumber: 3, mode: .holdRelease)
+        let persistence = RecordingConfigurationPersistence(initial)
+        let coordinator = makeCoordinator(persistence)
+        await coordinator.load()
+        await persistence.gateNextSaveWithFailure(TestFailure.write)
+        coordinator.edit([.triggers]) {
+            $0.triggers.mouseButton = .mouseButton(buttonNumber: 4, mode: .holdRelease)
+        }
+        let flush = Task { @MainActor in await coordinator.flush() }
+        while await persistence.saveCount == 0 { await Task.yield() }
+        coordinator.edit([.triggers]) {
+            $0.triggers.mouseButton = .mouseButton(buttonNumber: 5, mode: .tapToggle)
+        }
+        await persistence.releaseGatedSave()
+        let failed = await flush.value
+        XCTAssertFalse(failed)
+        XCTAssertEqual(coordinator.savedTriggers, initial.triggers)
+        let retried = await coordinator.retry()
+        XCTAssertTrue(retried)
+        XCTAssertEqual(coordinator.savedTriggers?.mouseButton, .mouseButton(buttonNumber: 5, mode: .tapToggle))
+    }
+
+    func testRetryInitialLoadFailureLoadsAndLiveAppliesWithoutSavingDefaults() async {
+        var initial = Configuration()
+        initial.triggers.keyboard = .keyboard(keyCode: 40, modifiers: 0, mode: .tapToggle)
+        let persistence = RecordingConfigurationPersistence(initial)
+        let recorder = LiveApplyRecorder()
+        let coordinator = makeCoordinator(persistence, recorder: recorder)
+        await persistence.setLoadFailure(TestFailure.expectedDecodeFailure)
+        await coordinator.load()
+        XCTAssertNil(coordinator.savedTriggers)
+        let failedRetry = await coordinator.retry()
+        XCTAssertFalse(failedRetry)
+        XCTAssertTrue(recorder.events.isEmpty)
+        await persistence.setLoadFailure(nil)
+        let recovered = await coordinator.retry()
+        XCTAssertTrue(recovered)
+        XCTAssertEqual(coordinator.savedTriggers, initial.triggers)
+        XCTAssertEqual(recorder.events.map(\.triggers), [initial.triggers])
+        let saveCount = await persistence.saveCount
+        XCTAssertEqual(saveCount, 0)
+    }
+
+    func testRetryFreshBaseDecodeFailureKeepsPendingTriggerEdit() async {
+        let persistence = RecordingConfigurationPersistence(Configuration())
+        let coordinator = makeCoordinator(persistence)
+        await coordinator.load()
+        let binding = TriggerBinding.keyboard(keyCode: 40, modifiers: 0, mode: .tapToggle)
+        coordinator.edit([.triggers]) { $0.triggers.keyboard = binding }
+        await persistence.setLoadFailure(makeDecodingError())
+        let failed = await coordinator.flush()
+        XCTAssertFalse(failed)
+        guard case .loadFailed = coordinator.status else { return XCTFail("Expected fresh-base load failure") }
+        await persistence.setLoadFailure(nil)
+        let retried = await coordinator.retry()
+        XCTAssertTrue(retried)
+        XCTAssertEqual(coordinator.savedTriggers?.keyboard, binding)
+    }
+
+    // These edits enter through the same bindings as the form, without a
+    // SwiftUI render/onChange callback. Event-tap capture itself is not covered.
+    func testRecorderBindingAndClearPersistWithoutPaneObservation() async throws {
+        let persistence = RecordingConfigurationPersistence(Configuration())
+        let coordinator = makeCoordinator(persistence)
+        await coordinator.load()
+        let id = try XCTUnwrap(coordinator.menuEditorModel.inner.first?.id)
+        let binding = try XCTUnwrap(coordinator.menuEditorModel.binding(forItem: id, band: .inner))
+        var item = binding.wrappedValue
+        item.actionType = .sendKeystroke
+        // Copy already uses Command-C; record a different shortcut so this
+        // exercises a content mutation rather than the intentional no-op path.
+        item.keystrokePayload = .key(keyCode: 9, modifiers: 1 << 20)
+        XCTAssertNotEqual(item.keystrokePayload, binding.wrappedValue.keystrokePayload)
+        binding.wrappedValue = item
+
+        XCTAssertEqual(coordinator.dirtyFields, [.menuItems])
+        let recorded = await coordinator.flush()
+        XCTAssertTrue(recorded)
+        var saved = await persistence.current
+        XCTAssertEqual(saved.inner.first?.keystrokePayload, item.keystrokePayload)
+
+        item.keystrokePayload = nil
+        item.actionData = ""
+        binding.wrappedValue = item
+        let closed = await coordinator.requestClose()
+        XCTAssertTrue(closed)
+        saved = await persistence.current
+        XCTAssertNil(saved.inner.first?.keystrokePayload)
+        XCTAssertTrue(coordinator.dirtyFields.isEmpty)
+    }
+
+    func testNestedCustomizationAndSubItemEditsPersistWithoutPaneObservation() async throws {
+        let persistence = RecordingConfigurationPersistence(Configuration())
+        let coordinator = makeCoordinator(persistence)
+        await coordinator.load()
+        let model = coordinator.menuEditorModel
+        let parent = try XCTUnwrap(model.middle.first(where: { $0.subItems?.isEmpty == false }))
+        let child = try XCTUnwrap(parent.subItems?.first)
+        let binding = try XCTUnwrap(model.binding(forSubItem: child.id, ofMiddle: parent.id))
+        var edited = binding.wrappedValue
+        edited.label = "Updated child"
+        binding.wrappedValue = edited
+        model.hudCustomization.inner.appearance.labelVisible = true
+        let flushed = await coordinator.flush()
+        XCTAssertTrue(flushed)
+        let saved = await persistence.current
+        XCTAssertEqual(saved.middle.first(where: { $0.id == parent.id })?.subItems?.first?.label, "Updated child")
+        XCTAssertTrue(saved.hudCustomization.inner.appearance.labelVisible)
+    }
+
+    func testEditDuringSaveSurvivesReloadAndCloseWaitsForLatestEdit() async {
+        let persistence = RecordingConfigurationPersistence(Configuration())
+        let coordinator = makeCoordinator(persistence)
+        await coordinator.load()
+        await persistence.gateNextSave()
+        coordinator.edit([.appearance]) { $0.appearance.deadZone = 49 }
+        let close = Task { @MainActor in await coordinator.requestClose() }
+        while await persistence.saveCount == 0 { await Task.yield() }
+
+        coordinator.menuEditorModel.middle[0].label = "Edited during write"
+        await persistence.releaseGatedSave()
+        let closed = await close.value
+        XCTAssertTrue(closed)
+        let saved = await persistence.current
+        XCTAssertEqual(saved.middle[0].label, "Edited during write")
+        XCTAssertEqual(coordinator.menuEditorModel.middle[0].label, "Edited during write")
+        XCTAssertTrue(coordinator.dirtyFields.isEmpty)
+        XCTAssertEqual(coordinator.status, .saved)
+    }
+
     private func makeCoordinator(
         _ persistence: RecordingConfigurationPersistence,
         recorder: LiveApplyRecorder? = nil
@@ -1284,6 +1442,7 @@ private actor RecordingConfigurationPersistence: ConfigurationPersisting {
     private var loadFailure: Error?
     private var saveFailure: Error?
     private var backupFailure: Error?
+    private var shouldGateSave = false
     private var gatedSaveFailure: Error?
     private var gatedSaveContinuation: CheckedContinuation<Void, Never>?
     private var backup: Configuration?
@@ -1300,12 +1459,15 @@ private actor RecordingConfigurationPersistence: ConfigurationPersisting {
 
     func save(_ configuration: Configuration) async throws {
         saveCount += 1
-        if let gatedSaveFailure {
+        if shouldGateSave {
+            shouldGateSave = false
             await withCheckedContinuation { continuation in
                 gatedSaveContinuation = continuation
             }
-            self.gatedSaveFailure = nil
-            throw gatedSaveFailure
+            if let gatedSaveFailure {
+                self.gatedSaveFailure = nil
+                throw gatedSaveFailure
+            }
         }
         if let saveFailure { throw saveFailure }
         current = configuration
@@ -1345,7 +1507,12 @@ private actor RecordingConfigurationPersistence: ConfigurationPersisting {
         backup = configuration
     }
 
+    func gateNextSave() {
+        shouldGateSave = true
+    }
+
     func gateNextSaveWithFailure(_ error: Error) {
+        shouldGateSave = true
         gatedSaveFailure = error
     }
 

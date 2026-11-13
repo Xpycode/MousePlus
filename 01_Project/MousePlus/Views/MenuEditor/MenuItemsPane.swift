@@ -29,6 +29,7 @@ struct MenuItemsPane: View {
 
             MenuEditorWorkspace(
                 model: coordinator.menuEditorModel,
+                appearance: coordinator.configuration.appearance,
                 onReset: resetMenuItems,
                 actionAccessory: {
                     if let selectedItem {
@@ -43,6 +44,7 @@ struct MenuItemsPane: View {
                     recoveryAndStatus
                 }
             )
+            .id(coordinator.selectedHUDProfile)
             .frame(minHeight: 520)
         }
         // The item form and customization column scroll independently. The band
@@ -74,17 +76,6 @@ struct MenuItemsPane: View {
     private var profileBar: some View {
         VStack(alignment: .leading, spacing: 5) {
             HStack(spacing: 8) {
-                Text("HUD Profile")
-
-                AppKitPopup(
-                    options: coordinator.editableHUDProfiles.map(profileSelectorTitle),
-                    selection: profileSelection,
-                    isEnabled: coordinator.isLoaded,
-                    accessibilityLabel: "HUD profile",
-                    accessibilityIdentifier: "menuItems.profile.selector"
-                )
-                .frame(minWidth: 180, maxWidth: 260)
-
                 AppKitButton(
                     title: "Add App HUD…",
                     isEnabled: coordinator.isLoaded,
@@ -136,49 +127,8 @@ struct MenuItemsPane: View {
         .padding(.top, 8)
     }
 
-    private var profileSelection: Binding<Int> {
-        Binding(
-            get: {
-                coordinator.editableHUDProfiles.firstIndex(of: coordinator.selectedHUDProfile) ?? 0
-            },
-            set: { index in
-                let profiles = coordinator.editableHUDProfiles
-                guard profiles.indices.contains(index) else { return }
-                profileMessage = nil
-                _ = coordinator.selectHUDProfile(profiles[index])
-            }
-        )
-    }
-
     private var selectedProfileTitle: String {
-        profileSelectorTitle(coordinator.selectedHUDProfile)
-    }
-
-    private func profileSelectorTitle(_ profile: HUDProfileReference) -> String {
-        let title = profileTitle(profile)
-        guard case .app(let bundleIdentifier) = profile else { return title }
-        let duplicateCount = coordinator.editableHUDProfiles.filter {
-            $0 != profile && profileTitle($0) == title
-        }.count
-        return duplicateCount > 0 ? "\(title) — \(bundleIdentifier)" : title
-    }
-
-    private func profileTitle(_ profile: HUDProfileReference) -> String {
-        switch profile {
-        case .global:
-            return "Global"
-        case .app(let bundleIdentifier):
-            guard let url = NSWorkspace.shared.urlForApplication(
-                withBundleIdentifier: bundleIdentifier
-            ) else {
-                return "Missing App — \(bundleIdentifier)"
-            }
-            let displayed = FileManager.default.displayName(atPath: url.path)
-            let name = displayed.hasSuffix(".app")
-                ? String(displayed.dropLast(4))
-                : displayed
-            return name.isEmpty ? bundleIdentifier : name
-        }
+        coordinator.profileTitle(coordinator.selectedHUDProfile)
     }
 
     private var profileSemantics: String {

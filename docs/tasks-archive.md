@@ -1,8 +1,15 @@
 # Completed Tasks
 
-**Total archived:** 43
-**Last updated:** 2026-09-11
+**Total archived:** 49
+**Last updated:** 2026-09-26
 
+- [x] (2026-09-26) Onboarding 1.1: Model trigger eligibility and launch ordering.
+- [x] (2026-09-26) Onboarding 2.1: Route startup and permission continuation to Triggers.
+- [x] (2026-09-26) Onboarding 2.2: Add inline setup and saved-trigger guidance.
+- [x] (2026-09-26) Onboarding 3.1: Integrate and run automated regressions.
+- [x] (2026-09-26) Onboarding 4.1: Review lifecycle and persistence behavior.
+
+- [x] (2026-09-26) Corrected signed build: user confirmed no recurring permission dialog, normal HUD triggering, and Global preview/layout parity. Recorder plain/modifier acceptance also passed. Merged into main.
 - [x] (2026-09-11) App-Specific HUDs — Task 5.1: Closed AC1–AC18 automated evidence, full-suite/build gates, and independent persistence/runtime adversarial review; signed-live Finder acceptance remains E1.
 - [x] (2026-09-11) App-Specific HUDs — Task 4.1: Presented the frozen app or Global context in the existing native center Settings action while preserving geometry, hit testing, drag ownership, accessibility, and preview isolation.
 - [x] (2026-09-11) App-Specific HUDs — Task 3.2: Added native profile selection, copy-on-create, deletion/recovery messaging, duplicate/missing-app handling, and safe opaque-profile replacement above Menu Items.
