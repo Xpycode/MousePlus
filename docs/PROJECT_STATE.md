@@ -14,12 +14,14 @@
 - **Phase:** Build — permission-loss remediation executing; Wave 1 complete. <!-- Phase changed: 2026-11-13 -->
 - **Focus:** Permission-loss remediation revision 2: remove all taps and self-relaunch on loss, decided by user. Detection by TCC notification plus tap probe. Permission reported ON; no further live permission-toggle tests.
 - **Blocker:** Onboarding E1 permission restoration FAILED November 13. Revocation has no runtime shutdown path; the input hang matches documented macOS behaviour for a live active tap in an untrusted process. Fresh-install deferred; VoiceOver excluded. Settings dragging remains unresolved.
-- **Next:** Wave 2: R1 (trust monitor, new files) is ready; R2 needs the G1 decision (checkpoint commit and merge of `origin/main`, or proceed dirty knowingly). No UI change planned. No live permission toggles; VoiceOver excluded.
-- **Execution:** [Permission-loss remediation, revision 2](plans/permission-loss-implementation.md) — Wave 1 complete (R0 headless harness: 43 tests pass, build-only succeeded, uncommitted pending G1); Wave 2 next: R1 ready, R2 blocked on G1. E1 open; onboarding E1 remains FAILED/open. Current handoff: [2026-11-13 Execution Resume](sessions/2026-11-13.md#execution-resume).
+- **Next:** Wave 3: R3 (loss path, bounded self-relaunch, suspended fallback; owns `MousePlusApp.swift`) is ready. No UI change planned. No live permission toggles; VoiceOver excluded.
+- **Execution:** [Permission-loss remediation, revision 2](plans/permission-loss-implementation.md) — Waves 1–2 complete (R0 harness, R1 trust monitor, R2 tap registry; 93/93 headless tests, test build succeeded, no launch); G1 passed; Wave 3 (R3) ready. E1 open; onboarding E1 remains FAILED/open. Current handoff: [2026-11-13 Execution Resume](sessions/2026-11-13.md#execution-resume).
 
 ## Recent
 
-- **2026-11-13 Wave 1 (R0):** Headless SwiftPM harness added (`01_Project/Package.swift`, `scripts/test-input-safety.sh`, `docs/testing/input-safety-harness.md`); 43 tests pass, isolated build-only check succeeded, no launch. Uncommitted pending G1.
+- **2026-11-13 G1 + Wave 2 (R1, R2):** Checkpointed all uncommitted work, merged `main` (code identical; doc conflicts kept newer versions), pushed. Added the permission-loss watcher and a registry that can remove every input tap at once; taps no longer silently re-enable and the keyboard fallback is gone. 93 headless tests pass, test build succeeded, no launch. Wave 2 commits not pushed.
+
+- **2026-11-13 Wave 1 (R0):** Headless SwiftPM harness added (`01_Project/Package.swift`, `scripts/test-input-safety.sh`, `docs/testing/input-safety-harness.md`); 43 tests pass, isolated build-only check succeeded, no launch. Committed in the G1 checkpoint.
 
 - **2026-11-13 planning and review:** Remediation plan created with three agents, then reviewed with three more plus direct source reads. Hang found documented (Apple forums 844416, 735204); plan rewritten as revision 2 with self-relaunch on loss. Documents only; no source, build, tests or app control.
 
@@ -38,7 +40,7 @@
 - **HUD Opening Styles:** 7/7 tasks complete and signed-live verified on the supported BetterMouse-to-keyboard route. VoiceOver, direct MousePlus mouse triggering and the broad device/geometry performance matrix are deferred before release and remain untested.
 - **App-specific HUDs:** 5/5 implementation waves and signed-live Finder/Global acceptance complete on the supported BetterMouse-to-keyboard route.
 - **Trigger backend:** Keyboard and standard mouse paths work; advanced Logitech HID++ support remains undecided.
-- **Selected plan:** Permission-loss remediation revision 2: 1/7 implementation/verification tasks complete (R0), gates G1 and E1 open. Prior onboarding: 7/7 implementation/remediation tasks complete, E1 FAILED/open. Six backlog items preserved.
+- **Selected plan:** Permission-loss remediation revision 2: 3/7 implementation/verification tasks complete (R0, R1, R2), G1 passed, E1 open. Prior onboarding: 7/7 implementation/remediation tasks complete, E1 FAILED/open. Six backlog items preserved.
 
 ## Risks and Backlog
 

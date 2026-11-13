@@ -1,8 +1,8 @@
 # Permission-loss remediation — Implementation Plan (revision 2)
 
 **Created:** 2026-11-13. **Revised:** 2026-11-13 after plan review.
-**Status:** Executing — Wave 1 (R0) complete 2026-11-13; Wave 2 next (R1 ready; R2 gated by G1).
-**Progress:** 1/7 implementation and verification tasks complete; gate G1 and external acceptance E1 open.
+**Status:** Executing — Waves 1–2 (R0, R1, R2) complete 2026-11-13; G1 passed; Wave 3 (R3) ready.
+**Progress:** 3/7 implementation and verification tasks complete; external acceptance E1 open.
 **Task states:** unchecked = pending unless a gate is named. This plan owns task status/evidence.
 Revision 1 (latch until manual restart, tasks P1–P7) is retained unchanged as
 [permission-loss-implementation.v1-superseded.md](permission-loss-implementation.v1-superseded.md).
@@ -127,7 +127,7 @@ Interfaces fixed before dispatch:
 
 ### Wave 2 — sensor and tap layer (parallel, disjoint)
 
-- [ ] **R1: Runtime trust monitor**
+- [x] **R1: Runtime trust monitor** — done 2026-11-13, commit `b7db89d` (see Wave 2 log)
   - Depends on: R0. External gates: none (new files only).
   - Owns: new `Services/RuntimeTrustMonitor.swift`, new `RuntimeTrustMonitorTests.swift`.
   - Interface: as fixed above. Injectable trust reader, probe, notification source and clock.
@@ -139,7 +139,8 @@ Interfaces fixed before dispatch:
     deadline; coalesced notification bursts; single loss callback; nothing prompts.
   - Backpressure: `scripts/test-input-safety.sh --suite RuntimeTrustMonitorTests`.
 
-- [ ] **R2: Tap registry, fault reporting, no silent re-enable or fallback**
+- [x] **R2: Tap registry, fault reporting, no silent re-enable or fallback** — done 2026-11-13,
+  commit `1c2c24c` (see Wave 2 log)
   - Depends on: R0. External gates: G1.
   - Owns: new `Services/InputTapRegistry.swift`, `Services/MouseButtonTriggerMonitor.swift`,
     `KeystrokeCaptureRecorder.swift`, `KeyboardTriggerMonitor.swift`, `TriggerService.swift`,
@@ -202,7 +203,10 @@ Interfaces fixed before dispatch:
 
 ## Gates and external acceptance
 
-- [ ] **G1: Checkpoint and base decision (user) — gates R2 and R3**
+- [x] **G1: Checkpoint and base decision (user) — gates R2 and R3** — passed 2026-11-13: user chose
+  checkpoint + merge. Checkpoint `bc39d95`, merge of `origin/main` `25f3cc1` (code merged clean and
+  identical to checkpoint; six doc conflicts took this branch's newer versions), harness 43/43 after
+  merge, branch pushed with remote equality verified.
   - R2 and R3 edit files that already carry uncommitted changes (`MouseButtonTriggerMonitor`,
     `KeystrokeCaptureRecorder`, `TriggerRecorderService`, `MousePlusApp`). The branch has one
     unpushed commit and is three commits behind `origin/main`, including `c5b8e61` (isolate
@@ -242,6 +246,60 @@ Interfaces fixed before dispatch:
 - The relaunch shows the system permission prompt, as any untrusted launch does.
 
 ## Execution log
+
+### G1 — checkpoint and base (2026-11-13, M1 Max)
+
+- **User decision:** checkpoint + merge. Checkpoint `bc39d95` (55 paths, explicit staging);
+  merge of `origin/main` `25f3cc1`: code auto-merged and identical to the checkpoint tree; six doc
+  conflicts resolved to this branch's newer versions. Harness 43/43 after merge; pushed, remote equal.
+
+### Wave 2 — R1, R2 (2026-11-13, M1 Max)
+
+- **Assignment:** two fresh-context developer agents in parallel, each in its own temporary git
+  worktree under the session scratchpad (outside Syncthing), because the harness compiles one
+  module and concurrent edits in one checkout would break each other's runs. Coordinator reviewed
+  both diffs, committed each on its temp branch, cherry-picked onto `fix/hud-live-remediation`,
+  resolved the expected list conflicts (`Package.swift`, harness script, harness note), then
+  removed both worktrees and branches after verifying full content carry-over.
+- **R1 (`b7db89d`):** `Services/RuntimeTrustMonitor.swift` + 12 tests. `@MainActor`; `start(onLoss:)`
+  (no reason argument; `lossReason` exposed afterwards), `stop()`, `trustReadIsFalse`,
+  `requestProbe(reason:) async -> Bool` (concurrent requests share one probe). Constants: trust read
+  0.5 s, backstop probe 5 s, probe deadline 1 s, notification coalescing 0.1 s trailing. Monitor
+  stops itself before the loss callback; never re-arms. OSLog `com.xpycode.MousePlus`/`RuntimeSafety`.
+  Coordinator corrections: probe comment no longer claims the throwaway tap is never enabled;
+  `DarwinTCCNotificationSource.name` made `nonisolated` (deinit isolation warning).
+- **R2 (`1c2c24c`):** `Services/InputTapRegistry.swift` (`InputTapDisableReason`, `InputTapHandle`,
+  `SystemEventTapHandle`, `InputTapFactory`, `InputTapRegistry.shared`, synchronous idempotent
+  `teardownAll()`). Mouse/keyboard monitors and keystroke recorder: disable clears pressed state,
+  cancels, reports `onDisabled(reason)`, never re-enables; explicit `resume()`; keyboard NSEvent
+  fallback deleted, install failure reports `onInstallFailed`. `TriggerService` forwards faults,
+  yields `.cancel` for held sources on disable and on `stop()` (stop-yield is an addition beyond the
+  spec), `updateConfig` keeps a stopped service stopped. `TriggerRecorderService` NSEvent seam +
+  `teardown()` clearing static flags; `KeystrokeCaptureRecorder.teardown()`. Tests split:
+  `KeystrokeCaptureEditorTests` (AppDelegate/editor, app-hosted only). Both R0 exclusions
+  re-admitted; `SKIPPED_TESTS` removed. One assertion in `HUDTriggerRoutingTests.swift` (outside
+  ownership) updated so it compiles against the new `.tapDisabled(reason)`; no behaviour change.
+- **Validation (coordinator, integrated tree):** `scripts/test-input-safety.sh --all` →
+  `Executed 93 tests, with 0 failures`. `xcodebuild -workspace 01_Project/MousePlus.xcworkspace
+  -scheme MousePlus -configuration Debug -derivedDataPath build/wave2-build-check build-for-testing`
+  → `TEST BUILD SUCCEEDED`, no warnings in touched files; app-hosted tests compiled, not run. No
+  launch, no handoff. Xcode uses synchronized folders, so no project membership edits were needed.
+- **Carried to R3:** wire `triggerService.onDisabled`/`onInstallFailed` to the monitor
+  (probe-then-resume or loss, burst rule); loss path must call `InputTapRegistry.shared.teardownAll()`
+  **and** `triggerService.stop()` plus both recorder `teardown()`s — after `teardownAll()` alone the
+  service still believes it is running and a configuration change would install new taps. The
+  `.cancel` yielded by `stop()` arrives asynchronously, so suspended `handleTriggerEvent` must
+  ignore it safely. The monitor does no trust check inside `start`; the first read is at 0.5 s.
+- **Carried to R5 review:** (1) the probe tap is enabled from `tapCreate` until invalidation
+  (microseconds; `otherMouseUp` only) — assess whether that window matters; (2)
+  `DarwinTCCNotificationSource` hands a raw pointer to a main-queue block, so a notification queued
+  just before the source is released could touch freed memory (the monitor owns the source for its
+  lifetime); (3) `SystemEventTapHandle` create/invalidate is verified by reading only; (4)
+  `SystemKeystrokeCaptureTap.stop()` can run from inside its own callback on disable; (5) whether
+  `TriggerService.stop()` should yield `.cancel`.
+- **Commit:** R1 and R2 as separate commits (above); plan/state update committed separately.
+  Not pushed (push not authorized for this wave).
+- **Next:** Wave 3, R3 (single task; owns `MousePlusApp.swift`).
 
 ### Wave 1 — R0 (2026-11-13, M1 Max)
 
