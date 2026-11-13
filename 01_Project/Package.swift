@@ -25,6 +25,7 @@ let package = Package(
                 "Utilities/HUDMotionPolicy.swift",
                 "Utilities/RadialGeometry.swift",
                 "Services/MouseButtonTriggerMonitor.swift",
+                "Services/RuntimeTrustMonitor.swift",
                 "Services/TriggerRecorderService.swift",
             ]
         ),
@@ -40,6 +41,7 @@ let package = Package(
                 "KeystrokePayloadCodingTests.swift",
                 "MouseButtonTriggerMonitorTests.swift",
                 "RadialGeometryTests.swift",
+                "RuntimeTrustMonitorTests.swift",
             ]
         ),
     ],

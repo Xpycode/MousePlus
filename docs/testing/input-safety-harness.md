@@ -22,11 +22,11 @@ scripts/test-input-safety.sh --list                                  # included/
 The script runs `swift test --package-path 01_Project` with scratch, cache, config and security
 paths under `build/test-input-safety/`, so `01_Project/.build` and `.swiftpm` are never created.
 
-## Included suites (43 tests, all pass)
+## Included suites (55 tests, all pass)
 
 ActionTypeCodingTests (4), HUDColorResolverTests (7), HUDCustomizationCodingTests (8),
 HUDMotionPolicyTests (4), KeystrokePayloadCodingTests (7), MouseButtonTriggerMonitorTests (3 of 5),
-RadialGeometryTests (10).
+RadialGeometryTests (10), RuntimeTrustMonitorTests (12, injected fakes only).
 
 ## Excluded
 

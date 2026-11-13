@@ -29,6 +29,7 @@ Included suites (compiled from real sources in place):
   KeystrokePayloadCodingTests
   MouseButtonTriggerMonitorTests   (minus the two skipped tests below)
   RadialGeometryTests
+  RuntimeTrustMonitorTests
 
 Excluded tests (skipped via --skip, still compiled):
   MouseButtonTriggerMonitorTests/testMouseRecorderFlagClearsOnCancel
