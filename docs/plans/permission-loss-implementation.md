@@ -203,6 +203,14 @@ Interfaces fixed before dispatch:
     tested scope recorded; "implemented and fake-validated" kept separate from "verified under
     real revocation". Neither this plan's E1 nor onboarding E1 is marked passed from fakes.
   - Backpressure: affected harness suites and build if source changed.
+  - **User decisions (2026-11-13, M1 Max):**
+    - S1, S2: fix as proposed in the [Wave 4 report](permission-loss-wave4-report.md#findings--r6).
+    - S3: extract a seam. The four AppDelegate latch-guard decisions move into a small,
+      harness-loadable type that AppDelegate consults, and latched-only tests run headless.
+      No app-hosted tests.
+    - N4: the backstop and notification paths declare loss only when the probe fails **and**
+      the trust read is false. Fault-routed paths stay probe-only. Add `RuntimeTrustMonitorTests`.
+    - N3, N5, N7: include. N1, N6: deferred. N2: leave as is.
 
 ## Gates and external acceptance
 

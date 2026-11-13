@@ -14,7 +14,7 @@
 - **Phase:** Build — permission-loss remediation executing; Waves 1–4 complete. <!-- Phase changed: 2026-11-13 -->
 - **Focus:** Permission-loss remediation revision 2: remove all taps and self-relaunch on loss, decided by user. Detection by TCC notification plus tap probe. Permission reported ON; no further live permission-toggle tests.
 - **Blocker:** Onboarding E1 permission restoration FAILED November 13. The input hang matches documented macOS behaviour for a live active tap in an untrusted process; a runtime shutdown path (R3) is implemented, fake-validated and independently reviewed (no blocker; three should-fix items open for R6), still unverified under real revocation. Fresh-install deferred; VoiceOver excluded. Settings dragging remains unresolved.
-- **Next:** Wave 5: R6 resolves review findings S1 (invalidate all ports before any tap-disable IPC), S2 (deadline on flush/launch), S3 (test the AppDelegate latch guards) and decides notes N1, N3–N7. No live permission toggles; VoiceOver excluded.
+- **Next:** Wave 5: R6. User decided 2026-11-13: S1, S2 as proposed; S3 via a headless seam; N4 needs probe **and** trust read to fail on the backstop and notification paths; N3, N5, N7 included; N1, N6 deferred. No live permission toggles; VoiceOver excluded.
 - **Execution:** [Permission-loss remediation, revision 2](plans/permission-loss-implementation.md) — Waves 1–4 complete (R0–R5; 117/117 headless tests, Debug build succeeded, no launch; review found no blocker, 3 should-fix); Wave 5 (R6) ready. E1 open; onboarding E1 remains FAILED/open. Evidence: [Wave 4 report](plans/permission-loss-wave4-report.md). Current handoff: [2026-11-13 Wave 4 Resume](sessions/2026-11-13.md#wave-4-resume).
 
 ## Recent
