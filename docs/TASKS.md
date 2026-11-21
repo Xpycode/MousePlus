@@ -6,6 +6,19 @@
 <!-- Ideas and future work. Added by /interview, user input, or discovered during development. -->
 <!-- Priority: top = highest, bottom = lowest -->
 
+- [ ] **Bug:** Menu Items preview showed the built-in sample ring while the status said "Saved";
+  the saved file and live HUD held the user's custom Global menu. Happened after adding a Safari
+  app HUD. Possible overwrite risk if the editor (not just the preview) holds samples. Diagnosis
+  leads and code paths: [2026-11-18 session](sessions/2026-11-18.md#bugs-found-open--next-session).
+
+- [ ] **Bug:** Trigger/keystroke labels use a hard-coded US layout (`Utilities/KeyCodeNames.swift`).
+  On a German keyboard, Command-Shift-# records correctly (keyCode 42) but displays as
+  Command-Shift-\. Derive names from the current keyboard layout. Found 2026-11-18.
+
+- [ ] Test HID++ button diversion next to BetterMouse (MX Master 3S gesture button `0x00C3`) to
+  settle the Logitech trigger-backend question; then spec a minimal Swift port. Call sequence,
+  control IDs and pitfalls: [OPENLOGI_REFERENCE.md](OPENLOGI_REFERENCE.md). Added 2026-11-21.
+
 - [ ] Expand the Menu Items icon browser beyond the current curated SF Symbols and add search/filtering
   inside its existing Browse popover. Requested during app-specific HUD E1 acceptance on 2026-09-11;
   placement and exact catalog scope still need confirmation under the UI-change protocol.

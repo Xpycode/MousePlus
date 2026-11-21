@@ -1,6 +1,6 @@
 # Project State
 
-**Last updated:** 2026-09-26
+**Last updated:** 2026-11-18
 
 ## Identity
 
@@ -12,17 +12,18 @@
 ## Now
 
 - **Phase:** Implementation — next task selection. <!-- Phase changed: 2026-09-11 -->
-- **Focus:** Ready to choose the next task on main; the accepted installed MousePlus build remains running.
-- **Blocker:** None for this acceptance task. The original system-dialog loop cause remains unestablished.
-- **Next:** Recommended: scope first-run trigger onboarding before clean-install release testing. No implementation plan is approved yet.
+- **Focus:** Fix two bugs found on the reset M4 Pro: Menu Items preview showing the sample ring, and US-only key labels.
+- **Blocker:** No signing certificates on the M4 Pro; only unsigned builds work there until an Apple Development certificate is set up.
+- **Next:** Diagnose the stale Menu Items preview first (possible overwrite risk), then the key-label bug. Onboarding scoping follows.
+- **Current handoff:** [2026-11-18 Resume](sessions/2026-11-18.md#resume)
 
 ## Recent
 
+- **2026-11-18:** Fresh clone and unsigned build on the reset M4 Pro; found a stale Menu Items preview and US-only key labels while setting it up.
 - **2026-09-26:** Verified plain/modifier recording, fixed preview dimensions, and passed 11 focused tests. Cleared a stuck macOS permission dialog; corrected signed build passed user-confirmed permission, trigger, and preview/layout acceptance. Changes merged and pushed to main.
 - **2026-09-25:** Exported a Developer ID-signed Release 0.1.0 (1) from the current working tree; Apple accepted notarization, and the stapled ZIP passed signature and Gatekeeper checks. Local artifact only.
 - **2026-09-17:** App-specific HUD acceptance passed through post-delete relaunch; a signed Release 0.1.0 (1) build was installed and launched from `/Applications` on M1-Max.
 - **2026-09-13:** Signed-live Finder/Global checks passed through action targeting; saved the remaining persistence/deletion handoff and quit the test build for session close.
-- **2026-09-13:** Made unused slot backing transparent by default with a persisted complete-ring option, kept empty regions inert, and stabilized the hidden-submenu warning layout; 134 focused regressions and the Debug build pass, and both appearances are signed-live accepted.
 
 ## Progress
 
@@ -35,12 +36,12 @@
 - **HUD Opening Styles:** 7/7 tasks complete and signed-live verified on the supported BetterMouse-to-keyboard route. VoiceOver, direct MousePlus mouse triggering and the broad device/geometry performance matrix are deferred before release and remain untested.
 - **App-specific HUDs:** 5/5 implementation waves and signed-live Finder/Global acceptance complete on the supported BetterMouse-to-keyboard route.
 - **Trigger backend:** Keyboard and standard mouse paths work; advanced Logitech HID++ support remains undecided.
-- **Task tracker:** no current sprint tasks; 44/49 tracked items complete overall (90%), with five backlog items.
+- **Task tracker:** no current sprint tasks; seven backlog items, including two bugs found 2026-11-18.
 
 ## Risks and Backlog
 
 - Fresh installs ship without a default trigger; onboarding is required before clean-install or public-release testing.
-- Capture the alternate MX4 vendor interface and re-capture the MX3S with the current inspector before choosing accept-limitation, HID++ implementation, or Options+ coexistence.
+- Capture the alternate MX4 vendor interface and re-capture the MX3S with the current inspector before choosing accept-limitation, HID++ implementation, or Options+ coexistence. OpenLogi's code and fixtures cover both mice; see `OPENLOGI_REFERENCE.md` (BetterMouse coexistence still untested).
 - The menu-bar status icon and General Settings Quit fallback are signed-live verified on the M1 Max.
 - Settings writers may still replace a corrupt configuration with defaults; the full deferred-risk list is in `MENU_EDITOR_REVIEW.md`.
 - Consider screenshots next if onboarding is deferred; it is the smallest unfinished HUD action and establishes dismiss-before-action behavior.
@@ -50,7 +51,7 @@
 ## Infrastructure
 
 - **Build:** `xcodebuild -workspace 01_Project/MousePlus.xcworkspace -scheme MousePlus -configuration Debug build`
-- **Signing:** Stable per-machine Debug identities are configured on both development Macs so Accessibility permission survives rebuilds.
+- **Signing:** Stable per-machine Debug identity on the M1 Max. The M4 Pro was reset and has no certificates (2026-11-18); recreate `Config/Debug.local.xcconfig` after adding one.
 - **Runtime:** Non-sandboxed AppKit/SwiftUI menu-bar app using an `NSPanel`, global event monitoring, Accessibility APIs, JSON configuration, and UserDefaults settings.
 - **Packages:** Adopts GlobalEventMonitors and ShortcutKit; contributes source patterns for GlobalEventMonitors and PermissionsService. See `PACKAGE-NOTES.md`.
 
@@ -75,3 +76,4 @@
 - Send Keystroke implementation record: `SEND_KEYSTROKE_PLAN.md`
 - Menu-editor findings and deferred risks: `MENU_EDITOR_REVIEW.md`
 - HID captures and evidence: `fixtures/`
+- HID++ diversion, haptics and ring ideas from OpenLogi: `OPENLOGI_REFERENCE.md`

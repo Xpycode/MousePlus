@@ -10,6 +10,7 @@
 
 | Date | Focus | Outcome | Log |
 |------|-------|---------|-----|
+| 2026-11-18 | Set up MousePlus on the reset M4 Pro | Fresh clone; unsigned Debug build runs (no certs on this Mac). Found two bugs: Menu Items preview shows sample ring while "Saved" (possible overwrite risk) and US-only key labels (German # shows as \). Config backed up. Next: diagnose preview bug. | [Log](2026-11-18.md) |
 | 2026-09-26 | Recorder, preview, and permission-dialog recovery | Recorder verified; preview dimensions fixed; 11 tests pass. Stuck macOS dialog cleared; corrected signed app passed permission, trigger, and layout acceptance. Merged and pushed to main; next: scope trigger onboarding. | [Log](2026-09-26.md) |
 | 2026-09-25 | Export a notarized MousePlus app | Release 0.1.0 (1) archived with Developer ID and hardened runtime; Apple accepted notarization. Stapled ZIP passed extraction, signature, and Gatekeeper checks. Local artifact only; next: acceptance testing and release prerequisites. | [→](2026-09-25.md) |
 | 2026-09-17 | Complete Finder/Global acceptance and install a versioned build | E1/AC19 passed and the plan was archived. Developer ID-signed Release 0.1.0 (1) was installed and launched from `/Applications` on M1-Max; local build is unnotarized. | [→](2026-09-17.md) |
@@ -29,7 +30,6 @@
 | 2026-09-04 | Implement and verify the menu-bar Restart MousePlus command | Added and signed-live-verified a flush → fresh-instance launch → terminate lifecycle barrier with regression tests; committed and pushed the clean branch. Next: screenshots HUD action. | [→](2026-09-04.md) |
 | 2026-09-04 | Close the signed HUD redesign, then plan and execute the full ring-controls reorganization (Waves 1–4) | The redesign passed all live checks with 217 tests green and was committed. Planned and confirmed Menu/Inner/Middle/Outer tab ownership, landed Wave 1 (tolerant per-ring label model plus a pure readable-rotation presentation policy), Wave 2 (native Menu/Inner/Middle/Outer segmented inspector), Wave 3 (wired label visibility/orientation into live HUD and preview, proved the fields survive every Settings write path), and Wave 4 (adversarial review fixed a wedge-caption width bug; signed Debug build quit/relaunched live and confirmed working). 235/235 tests pass; ring-controls reorganization complete. Logged a "Restart MousePlus" menu-bar item to the backlog. | [→](2026-09-04.md) |
 | 2026-09-03 | Execute, live-verify, and remediate the sustained-use HUD redesign | Reorder and dismissal passed live; a macOS 27 Window Snap crash was fixed and retested with 207 tests green. Color verification remains; clearer root “Default” wording is logged for the next UI-design pass. | [→](2026-09-03.md) |
-| 2026-09-02 | Close Send Keystroke, plan the sustained-use HUD redesign, and execute Waves 1–4 | Runtime and editor integration now support independent rings, safe commits, durable customization, native controls, item colors, and a non-executing preview; the full unit target and signed Debug build pass. Next: `/execute wave 5`. | [→](2026-09-02.md) |
 
 ---
 
