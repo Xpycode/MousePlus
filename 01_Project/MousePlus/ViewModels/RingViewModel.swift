@@ -360,7 +360,8 @@ final class RingViewModel {
         // at ring-open) plus a live screen-geometry snapshot for window snapping.
         // Cheap to build unconditionally; passed across the actor boundary as Sendable.
         let context = ActionContext(frontmostPID: frontmostPID,
-                                    screenLayout: ScreenLayout.capture())
+                                    screenLayout: ScreenLayout.capture(),
+                                    returnsFocusToTarget: true)
         Task {
             let result = await actionService.execute(item, context: context)
             await actionResultRouter.routeRuntimeResult(result, for: item.id)

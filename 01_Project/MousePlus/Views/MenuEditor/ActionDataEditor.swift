@@ -143,9 +143,15 @@ struct ActionDataEditor: View {
     }
 
     private var committedKeystrokeDisplay: String {
-        guard let shortcut = item.keystrokePayload?.shortcutKitValue,
-              !shortcut.isUnbound else { return "None" }
-        return shortcut.resolvedDisplayName
+        // The payload is posted as a physical key code, so label it by position
+        // under the current layout. ShortcutKit's resolved name assumes
+        // letter-normalised codes and would call a German Z key "Y".
+        guard case let .key(keyCode, modifiers)? = item.keystrokePayload else { return "None" }
+        return TriggerBinding.keyboard(
+            keyCode: keyCode,
+            modifiers: modifiers & KeystrokePayload.modifierMask,
+            mode: .holdRelease
+        ).displayString
     }
 
     private func handleKeystrokeCapture(_ outcome: KeystrokeCaptureRecorder.Outcome?) {

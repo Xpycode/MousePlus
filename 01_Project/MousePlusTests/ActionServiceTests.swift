@@ -88,6 +88,39 @@ final class ActionServiceTests: XCTestCase {
         )
     }
 
+    /// Regression (2026-11-21): clicking a ring wedge left MousePlus active, so
+    /// the chord never reached Safari. Live-ring keystrokes hand focus back first.
+    func testLiveRingKeystrokeReturnsFocusToTargetBeforeSending() async {
+        let keystrokes = KeystrokeStub()
+        let workspace = WorkspaceStub()
+        let service = ActionService(workspace: workspace, keystrokeService: keystrokes)
+
+        let result = await service.execute(
+            item(.sendKeystroke, payload: .key(keyCode: 42, modifiers: 1 << 20)),
+            context: ActionContext(frontmostPID: 4242, returnsFocusToTarget: true)
+        )
+
+        XCTAssertEqual(result, .completed)
+        let returns = await workspace.focusReturns
+        XCTAssertEqual(returns, [4242])
+        let calls = await keystrokes.calls
+        XCTAssertEqual(calls.count, 1)
+    }
+
+    func testKeystrokeWithoutFocusReturnRequestLeavesFocusAlone() async {
+        let keystrokes = KeystrokeStub()
+        let workspace = WorkspaceStub()
+        let service = ActionService(workspace: workspace, keystrokeService: keystrokes)
+
+        _ = await service.execute(
+            item(.sendKeystroke, payload: .key(keyCode: 42, modifiers: 1 << 20)),
+            context: ActionContext(frontmostPID: 4242)
+        )
+
+        let returns = await workspace.focusReturns
+        XCTAssertEqual(returns, [])
+    }
+
     func testMissingKeystrokePayloadIsRejectedWithoutSending() async {
         let keystrokes = KeystrokeStub()
         let service = ActionService(keystrokeService: keystrokes)
@@ -147,12 +180,15 @@ private actor WorkspaceStub: ActionWorkspace {
     let result: Result<Bool, Error>
     private(set) var bundleIdentifiers: [String] = []
 
-    init(result: Result<Bool, Error>) { self.result = result }
+    init(result: Result<Bool, Error> = .success(true)) { self.result = result }
 
     func activateOrLaunch(bundleIdentifier: String) async throws -> Bool {
         bundleIdentifiers.append(bundleIdentifier)
         return try result.get()
     }
+
+    private(set) var focusReturns: [pid_t] = []
+    func returnFocusIfStolen(toPID pid: pid_t) async { focusReturns.append(pid) }
 }
 
 private actor KeystrokeStub: ActionKeystrokeSending {

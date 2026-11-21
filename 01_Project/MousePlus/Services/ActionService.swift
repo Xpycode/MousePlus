@@ -4,10 +4,15 @@ import AppKit
 struct ActionContext: Sendable {
     var frontmostPID: pid_t?
     var screenLayout: ScreenLayout?
+    /// Live-ring actions set this: if MousePlus itself took focus while the ring
+    /// was used, hand focus back to `frontmostPID` before sending a keystroke.
+    var returnsFocusToTarget = false
 
-    init(frontmostPID: pid_t? = nil, screenLayout: ScreenLayout? = nil) {
+    init(frontmostPID: pid_t? = nil, screenLayout: ScreenLayout? = nil,
+         returnsFocusToTarget: Bool = false) {
         self.frontmostPID = frontmostPID
         self.screenLayout = screenLayout
+        self.returnsFocusToTarget = returnsFocusToTarget
     }
 }
 
@@ -37,9 +42,37 @@ struct SystemActionProcessRunner: ActionProcessRunning {
 
 protocol ActionWorkspace: Sendable {
     func activateOrLaunch(bundleIdentifier: String) async throws -> Bool
+    /// If MousePlus is the active app, make `pid` active again and wait (briefly)
+    /// until it is. Does nothing when any other app is frontmost.
+    func returnFocusIfStolen(toPID pid: pid_t) async
+}
+
+extension ActionWorkspace {
+    func returnFocusIfStolen(toPID pid: pid_t) async {}
 }
 
 struct SystemActionWorkspace: ActionWorkspace {
+    /// A synthetic keystroke goes to whichever app is active. Clicking a ring
+    /// wedge can leave MousePlus active (observed 2026-11-21: the chord beeped,
+    /// or raised the Settings window, instead of reaching Safari).
+    @MainActor
+    func returnFocusIfStolen(toPID pid: pid_t) async {
+        let ownPID = ProcessInfo.processInfo.processIdentifier
+        guard pid != ownPID,
+              NSWorkspace.shared.frontmostApplication?.processIdentifier == ownPID,
+              let target = NSRunningApplication(processIdentifier: pid),
+              !target.isTerminated else { return }
+
+        NSApp.yieldActivation(to: target)
+        target.activate(from: .current)
+        // Activation is asynchronous and only a request; wait for it to land
+        // rather than trusting a fixed delay. Give up after half a second.
+        for _ in 0..<50 {
+            if NSWorkspace.shared.frontmostApplication?.processIdentifier == pid { return }
+            try? await Task.sleep(for: .milliseconds(10))
+        }
+    }
+
     @MainActor
     func activateOrLaunch(bundleIdentifier: String) async throws -> Bool {
         if let app = NSWorkspace.shared.runningApplications.first(where: {
@@ -114,6 +147,9 @@ actor ActionService {
             case .sendKeystroke:
                 guard case let .key(keyCode, modifiers)? = item.keystrokePayload else {
                     return ActionExecutionResult(validation: validation)
+                }
+                if context.returnsFocusToTarget, let target = context.frontmostPID {
+                    await workspace.returnFocusIfStolen(toPID: target)
                 }
                 try await keystrokeService.send(
                     keyCode: keyCode,

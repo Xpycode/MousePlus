@@ -1,11 +1,13 @@
 import AppKit
+import Carbon.HIToolbox
 
 /// Human-readable names for keyboard virtual key codes and mouse button numbers,
 /// plus a `displayString` for a `TriggerBinding`. Used by the Triggers settings tab
 /// to render what a recorded binding maps to ("Ctrl+Opt+F5", "Middle Click", "Button 4 (Back)").
 enum KeyCodeNames {
-    /// Common macOS virtual key codes (`kVK_*`) → display label. Anything not listed
-    /// falls back to "Key <code>" so an unusual key still shows something sensible.
+    /// US-ANSI virtual key codes (`kVK_*`) → display label. Authoritative for the
+    /// layout-independent keys in `fixedKeyCodes`; for everything else it is only
+    /// the fallback when the current layout cannot name the key (see `key(_:)`).
     static let map: [UInt16: String] = [
         // Letters
         0: "A", 1: "S", 2: "D", 3: "F", 4: "H", 5: "G", 6: "Z", 7: "X", 8: "C", 9: "V",
@@ -29,8 +31,87 @@ enum KeyCodeNames {
         119: "End", 121: "Page Down",
     ]
 
-    static func key(_ code: UInt16) -> String {
-        map[code] ?? "Key \(code)"
+    /// Keys whose label never depends on the keyboard layout. `UCKeyTranslate`
+    /// returns control characters (or a bare space) for these, so they are
+    /// answered from the table before any layout lookup.
+    static let fixedKeyCodes: Set<UInt16> = [
+        36, 48, 49, 51, 53,                                             // Return, Tab, Space, Delete, Escape
+        96, 97, 98, 99, 100, 101, 103, 105, 107, 109, 111, 113, 118, 120, 122, // F-keys
+        123, 124, 125, 126,                                             // arrows
+        114, 115, 116, 117, 119, 121,                                   // Help, Home, Page Up, Fwd Delete, End, Page Down
+    ]
+
+    /// Numeric-keypad key codes → US label. Keypad keys translate to the same
+    /// characters as the main row, so they are told apart by key code and
+    /// prefixed with "Keypad".
+    static let keypad: [UInt16: String] = [
+        65: ".", 67: "*", 69: "+", 75: "/", 78: "-", 81: "=",
+        82: "0", 83: "1", 84: "2", 85: "3", 86: "4", 87: "5", 88: "6", 89: "7", 91: "8", 92: "9",
+    ]
+
+    /// Display label for a physical key code under the user's current keyboard
+    /// layout (German key 42 reads "#", not the US backslash). Bindings are stored and
+    /// matched by physical key code, so the label is always positional.
+    ///
+    /// `layoutLabel` is injectable for tests; the US table is the fallback when
+    /// the layout cannot name the key.
+    static func key(
+        _ code: UInt16,
+        layoutLabel: (UInt16) -> String? = KeyCodeNames.currentLayoutLabel
+    ) -> String {
+        switch code {
+        case 71: return "Keypad Clear"
+        case 76: return "Keypad Enter"
+        default: break
+        }
+        if fixedKeyCodes.contains(code), let fixed = map[code] { return fixed }
+        if let usKeypad = keypad[code] {
+            return "Keypad \(layoutLabel(code).map(keyCap) ?? usKeypad)"
+        }
+        if let live = layoutLabel(code) { return keyCap(live) }
+        return map[code] ?? "Key \(code)"
+    }
+
+    /// Upper-case a key cap only when that keeps it a single character
+    /// ("ß" would otherwise become "SS").
+    static func keyCap(_ label: String) -> String {
+        let upper = label.uppercased()
+        return upper.count == label.count ? upper : label
+    }
+
+    /// The character the current keyboard layout prints for `code` with no
+    /// modifiers, or `nil` when it cannot be determined (no layout data, a
+    /// non-printing key, or a call from off the main thread — Text Input
+    /// Sources is main-thread-only).
+    static func currentLayoutLabel(_ code: UInt16) -> String? {
+        guard Thread.isMainThread else { return nil }
+        // The *layout* source (not the current input source) still carries key
+        // data while a Japanese/Chinese/Korean input method is active.
+        guard let source = TISCopyCurrentKeyboardLayoutInputSource()?.takeRetainedValue()
+                ?? TISCopyCurrentASCIICapableKeyboardLayoutInputSource()?.takeRetainedValue(),
+              let raw = TISGetInputSourceProperty(source, kTISPropertyUnicodeKeyLayoutData)
+        else { return nil }
+        let data = Unmanaged<CFData>.fromOpaque(raw).takeUnretainedValue() as Data
+
+        var deadKeyState: UInt32 = 0
+        var length = 0
+        var chars = [UniChar](repeating: 0, count: 4)
+        let status = data.withUnsafeBytes { buffer in
+            UCKeyTranslate(
+                buffer.bindMemory(to: UCKeyboardLayout.self).baseAddress,
+                code,
+                UInt16(kUCKeyActionDisplay),          // names dead keys (German ´ and ^) too
+                0,
+                UInt32(LMGetKbdType()),               // ISO boards swap keys 10 and 50
+                OptionBits(kUCKeyTranslateNoDeadKeysMask),
+                &deadKeyState, chars.count, &length, &chars
+            )
+        }
+        guard status == noErr, length > 0 else { return nil }
+        let label = String(utf16CodeUnits: chars, count: length)
+        guard label.count == 1, let scalar = label.unicodeScalars.first,
+              scalar.value > 0x20, scalar.value != 0x7F else { return nil }
+        return label
     }
 
     /// Modifier names as text in canonical Apple order ("Ctrl+Opt+Shift+Cmd"), or ""

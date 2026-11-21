@@ -56,7 +56,13 @@ final class RingHostingView<Content: View>: NSHostingView<Content> {
 
     override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
 
+    /// With `preventWindowOrdering()` in `mouseDown`, this keeps a click on the
+    /// ring from activating MousePlus, so a keystroke action still reaches the
+    /// app the ring was opened over.
+    override func shouldDelayWindowOrdering(for event: NSEvent) -> Bool { true }
+
     override func mouseDown(with event: NSEvent) {
+        NSApp.preventWindowOrdering()
         inputOwnership.primaryDown()
         super.mouseDown(with: event)
     }
@@ -277,7 +283,7 @@ final class RingWindowController {
     }
 
     private func createPanel(side: CGFloat) -> NSPanel {
-        let panel = NSPanel(
+        let panel = RingPanel(
             contentRect: NSRect(origin: .zero, size: NSSize(width: side, height: side)),
             styleMask: [.borderless, .nonactivatingPanel],
             backing: .buffered,
@@ -301,6 +307,16 @@ final class RingWindowController {
 
         return panel
     }
+}
+
+/// The ring never takes keyboard focus. A clicked panel that became key handed
+/// that focus to the next MousePlus window (Settings) when it closed, which
+/// activated MousePlus and switched Spaces instead of leaving the target app in
+/// front (observed 2026-11-21). Escape and clicks arrive through monitors and
+/// `acceptsFirstMouse`, so nothing here needs key status.
+final class RingPanel: NSPanel {
+    override var canBecomeKey: Bool { false }
+    override var canBecomeMain: Bool { false }
 }
 
 /// Pure boundary math shared by runtime dismissal and focused unit tests.

@@ -55,4 +55,37 @@ final class MenuEditorPreviewSyncTests: XCTestCase {
         runtime.load(from: config)
         XCTAssertEqual(interaction.coordinator?.snapshot.geometry, runtime.geometry)
     }
+
+    /// Regression (2026-11-18): Settings opened on Menu Items, the saved menu loaded
+    /// right after the preview mounted, and the preview kept drawing the samples.
+    func testPreviewFollowsALoadThatLandsImmediatelyAfterMount() async throws {
+        let model = MenuEditorModel(inner: RingMenuItem.sampleInnerItems,
+                                    middle: RingMenuItem.sampleItems)
+        let host = NSHostingView(rootView: RingPreviewSelector(model: model))
+        let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 480, height: 500),
+                              styleMask: .borderless, backing: .buffered, defer: false)
+        window.contentView = host
+        defer { window.contentView = nil }
+
+        // No settling between mount and load: both land in the same update.
+        var config = Configuration()
+        config.inner.append(RingMenuItem(label: "Extra", icon: "app.fill", actionType: .appSwitch))
+        config.middle.append(RingMenuItem(label: "Extra", icon: "app.fill", actionType: .appSwitch))
+        config.hudCustomization.inner.layout.angularOffset = 61
+        model.load(from: config)
+
+        for _ in 0..<10 {
+            host.layoutSubtreeIfNeeded()
+            try? await Task.sleep(for: .milliseconds(10))
+        }
+
+        func surface(_ view: NSView) -> InteractionNSView? {
+            if let view = view as? InteractionNSView { return view }
+            return view.subviews.lazy.compactMap { surface($0) }.first
+        }
+        let snapshot = try XCTUnwrap(surface(host)?.coordinator?.snapshot)
+        let runtime = RingViewModel()
+        runtime.load(from: config)
+        XCTAssertEqual(snapshot.geometry, runtime.geometry)
+    }
 }

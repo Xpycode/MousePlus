@@ -6,14 +6,20 @@
 <!-- Ideas and future work. Added by /interview, user input, or discovered during development. -->
 <!-- Priority: top = highest, bottom = lowest -->
 
-- [ ] **Bug:** Menu Items preview showed the built-in sample ring while the status said "Saved";
-  the saved file and live HUD held the user's custom Global menu. Happened after adding a Safari
-  app HUD. Possible overwrite risk if the editor (not just the preview) holds samples. Diagnosis
-  leads and code paths: [2026-11-18 session](sessions/2026-11-18.md#bugs-found-open--next-session).
+- [ ] **Awaiting recurrence check:** Menu Items preview showed the built-in sample ring while the
+  status said "Saved". Cause not reproduced; precautionary remount-after-load added 2026-11-21.
+  If it recurs, check the Selected Item tab before clicking the ring.
+  [2026-11-21 session](sessions/2026-11-21.md#progress).
 
-- [ ] **Bug:** Trigger/keystroke labels use a hard-coded US layout (`Utilities/KeyCodeNames.swift`).
-  On a German keyboard, Command-Shift-# records correctly (keyCode 42) but displays as
-  Command-Shift-\. Derive names from the current keyboard layout. Found 2026-11-18.
+- [ ] Guard Global menu saves against external changes. A Menu Items save replaces the whole
+  Global menu on disk with no changed-externally check (app HUDs have one). No second writer
+  exists today. Found 2026-11-21; code path in the session log.
+
+- [ ] Set up a stable local signing identity on the M4 Pro (self-signed certificate, or sign Xcode
+  into the Apple ID) so Accessibility permission survives rebuilds. Offered 2026-11-21; undecided.
+
+- [ ] Settings "Test Action" for Send Keystroke does not bring the target app forward first, so
+  the keystroke may land on Settings itself. Read from code 2026-11-21; not reproduced.
 
 - [ ] Test HID++ button diversion next to BetterMouse (MX Master 3S gesture button `0x00C3`) to
   settle the Logitech trigger-backend question; then spec a minimal Swift port. Call sequence,
