@@ -17,6 +17,10 @@ struct Configuration: Codable {
     private var unknownFields: [String: JSONValue]
     private var preservedGlobalInnerJSON: [JSONValue]
     private var preservedGlobalMiddleJSON: [JSONValue]
+    /// True when decoding converted at least one copied (version 1) App HUD into
+    /// inheritance metadata. Never encoded; `ConfigurationService` uses it to
+    /// write the one-time pre-migration backup before the first save.
+    private(set) var migratedAppHUDProfilesOnLoad = false
 
     var globalHUDActionLayout: HUDActionLayout {
         get {
@@ -37,6 +41,8 @@ struct Configuration: Codable {
 
     /// Only profiles this version can decode are exposed to runtime and editors.
     /// Opaque entries remain in `storedAppHUDProfiles` for lossless persistence.
+    /// These are the stored profiles (inheritance metadata after load), so a
+    /// Global-only edit leaves them equal. Use `resolvedAppLayout` for display.
     var validAppHUDProfiles: [String: AppHUDProfile] {
         storedAppHUDProfiles.reduce(into: [:]) { result, entry in
             guard Self.isValidBundleIdentifier(entry.key),
@@ -165,6 +171,10 @@ struct Configuration: Codable {
         if schemaVersion < 1 {
             migrateLegacySampleAppSwitcher()
         }
+
+        // Runs once Global and every profile are decoded, so each copied
+        // profile is compared with the final in-memory Global.
+        migrateAppHUDProfilesAfterDecode()
     }
 
     func encode(to encoder: Encoder) throws {
@@ -196,6 +206,10 @@ struct Configuration: Codable {
         )
     }
 
+    /// The stored profile: inheritance metadata once loaded (a profile set in
+    /// memory as a version 1 copy stays one until it is saved and reloaded).
+    /// Its COMPAT `layout` is empty for an inheriting profile; resolve with
+    /// `resolvedAppLayout(forBundleIdentifier:)` for anything shown.
     func appHUDProfile(forBundleIdentifier bundleIdentifier: String) -> AppHUDProfile? {
         guard Self.isValidBundleIdentifier(bundleIdentifier),
               case .available(let profile) = storedAppHUDProfiles[bundleIdentifier] else { return nil }
@@ -224,8 +238,71 @@ struct Configuration: Codable {
         unavailableAppHUDProfilesCollection = source.unavailableAppHUDProfilesCollection
     }
 
+    /// A new App HUD inherits every Global item in Global's order.
     func makeAppHUDProfileFromGlobal() -> AppHUDProfile {
-        AppHUDProfile(layout: globalHUDActionLayout)
+        AppHUDProfile()
+    }
+
+    /// The App HUD resolved against the current Global: what the HUD shows, each
+    /// item's origin and the items that do not fit. `nil` when there is no
+    /// readable profile for the bundle identifier.
+    func resolvedAppLayout(forBundleIdentifier bundleIdentifier: String) -> ResolvedAppLayout? {
+        guard let profile = appHUDProfile(forBundleIdentifier: bundleIdentifier) else { return nil }
+        return AppHUDResolver.resolve(global: globalHUDActionLayout, profile: profile)
+    }
+
+    /// Replaces the inheritance metadata of an existing readable App HUD while
+    /// keeping its profile-level unknown fields. Returns `false` (and changes
+    /// nothing) when the profile is missing or quarantined, or when the whole
+    /// profile collection is unreadable. Create profiles with `setAppHUDProfile`.
+    @discardableResult
+    mutating func setAppHUDInheritance(
+        _ rings: AppHUDRings,
+        forBundleIdentifier bundleIdentifier: String
+    ) -> Bool {
+        guard unavailableAppHUDProfilesCollection == nil,
+              var profile = appHUDProfile(forBundleIdentifier: bundleIdentifier) else { return false }
+        profile.setRings(rings)
+        storedAppHUDProfiles[bundleIdentifier] = .available(profile)
+        return true
+    }
+
+    /// Repairs every readable inheriting App HUD after Global changed from
+    /// `oldGlobal` to the current Global: overrides of deleted Global items
+    /// become app-only and stale hidden/order IDs are dropped. Without a Global
+    /// deletion the stored profiles stay equal. Quarantined entries and
+    /// version 1 copies are left unchanged.
+    mutating func repairAppHUDProfiles(afterGlobalChangeFrom oldGlobal: HUDActionLayout) {
+        let newGlobal = globalHUDActionLayout
+        for (bundleIdentifier, stored) in storedAppHUDProfiles {
+            guard Self.isValidBundleIdentifier(bundleIdentifier),
+                  case .available(let profile) = stored,
+                  profile.isInheriting else { continue }
+            let repaired = AppHUDResolver.repairAfterGlobalChange(
+                profile: profile,
+                oldGlobal: oldGlobal,
+                newGlobal: newGlobal
+            )
+            if repaired != profile {
+                storedAppHUDProfiles[bundleIdentifier] = .available(repaired)
+            }
+        }
+    }
+
+    /// Converts copied (version 1) profiles to inheritance metadata without
+    /// changing what they show, then runs the load-time fallback repair.
+    /// Idempotent: inheriting profiles are only repaired.
+    private mutating func migrateAppHUDProfilesAfterDecode() {
+        guard unavailableAppHUDProfilesCollection == nil else { return }
+        let global = globalHUDActionLayout
+        for (bundleIdentifier, stored) in storedAppHUDProfiles {
+            guard Self.isValidBundleIdentifier(bundleIdentifier),
+                  case .available(let profile) = stored,
+                  !profile.isInheriting else { continue }
+            storedAppHUDProfiles[bundleIdentifier] = .available(profile.migrated(global: global))
+            migratedAppHUDProfilesOnLoad = true
+        }
+        repairAppHUDProfiles(afterGlobalChangeFrom: global)
     }
 
     @discardableResult
@@ -275,10 +352,13 @@ struct Configuration: Codable {
         }
         switch storedAppHUDProfiles[bundleIdentifier] {
         case .available(let profile):
+            // Resolved once per invocation; the result is frozen in the
+            // returned value, so a later Global save cannot change an open HUD.
+            let resolved = AppHUDResolver.resolve(global: globalHUDActionLayout, profile: profile)
             return ResolvedHUDProfile(
                 route: route,
                 profileReference: .app(bundleIdentifier: bundleIdentifier),
-                actionLayout: profile.layout,
+                actionLayout: resolved.layout,
                 targetApplication: frontmostApp,
                 resolution: .exactAppMatch
             )

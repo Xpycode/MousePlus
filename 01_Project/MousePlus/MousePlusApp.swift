@@ -510,6 +510,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         )
     }
 
+    /// Called once per HUD opening (or route replacement). App HUD inheritance
+    /// is resolved here, so a Global save while the HUD is open changes only the
+    /// next opening (AC15).
     private func resolveInvocation(route: HUDInvocationRoute) -> ResolvedHUDProfile {
         let app = NSWorkspace.shared.frontmostApplication
         let snapshot = FrontmostAppSnapshot(

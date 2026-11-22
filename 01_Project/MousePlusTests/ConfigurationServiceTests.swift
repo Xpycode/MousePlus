@@ -53,8 +53,198 @@ final class ConfigurationServiceTests: XCTestCase {
         let reloaded = try await service.loadResult().configuration
 
         XCTAssertEqual(reloaded.triggers.globalHUDShortcut, shortcut)
-        XCTAssertEqual(reloaded.appHUDProfile(forBundleIdentifier: "com.apple.finder"), profile)
-        XCTAssertEqual(reloaded.validAppHUDProfiles, ["com.apple.finder": profile])
+        // The saved copy migrates at load into inheritance metadata that shows
+        // exactly the same items.
+        let migrated = profile.migrated(global: reloaded.globalHUDActionLayout)
+        XCTAssertTrue(migrated.isInheriting)
+        XCTAssertEqual(reloaded.appHUDProfile(forBundleIdentifier: "com.apple.finder"), migrated)
+        XCTAssertEqual(reloaded.validAppHUDProfiles, ["com.apple.finder": migrated])
+        XCTAssertEqual(
+            reloaded.resolvedAppLayout(forBundleIdentifier: "com.apple.finder")?.layout,
+            profile.layout
+        )
+    }
+
+    // MARK: - App HUD inheritance migration (AC16–AC18)
+
+    func testVersion1FileLoadsWithIdenticalResolvedLayout() async throws {
+        let fixture = Version1Fixture()
+        let service = makeService()
+        let before = fixture.configuration
+        try await writeRaw(fixture.data(), to: service)
+
+        let loaded = try await service.loadResult().configuration
+
+        XCTAssertTrue(loaded.migratedAppHUDProfilesOnLoad)
+        let stored = try XCTUnwrap(loaded.appHUDProfile(forBundleIdentifier: Version1Fixture.finder))
+        XCTAssertTrue(stored.isInheriting)
+        let resolved = try XCTUnwrap(loaded.resolvedAppLayout(forBundleIdentifier: Version1Fixture.finder))
+        XCTAssertEqual(resolved.layout, fixture.v1Layout)
+        XCTAssertEqual(resolved.origins[fixture.copy.id], .inherited)
+        XCTAssertEqual(resolved.origins[fixture.snap.id], .customized)
+        XCTAssertEqual(resolved.origins[fixture.note.id], .appOnly)
+        XCTAssertEqual(stored.rings?.inner.hidden, [fixture.paste.id])
+        XCTAssertNotNil(stored.rings?.middle.customOrder)
+
+        let snapshot = FrontmostAppSnapshot(
+            processIdentifier: 3,
+            bundleIdentifier: Version1Fixture.finder,
+            localizedName: "Finder"
+        )
+        XCTAssertEqual(
+            loaded.resolveHUD(
+                route: .contextual,
+                frontmostApp: snapshot,
+                mousePlusBundleIdentifier: "com.xpycode.MousePlus"
+            ),
+            before.resolveHUD(
+                route: .contextual,
+                frontmostApp: snapshot,
+                mousePlusBundleIdentifier: "com.xpycode.MousePlus"
+            )
+        )
+    }
+
+    func testPreMigrationBackupIsWrittenOnceBeforeFirstSave() async throws {
+        let fixture = Version1Fixture()
+        let service = makeService()
+        let original = try fixture.data()
+        try await writeRaw(original, to: service)
+        let backupURL = service.preInheritanceBackupURL
+        let store = await service.store
+
+        let firstLoad = try await service.loadResult().configuration
+        XCTAssertFalse(
+            FileManager.default.fileExists(atPath: backupURL.path),
+            "Loading alone must not write anything"
+        )
+
+        try await service.save(firstLoad)
+        XCTAssertEqual(try Data(contentsOf: backupURL), original)
+        XCTAssertEqual(
+            backupURL.deletingLastPathComponent(),
+            store.configurationURL.deletingLastPathComponent()
+        )
+        let savedProfiles = try XCTUnwrap(try savedObject(store)["appHUDProfiles"] as? [String: Any])
+        let savedProfile = try XCTUnwrap(savedProfiles[Version1Fixture.finder] as? [String: Any])
+        XCTAssertNil(savedProfile["layout"])
+        XCTAssertNotNil(savedProfile["rings"])
+
+        // The migrated file is now on disk: a second load migrates nothing and
+        // writes nothing, and a later save leaves the backup untouched.
+        let directoryBefore = try directoryListing(store)
+        let secondLoad = try await service.loadResult().configuration
+        XCTAssertFalse(secondLoad.migratedAppHUDProfilesOnLoad)
+        XCTAssertEqual(try directoryListing(store), directoryBefore)
+        XCTAssertEqual(
+            secondLoad.resolvedAppLayout(forBundleIdentifier: Version1Fixture.finder)?.layout,
+            fixture.v1Layout
+        )
+        XCTAssertEqual(
+            secondLoad.appHUDProfile(forBundleIdentifier: Version1Fixture.finder),
+            firstLoad.appHUDProfile(forBundleIdentifier: Version1Fixture.finder)
+        )
+
+        try Data("sentinel".utf8).write(to: backupURL)
+        try await service.save(secondLoad)
+        XCTAssertEqual(try Data(contentsOf: backupURL), Data("sentinel".utf8))
+    }
+
+    func testPreMigrationBackupNeverOverwritesAnExistingBackup() async throws {
+        let fixture = Version1Fixture()
+        let service = makeService()
+        try await writeRaw(fixture.data(), to: service)
+        let backupURL = service.preInheritanceBackupURL
+        try Data("earlier backup".utf8).write(to: backupURL)
+
+        let loaded = try await service.loadResult().configuration
+        try await service.save(loaded)
+
+        XCTAssertEqual(try Data(contentsOf: backupURL), Data("earlier backup".utf8))
+    }
+
+    func testSavingWithoutCopiedProfilesWritesNoMigrationBackup() async throws {
+        let service = makeService()
+        var configuration = Configuration()
+        XCTAssertTrue(configuration.setAppHUDProfile(
+            configuration.makeAppHUDProfileFromGlobal(),
+            forBundleIdentifier: Version1Fixture.finder
+        ))
+        try await service.save(configuration)
+        let loaded = try await service.loadResult().configuration
+        try await service.save(loaded)
+
+        XCTAssertFalse(loaded.migratedAppHUDProfilesOnLoad)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: service.preInheritanceBackupURL.path))
+    }
+
+    func testQuarantinedProfileRoundTripsUnchangedAlongsideMigration() async throws {
+        let fixture = Version1Fixture()
+        let service = makeService()
+        let unreadable: [String: Any] = [
+            "layout": ["inner": "invalid", "middle": []],
+            "futurePayload": ["revision": 9],
+        ]
+        var object = try XCTUnwrap(
+            JSONSerialization.jsonObject(with: fixture.data()) as? [String: Any]
+        )
+        var profiles = try XCTUnwrap(object["appHUDProfiles"] as? [String: Any])
+        profiles["com.example.broken"] = unreadable
+        object["appHUDProfiles"] = profiles
+        try await writeRaw(JSONSerialization.data(withJSONObject: object), to: service)
+
+        let loaded = try await service.loadResult().configuration
+        XCTAssertTrue(loaded.migratedAppHUDProfilesOnLoad)
+        XCTAssertTrue(loaded.hasUnavailableAppHUDProfile(forBundleIdentifier: "com.example.broken"))
+        XCTAssertNil(loaded.resolvedAppLayout(forBundleIdentifier: "com.example.broken"))
+        try await service.save(loaded)
+
+        let store = await service.store
+        let saved = try XCTUnwrap(try savedObject(store)["appHUDProfiles"] as? [String: Any])
+        XCTAssertEqual(saved["com.example.broken"] as? NSDictionary, unreadable as NSDictionary)
+        XCTAssertNotNil((saved[Version1Fixture.finder] as? [String: Any])?["rings"])
+    }
+
+    func testSetAppHUDInheritanceUpdatesOnlyExistingReadableProfiles() throws {
+        let fixture = Version1Fixture()
+        var configuration = try JSONDecoder().decode(Configuration.self, from: fixture.data())
+        var rings = try XCTUnwrap(
+            configuration.appHUDProfile(forBundleIdentifier: Version1Fixture.finder)?.rings
+        )
+        rings.inner.hidden = []
+
+        XCTAssertTrue(configuration.setAppHUDInheritance(rings, forBundleIdentifier: Version1Fixture.finder))
+        XCTAssertEqual(configuration.appHUDProfile(forBundleIdentifier: Version1Fixture.finder)?.rings, rings)
+        XCTAssertEqual(
+            configuration.resolvedAppLayout(forBundleIdentifier: Version1Fixture.finder)?
+                .layout.inner.map(\.label),
+            ["Note", "Copy", "Paste"]
+        )
+        XCTAssertFalse(configuration.setAppHUDInheritance(AppHUDRings(), forBundleIdentifier: "com.apple.Notes"))
+        XCTAssertNil(configuration.appHUDProfile(forBundleIdentifier: "com.apple.Notes"))
+    }
+
+    func testLoadRepairTurnsOrphanedOverrideIntoAppOnlyItem() throws {
+        let fixture = Version1Fixture()
+        let orphan = RingMenuItem(label: "Gone", icon: "xmark", actionType: .custom, actionData: "kept")
+        let profile = AppHUDProfile(rings: AppHUDRings(
+            inner: RingInheritance(overrides: [orphan.id: orphan])
+        ))
+        var configuration = fixture.configuration
+        XCTAssertTrue(configuration.setAppHUDProfile(profile, forBundleIdentifier: "com.apple.Safari"))
+
+        let reloaded = try JSONDecoder().decode(
+            Configuration.self,
+            from: JSONEncoder().encode(configuration)
+        )
+
+        let rings = try XCTUnwrap(reloaded.appHUDProfile(forBundleIdentifier: "com.apple.Safari")?.rings)
+        XCTAssertTrue(rings.inner.overrides.isEmpty)
+        XCTAssertEqual(rings.inner.appOnly.map(\.item), [orphan])
+        XCTAssertEqual(
+            reloaded.resolvedAppLayout(forBundleIdentifier: "com.apple.Safari")?.layout.inner.last,
+            orphan
+        )
     }
 
     func testServicePreservesUnreadableProfileDuringUnrelatedSave() async throws {
@@ -517,6 +707,28 @@ final class ConfigurationServiceTests: XCTestCase {
         XCTAssertTrue(stillHasBackup)
     }
 
+    private func writeRaw(_ data: Data, to service: ConfigurationService) async throws {
+        let store = await service.store
+        try FileManager.default.createDirectory(
+            at: store.configurationURL.deletingLastPathComponent(),
+            withIntermediateDirectories: true
+        )
+        try data.write(to: store.configurationURL)
+    }
+
+    private func savedObject(_ store: ConfigurationStore) throws -> [String: Any] {
+        try XCTUnwrap(
+            JSONSerialization.jsonObject(with: Data(contentsOf: store.configurationURL))
+                as? [String: Any]
+        )
+    }
+
+    private func directoryListing(_ store: ConfigurationStore) throws -> [String] {
+        try FileManager.default.contentsOfDirectory(
+            atPath: store.configurationURL.deletingLastPathComponent().path
+        ).sorted()
+    }
+
     private func makeService() -> ConfigurationService {
         ConfigurationService(store: ConfigurationStore(directoryURL: makeTemporaryDirectory()))
     }
@@ -638,6 +850,47 @@ final class ConfigurationServiceTests: XCTestCase {
             }
         }
         return flatten(configuration.inner) + flatten(configuration.middle)
+    }
+}
+
+/// A 0.1.0-shaped configuration: the Finder App HUD is a full copy (`layout`)
+/// with an unchanged item, an edited item, an app-only item, a removed Global
+/// item and its own middle order.
+private struct Version1Fixture {
+    static let finder = "com.apple.finder"
+
+    let copy = RingMenuItem(label: "Copy", icon: "doc.on.doc", actionType: .custom)
+    let paste = RingMenuItem(label: "Paste", icon: "doc.on.clipboard", actionType: .custom)
+    let apps = RingMenuItem(label: "Apps", icon: "square.grid.2x2", actionType: .custom)
+    let snap = RingMenuItem(label: "Snap", icon: "rectangle.split.2x1", actionType: .custom)
+    let note = RingMenuItem(label: "Note", icon: "note.text", actionType: .custom)
+
+    var v1Layout: HUDActionLayout {
+        var finderSnap = snap
+        finderSnap.label = "Finder Snap"
+        return HUDActionLayout(inner: [note, copy], middle: [finderSnap, apps])
+    }
+
+    var configuration: Configuration {
+        Configuration(
+            inner: [copy, paste],
+            middle: [apps, snap],
+            appHUDProfiles: [Self.finder: AppHUDProfile(layout: v1Layout)]
+        )
+    }
+
+    /// An in-memory copied profile encodes the version 1 `layout` shape, exactly
+    /// as 0.1.0 wrote it.
+    func data() throws -> Data {
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+        let data = try encoder.encode(configuration)
+        let object = try JSONSerialization.jsonObject(with: data) as? [String: Any]
+        let profile = (object?["appHUDProfiles"] as? [String: Any])?[Self.finder] as? [String: Any]
+        guard profile?["layout"] != nil, profile?["rings"] == nil else {
+            throw FixtureFailure.expectedLoadedConfiguration("version 1 fixture")
+        }
+        return data
     }
 }
 

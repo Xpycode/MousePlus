@@ -26,7 +26,9 @@ enum HUDProfileResolution: String, Codable, Equatable, Sendable {
     case unavailableProfile
 }
 
-/// Fully resolved, invocation-frozen inputs for the runtime HUD.
+/// Fully resolved, invocation-frozen inputs for the runtime HUD. For an App
+/// HUD, `actionLayout` is Global plus that app's inheritance metadata, resolved
+/// once when the HUD opens (`AppHUDResolver`); it does not follow later saves.
 struct ResolvedHUDProfile: Equatable {
     let route: HUDInvocationRoute
     let profileReference: HUDProfileReference

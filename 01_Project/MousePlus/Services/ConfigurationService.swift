@@ -62,6 +62,16 @@ actor ConfigurationService: ConfigurationPersisting {
         return .loaded(try decode(at: store.configurationURL))
     }
 
+    /// Where the configuration file is copied, unchanged, before the first save
+    /// that replaces copied (version 1) App HUDs with inheritance metadata.
+    nonisolated var preInheritanceBackupURL: URL {
+        let configurationURL = store.configurationURL
+        return configurationURL.deletingLastPathComponent().appendingPathComponent(
+            configurationURL.deletingPathExtension().lastPathComponent
+                + ".pre-app-hud-inheritance.json"
+        )
+    }
+
     func save(_ configuration: Configuration) async throws {
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
@@ -73,7 +83,24 @@ actor ConfigurationService: ConfigurationPersisting {
             try fileManager.createDirectory(at: directory, withIntermediateDirectories: true)
         }
 
+        try writePreInheritanceBackupIfNeeded()
         try data.write(to: store.configurationURL, options: .atomic)
+    }
+
+    /// Copies the on-disk file to `preInheritanceBackupURL` when it still holds
+    /// copied App HUDs that loading migrates, so the save about to replace it
+    /// keeps a recovery point. Decided from disk rather than from this
+    /// instance's loads, so it holds whichever service instance saves first.
+    /// Never overwrites an existing backup; once the migrated file is saved,
+    /// later loads and saves find nothing to migrate and write nothing.
+    private func writePreInheritanceBackupIfNeeded() throws {
+        let backupURL = preInheritanceBackupURL
+        guard !fileManager.fileExists(atPath: backupURL.path),
+              fileManager.fileExists(atPath: store.configurationURL.path),
+              let existing = try? Data(contentsOf: store.configurationURL),
+              let decoded = try? JSONDecoder().decode(Configuration.self, from: existing),
+              decoded.migratedAppHUDProfilesOnLoad else { return }
+        try existing.write(to: backupURL, options: .atomic)
     }
 
     func reset() async throws {

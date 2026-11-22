@@ -4,7 +4,7 @@
 > Repair scheduling errors while preserving task IDs, completed evidence and approved scope.
 > Task state/evidence is authoritative here; TASKS links here and holds backlog/inbox.
 
-**Progress:** 3/11 tasks (Wave 1 complete); external acceptance: E1 (Atlas Settings check), E2 (user live acceptance).
+**Progress:** 5/11 tasks (Waves 1–2 complete); external acceptance: E1 (Atlas Settings check), E2 (user live acceptance).
 **Task states:** unchecked = pending / implemented-unverified / blocked (name gate);
 checked = complete with required evidence.
 
@@ -159,7 +159,7 @@ Paths: S = `01_Project/MousePlus`, T = `01_Project/MousePlusTests` (folders are 
 
 ### Wave 2 (parallel — both consume 1.1; disjoint files)
 
-- [ ] **2.1**: Configuration storage, migration at load, and runtime resolution (AC15, AC16).
+- [x] **2.1**: Configuration storage, migration at load, and runtime resolution (AC15, AC16).
   - Depends on: 1.1
   - Owns: `S/Models/Configuration.swift` (migration after decode, `appHUDProfile` accessors
     returning resolved data, `makeAppHUDProfileFromGlobal` → an empty `RingInheritance`,
@@ -174,7 +174,7 @@ Paths: S = `01_Project/MousePlus`, T = `01_Project/MousePlusTests` (folders are 
   - Backpressure: build succeeds; `AppSpecificHUDRuntimeTests`, `ConfigurationServiceTests`,
     `HUDTriggerRoutingTests`, `RingViewModelHUDTests`.
 
-- [ ] **2.2**: The editor model knows each item's origin, the hidden items and the order mode.
+- [x] **2.2**: The editor model knows each item's origin, the hidden items and the order mode.
   - Depends on: 1.1
   - Owns: `S/ViewModels/MenuEditorModel.swift` and `T/MenuEditorModelRegressionTests.swift`.
   - Interface:
@@ -284,10 +284,12 @@ Paths: S = `01_Project/MousePlus`, T = `01_Project/MousePlusTests` (folders are 
 
 ## Operational Learnings
 
-- **Worktree agents** branch from the last commit; commit plan/spec docs before dispatch or agents read them from the main checkout.
+- **Worktree agents** branch from `origin/main` (e456859), not local `main`; tell agents to `git merge --ff-only main` first (Wave 2 agents did).
 - **1.1 → 2.1/3.1 window:** the COMPAT `layout`/`inner`/`middle` accessors return an empty layout for a v2 profile, and assigning them reverts the profile to a v1 copy. Once 2.1 migrates at load, the coordinator's old paths (`SettingsWorkspaceCoordinator` ~lines 278, 538, 557) misbehave until 3.1 lands. Do not ship or live-test between 2.1 and 3.1; treat Waves 2–3 as one unit before any user build.
 - **`diff` contract (for 2.2/3.1):** `edited` must be the *complete* ring including not-shown items, or those Global items become hidden. Pass `origins` so `.customized` forces an override and `.inherited` drops an identical one (Revert to Global). Load-time fallback repair: `repairAfterGlobalChange(profile:, oldGlobal: g, newGlobal: g)`.
 - **Extra 1.1 API beyond the frozen list:** `AppHUDRings` container (`profile.rings`), `resolve(global:rings:)`, `AppHUDProfile.migrated(global:)`, `setRings`, `ringCapacity`, JSON-preservation helpers. A v1 profile passed to `resolve` is migrated in memory.
+- **2.1 API:** `resolvedAppLayout(forBundleIdentifier:)` (display), `setAppHUDInheritance(_ rings: AppHUDRings, forBundleIdentifier:) -> Bool` (existing readable profiles only), `repairAppHUDProfiles(afterGlobalChangeFrom:)` (for the Global-save repair). `appHUDProfile`/`validAppHUDProfiles` still return *stored* metadata (needed for the AC19 compare). Backup: `config.pre-app-hud-inheritance.json`, written once by `save()` when the on-disk file still needs migration.
+- **2.2 API:** `load(resolved:global:hudCustomization:preservingSelection:normalizeStoredValues:)`, `inheritanceEditState: AppHUDEditState?` (`edited` = full rings incl. not-shown, `origins`, `global`), `customizedItemIDs`, `origin(of:)`, `hiddenItems(band:)`, `hasCustomOrder(band:)` (derived), `notShown(band:)`, `customize/revertToGlobal/revertOrder/show(hidden:)`. Dirty check must compare `diff` output vs stored profile, not visible arrays. Reload with `load(resolved:)` after reset/create (`resetToDefaults` leaves stale origins).
 - **1.3 hook:** `RingMenuView.accessibilityLabelSuffix: ((RingMenuItem) -> String)?` (nil at runtime). 4.1 must pass `customizedItemIDs`/`appName` at the preview call site (`MenuEditorView.swift:30`) and `sourceLabel:` to `TestActionControl`.
 
 ## Blocked Tasks
@@ -301,6 +303,7 @@ Paths: S = `01_Project/MousePlus`, T = `01_Project/MousePlusTests` (folders are 
 | Wave / task IDs | Assignments or serial reason | Validation / evidence | Commits or exception | Remaining gates / next action or stop reason |
 |---|---|---|---|---|
 | Wave 1: 1.1, 1.2, 1.3 | Three parallel fresh-context agents in isolated worktrees (one per task); 1.3 was reassigned `RingMenuView.swift` to replace a duplicate accessibility layer with a suffix hook | Integrated `build-for-testing` (Debug, unsigned) in the main checkout: TEST BUILD SUCCEEDED; no new warnings. 27 tests in 1.1, 2 in 1.2, 4 in 1.3 compiled, **not run** (needs user test authorization) | d495f9a; test fix in the next commit | Focused run (user-authorized): AppHUDInheritanceTests, AppSpecificHUDModelTests, TestActionControllerTests, MenuEditorPreviewSyncTests, **56/56 passed** after narrowing one over-strict assertion (the resolved runtime layout doesn't carry layout-level unknown JSON; storage does, and that's asserted). Complete. Next: Wave 2 |
+| Wave 2: 2.1, 2.2 | Two parallel fresh-context agents in worktrees (fast-forwarded to 5d7ff79) | Integrated focused run: AppSpecificHUDRuntimeTests, ConfigurationServiceTests, HUDTriggerRoutingTests, RingViewModelHUDTests, MenuEditorModelRegressionTests, AppHUDInheritanceTests, TestActionControllerTests, MenuEditorPreviewSyncTests, **152/152 passed**. AppSpecificHUDModelTests and SettingsWorkspaceCoordinatorTests are known-broken (crash on empty `makeAppHUDProfileFromGlobal().inner`); fixing them is in 3.1's scope | See the Wave 2 commit | 3.1 next. Interim: the coordinator shows empty App HUD rings and an edit would save a v1 copy. No build handoff until 3.1 |
 
 ---
 *Keep active while required work or acceptance is incomplete. On completion, archive with execution

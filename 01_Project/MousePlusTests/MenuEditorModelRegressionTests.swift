@@ -288,4 +288,188 @@ final class MenuEditorModelRegressionTests: XCTestCase {
         XCTAssertEqual(decoded, original)
         XCTAssertEqual(decoded.dynamicSource, .runningApps)
     }
+
+    // MARK: - App HUD inheritance (AC9–AC13)
+
+    private struct AppFixture {
+        let a = RingMenuItem(label: "A", icon: "a.circle", actionType: .custom)
+        let b = RingMenuItem(label: "B", icon: "b.circle", actionType: .custom)
+        let c = RingMenuItem(label: "C", icon: "c.circle", actionType: .custom)
+        var global: HUDActionLayout { HUDActionLayout(inner: [], middle: [a, b, c]) }
+    }
+
+    private func makeAppModel(
+        global: HUDActionLayout,
+        middle: RingInheritance = RingInheritance()
+    ) -> MenuEditorModel {
+        let model = MenuEditorModel(inner: [], middle: [])
+        let resolved = AppHUDResolver.resolve(global: global, rings: AppHUDRings(middle: middle))
+        model.load(resolved: resolved, global: global, hudCustomization: .default, normalizeStoredValues: false)
+        return model
+    }
+
+    /// The middle ring a save would store, via the `diff` contract.
+    private func storedMiddle(_ model: MenuEditorModel) throws -> RingInheritance {
+        let state = try XCTUnwrap(model.inheritanceEditState)
+        return AppHUDResolver.diff(
+            edited: state.edited.middle,
+            previous: RingInheritance(),
+            global: state.global.middle,
+            origins: state.origins
+        )
+    }
+
+    func testAppHUDFieldAndSubItemEditsCustomizeInheritedItem() throws {
+        let f = AppFixture()
+        let model = makeAppModel(global: f.global)
+        XCTAssertTrue(model.isEditingAppHUD)
+        XCTAssertEqual(model.origin(of: f.a.id), .inherited)
+
+        let binding = try XCTUnwrap(model.binding(forItem: f.a.id, band: .middle))
+        binding.wrappedValue = binding.wrappedValue
+        XCTAssertEqual(model.origin(of: f.a.id), .inherited, "an unchanged write must not customize")
+
+        binding.wrappedValue.label = "App A"
+        XCTAssertEqual(model.origin(of: f.a.id), .customized)
+        XCTAssertEqual(model.customizedItemIDs, [f.a.id])
+        XCTAssertEqual(try storedMiddle(model).overrides[f.a.id]?.label, "App A")
+
+        model.addSubItem(toMiddle: f.b.id)
+        XCTAssertEqual(model.origin(of: f.b.id), .customized, "a sub-item edit customizes its parent")
+        XCTAssertEqual(model.origin(of: f.c.id), .inherited)
+    }
+
+    func testAppHUDCustomizeKeepsIdenticalCopyAndRevertFollowsGlobal() throws {
+        let f = AppFixture()
+        let model = makeAppModel(global: f.global)
+
+        model.customize(id: f.b.id)
+        XCTAssertEqual(model.origin(of: f.b.id), .customized)
+        XCTAssertEqual(model.middle[1], f.b, "Customize keeps the content identical")
+        XCTAssertEqual(try storedMiddle(model).overrides[f.b.id], f.b, "an identical explicit Customize sticks")
+
+        model.binding(forItem: f.b.id, band: .middle)?.wrappedValue.label = "Edited"
+        model.revertToGlobal(id: f.b.id)
+        XCTAssertEqual(model.origin(of: f.b.id), .inherited)
+        XCTAssertEqual(model.middle[1], f.b)
+        XCTAssertTrue(try storedMiddle(model).isEmpty)
+    }
+
+    func testAppHUDRemoveHidesGlobalItemAndShowRestoresItsPosition() throws {
+        let f = AppFixture()
+        let model = makeAppModel(global: f.global)
+        model.selection = SlotSelection(band: .middle, itemID: f.b.id, subItemID: nil)
+
+        model.removeSelectedItem()
+        XCTAssertEqual(model.middle.map(\.id), [f.a.id, f.c.id])
+        XCTAssertEqual(model.hiddenItems, [f.b])
+        XCTAssertNil(model.origin(of: f.b.id))
+        XCTAssertEqual(try storedMiddle(model).hidden, [f.b.id])
+
+        model.show(hidden: f.b)
+        XCTAssertEqual(model.middle.map(\.id), [f.a.id, f.b.id, f.c.id])
+        XCTAssertEqual(model.origin(of: f.b.id), .inherited)
+        XCTAssertTrue(model.hiddenItems.isEmpty)
+        XCTAssertTrue(try storedMiddle(model).isEmpty)
+    }
+
+    func testAppHUDRemoveDeletesAppOnlyItem() throws {
+        let f = AppFixture()
+        let model = makeAppModel(global: f.global)
+        model.addItem(to: .middle)
+        let added = try XCTUnwrap(model.selection?.itemID)
+        XCTAssertEqual(model.origin(of: added), .appOnly)
+
+        model.removeSelectedItem()
+        XCTAssertEqual(model.middle.map(\.id), [f.a.id, f.b.id, f.c.id])
+        XCTAssertTrue(model.hiddenItems.isEmpty)
+        XCTAssertTrue(try storedMiddle(model).isEmpty)
+    }
+
+    func testAppHUDShowInCustomOrderRingAppendsAtEnd() throws {
+        let f = AppFixture()
+        let model = makeAppModel(
+            global: f.global,
+            middle: RingInheritance(hidden: [f.a.id], customOrder: [f.c.id, f.b.id])
+        )
+        XCTAssertEqual(model.middle.map(\.id), [f.c.id, f.b.id])
+        XCTAssertTrue(model.hasCustomOrder(band: .middle))
+
+        model.show(hidden: f.a)
+        XCTAssertEqual(model.middle.map(\.id), [f.c.id, f.b.id, f.a.id])
+        XCTAssertEqual(model.origin(of: f.a.id), .inherited)
+    }
+
+    func testAppHUDMoveSetsCustomOrderAndRevertOrderKeepsAppOnlyAnchor() throws {
+        let f = AppFixture()
+        let x = RingMenuItem(label: "X", icon: "x.circle", actionType: .custom)
+        let model = makeAppModel(
+            global: f.global,
+            middle: RingInheritance(appOnly: [AppOnlyItem(item: x, after: f.a.id)])
+        )
+        XCTAssertEqual(model.middle.map(\.id), [f.a.id, x.id, f.b.id, f.c.id])
+        XCTAssertFalse(model.hasCustomOrder(band: .middle))
+
+        model.moveItem(id: f.c.id, in: .middle, by: -1)
+        XCTAssertEqual(model.middle.map(\.id), [f.a.id, x.id, f.c.id, f.b.id])
+        XCTAssertTrue(model.hasCustomOrder(band: .middle))
+        XCTAssertNotNil(try storedMiddle(model).customOrder)
+
+        model.revertOrder(band: .middle)
+        XCTAssertEqual(model.middle.map(\.id), [f.a.id, x.id, f.b.id, f.c.id])
+        XCTAssertFalse(model.hasCustomOrder(band: .middle))
+        XCTAssertNil(try storedMiddle(model).customOrder)
+        XCTAssertEqual(model.origin(of: x.id), .appOnly)
+    }
+
+    func testAppHUDNotShownItemsStayInFullRing() throws {
+        let globalItems = (0..<AppHUDResolver.ringCapacity).map {
+            RingMenuItem(label: "G\($0)", icon: "circle", actionType: .custom)
+        }
+        let extra = RingMenuItem(label: "Extra", icon: "plus", actionType: .custom)
+        let global = HUDActionLayout(inner: [], middle: globalItems)
+        let model = makeAppModel(
+            global: global,
+            middle: RingInheritance(appOnly: [AppOnlyItem(item: extra, after: globalItems.last?.id)])
+        )
+        XCTAssertEqual(model.middle.count, AppHUDResolver.ringCapacity)
+        XCTAssertEqual(model.notShown(band: .middle), [extra])
+        XCTAssertEqual(model.origin(of: extra.id), .appOnly)
+        XCTAssertEqual(try XCTUnwrap(model.inheritanceEditState).edited.middle.count, AppHUDResolver.ringCapacity + 1)
+        XCTAssertTrue(try storedMiddle(model).hidden.isEmpty, "not-shown items must not become hidden")
+
+        model.selection = SlotSelection(band: .middle, itemID: globalItems[0].id, subItemID: nil)
+        model.removeSelectedItem()
+        XCTAssertEqual(model.middle.last, extra, "hiding frees a slot for the not-shown item")
+        XCTAssertTrue(model.notShown(band: .middle).isEmpty)
+        XCTAssertEqual(model.hiddenItems, [globalItems[0]])
+    }
+
+    func testGlobalModeHasNoInheritanceAndRemoveDeletes() {
+        let f = AppFixture()
+        let model = makeAppModel(global: f.global)
+        model.load(resolved: nil, global: f.global, hudCustomization: .default)
+
+        XCTAssertFalse(model.isEditingAppHUD)
+        XCTAssertEqual(model.middle.map(\.id), [f.a.id, f.b.id, f.c.id])
+        XCTAssertNil(model.origin(of: f.a.id))
+        XCTAssertNil(model.inheritanceEditState)
+
+        model.binding(forItem: f.a.id, band: .middle)?.wrappedValue.label = "Edited"
+        model.customize(id: f.b.id)
+        model.moveItem(id: f.c.id, in: .middle, by: -1)
+        XCTAssertTrue(model.origins.isEmpty)
+        XCTAssertFalse(model.hasCustomOrder(band: .middle))
+
+        model.selection = SlotSelection(band: .middle, itemID: f.b.id, subItemID: nil)
+        model.removeSelectedItem()
+        XCTAssertEqual(model.middle.map(\.id), [f.a.id, f.c.id])
+        XCTAssertTrue(model.hiddenItems.isEmpty)
+        XCTAssertTrue(model.notShown(band: .middle).isEmpty)
+
+        // The existing Global entry point also leaves App HUD mode.
+        let app = makeAppModel(global: f.global)
+        app.load(actionLayout: f.global, hudCustomization: .default)
+        XCTAssertFalse(app.isEditingAppHUD)
+    }
 }

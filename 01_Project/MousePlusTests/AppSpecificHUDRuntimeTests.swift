@@ -124,6 +124,152 @@ final class AppSpecificHUDRuntimeTests: XCTestCase {
         XCTAssertEqual(model.innerItems.map(\.label), ["New Finder"])
     }
 
+    // MARK: - App HUD inheritance at runtime (AC1, AC2, AC15, AC16)
+
+    func testInheritingProfileShowsResolvedItemsAtRuntime() {
+        let copy = item("Copy")
+        let paste = item("Paste")
+        let apps = item("Apps")
+        let note = item("Note")
+        var finderPaste = paste
+        finderPaste.label = "Finder Paste"
+        let profile = AppHUDProfile(rings: AppHUDRings(inner: RingInheritance(
+            overrides: [paste.id: finderPaste],
+            appOnly: [AppOnlyItem(item: note, after: copy.id)]
+        )))
+        let configuration = Configuration(
+            inner: [copy, paste],
+            middle: [apps],
+            appHUDProfiles: ["com.apple.finder": profile]
+        )
+
+        let resolved = configuration.resolveHUD(
+            route: .contextual,
+            frontmostApp: finderSnapshot,
+            mousePlusBundleIdentifier: "com.xpycode.MousePlus"
+        )
+        let model = RingViewModel()
+        model.load(resolved: resolved, presentation: configuration)
+
+        XCTAssertEqual(resolved.resolution, .exactAppMatch)
+        XCTAssertEqual(resolved.profileReference, .app(bundleIdentifier: "com.apple.finder"))
+        XCTAssertEqual(
+            resolved.actionLayout,
+            configuration.resolvedAppLayout(forBundleIdentifier: "com.apple.finder")?.layout
+        )
+        XCTAssertEqual(model.innerItems.map(\.label), ["Copy", "Note", "Finder Paste"])
+        XCTAssertEqual(model.middleItems.map(\.label), ["Apps"])
+    }
+
+    func testNewAppHUDInheritsEveryGlobalItem() {
+        var configuration = Configuration(inner: [item("Copy")], middle: [item("Apps")])
+        let profile = configuration.makeAppHUDProfileFromGlobal()
+        XCTAssertEqual(profile.rings, AppHUDRings())
+        XCTAssertTrue(configuration.setAppHUDProfile(profile, forBundleIdentifier: "com.apple.finder"))
+
+        XCTAssertEqual(
+            configuration.resolveHUD(
+                route: .contextual,
+                frontmostApp: finderSnapshot,
+                mousePlusBundleIdentifier: "com.xpycode.MousePlus"
+            ).actionLayout,
+            HUDActionLayout(inner: configuration.inner, middle: configuration.middle)
+        )
+    }
+
+    func testInheritedItemFollowsGlobalEditAtNextOpeningOnly() {
+        let copy = item("Copy")
+        let paste = item("Paste")
+        var finderPaste = paste
+        finderPaste.label = "Finder Paste"
+        var configuration = Configuration(
+            inner: [copy, paste],
+            middle: [],
+            appHUDProfiles: ["com.apple.finder": AppHUDProfile(rings: AppHUDRings(
+                inner: RingInheritance(overrides: [paste.id: finderPaste])
+            ))]
+        )
+        let openHUD = RingViewModel()
+        openHUD.load(
+            resolved: configuration.resolveHUD(
+                route: .contextual,
+                frontmostApp: finderSnapshot,
+                mousePlusBundleIdentifier: "com.xpycode.MousePlus"
+            ),
+            presentation: configuration
+        )
+
+        // Global Save: record Command-C on Copy and rename Paste.
+        configuration.inner[0].keystrokePayload = .key(keyCode: 8, modifiers: 1 << 20)
+        configuration.inner[1].label = "Global Paste v2"
+
+        // AC15: the open HUD keeps what it resolved when it opened.
+        XCTAssertNil(openHUD.innerItems[0].keystrokePayload)
+        XCTAssertEqual(openHUD.innerItems.map(\.label), ["Copy", "Finder Paste"])
+
+        let nextHUD = RingViewModel()
+        nextHUD.load(
+            resolved: configuration.resolveHUD(
+                route: .contextual,
+                frontmostApp: finderSnapshot,
+                mousePlusBundleIdentifier: "com.xpycode.MousePlus"
+            ),
+            presentation: configuration
+        )
+        // AC1: inherited Copy follows Global. AC2: customized Paste does not.
+        XCTAssertEqual(nextHUD.innerItems[0].keystrokePayload, .key(keyCode: 8, modifiers: 1 << 20))
+        XCTAssertEqual(nextHUD.innerItems.map(\.label), ["Copy", "Finder Paste"])
+    }
+
+    func testVersion1ConfigurationResolvesIdenticallyAfterReloadAndThenFollowsGlobal() throws {
+        let copy = item("Copy")
+        let paste = item("Paste")
+        let note = item("Note")
+        let configuration = Configuration(
+            inner: [copy, paste],
+            middle: [],
+            appHUDProfiles: ["com.apple.finder": AppHUDProfile(layout: HUDActionLayout(
+                inner: [copy, note], middle: []
+            ))]
+        )
+        let before = configuration.resolveHUD(
+            route: .contextual,
+            frontmostApp: finderSnapshot,
+            mousePlusBundleIdentifier: "com.xpycode.MousePlus"
+        )
+
+        var reloaded = try JSONDecoder().decode(
+            Configuration.self,
+            from: JSONEncoder().encode(configuration)
+        )
+        let after = reloaded.resolveHUD(
+            route: .contextual,
+            frontmostApp: finderSnapshot,
+            mousePlusBundleIdentifier: "com.xpycode.MousePlus"
+        )
+        XCTAssertEqual(after, before)
+        XCTAssertEqual(after.actionLayout.inner.map(\.label), ["Copy", "Note"])
+
+        // The migrated Copy is inherited, so a later Global edit reaches it.
+        reloaded.inner[0].label = "Copy v2"
+        XCTAssertEqual(
+            reloaded.resolveHUD(
+                route: .contextual,
+                frontmostApp: finderSnapshot,
+                mousePlusBundleIdentifier: "com.xpycode.MousePlus"
+            ).actionLayout.inner.map(\.label),
+            ["Copy v2", "Note"]
+        )
+    }
+
+    private var finderSnapshot: FrontmostAppSnapshot {
+        FrontmostAppSnapshot(
+            processIdentifier: 41,
+            bundleIdentifier: "com.apple.finder",
+            localizedName: "Finder"
+        )
+    }
+
     func testCommittedActionsUseFrozenInvocationPIDAndReplacementOwnerPID() async {
         let executor = RecordingActionExecutor()
         let model = RingViewModel(actionService: executor)
