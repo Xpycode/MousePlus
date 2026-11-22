@@ -16,15 +16,15 @@
 - **Execution:** [plan](plans/app-hud-inheritance-implementation.md) all 11 tasks, review (5.2) and Atlas check (E1) done; awaiting E2, your live acceptance in Safari/Finder (unsigned build means re-granting Accessibility).
 - **Blocker:** No signing certificates on the M4 Pro; every unsigned rebuild loses its Accessibility permission and must be re-added by hand.
 - **Next:** E2 live acceptance; then archive the plan; local signing certificate once the 99-AUTH folder is on this Mac.
-- **Current handoff:** [2026-11-22 Resume (spec and plan)](sessions/2026-11-22.md#resume-spec-and-plan)
+- **Current handoff:** [2026-11-22 Resume (execution)](sessions/2026-11-22.md#resume-execution)
 
 ## Recent
 
+- **2026-11-22 (evening):** Built App HUD inheritance end to end. App menus now follow Global unless you customize, hide or reorder an item, and existing App HUDs convert without visible change. 250 of 251 focused tests pass (the failure was already broken), the review was clean, and the Settings screens passed the hidden-desktop check. Your live acceptance is next; 7 commits are not pushed yet.
 - **2026-11-22 (later):** Wrote and approved the App HUD inheritance spec (app menus follow Global unless customized, hidden or reordered) and an 11-task plan, using a code survey and web research on how other apps handle overrides.
 - **2026-11-22:** The mouse trigger button no longer also acts in other apps (Warp tab switching); Global menu saves no longer overwrite outside changes; Test Action sends keystrokes to the app you came from. User-verified and committed. Decided app menus will inherit from Global.
 - **2026-11-21:** Key labels now follow the keyboard layout; precautionary fix for the stale preview; fixed ring keystrokes going to MousePlus instead of the app underneath (ring panel no longer takes keyboard focus; user-accepted in Safari with Settings closed and open). Committed.
 - **2026-11-18:** Fresh clone and unsigned build on the reset M4 Pro; found a stale Menu Items preview and US-only key labels while setting it up.
-- **2026-09-26:** Verified plain/modifier recording, fixed preview dimensions, and passed 11 focused tests. Cleared a stuck macOS permission dialog; corrected signed build passed user-confirmed permission, trigger, and preview/layout acceptance. Changes merged and pushed to main.
 
 ## Progress
 
