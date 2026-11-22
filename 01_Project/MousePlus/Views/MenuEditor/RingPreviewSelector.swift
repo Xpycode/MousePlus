@@ -90,11 +90,12 @@ struct RingWedgeAccessibility: Equatable {
         position: Int,
         selected: Bool,
         unavailableReason: String? = nil,
-        identifierPrefix: String = "hud.wedge"
+        identifierPrefix: String = "hud.wedge",
+        labelSuffix: String = ""
     ) {
         let itemLabel = item.label.isEmpty ? "unlabeled" : item.label
         let symbolState = SFSymbol.isValid(item.icon) ? "" : ", invalid symbol; placeholder shown"
-        label = "\(band) wedge, position \(position + 1), \(itemLabel), action \(item.actionType.displayName)\(symbolState)"
+        label = "\(band) wedge, position \(position + 1), \(itemLabel), action \(item.actionType.displayName)\(symbolState)\(labelSuffix)"
         isSelected = selected
         isUnavailable = unavailableReason != nil
         value = [
@@ -102,6 +103,34 @@ struct RingWedgeAccessibility: Equatable {
             unavailableReason.map { "Unavailable. \($0)" }
         ].compactMap { $0 }.joined(separator: ". ")
         identifier = "\(identifierPrefix).\(band.lowercased()).\(position + 1)"
+    }
+}
+
+/// Editor-preview marking for items an App HUD has customized. Decoration
+/// only: the dot never hit-tests and never alters selection geometry. The
+/// accessibility label gains a suffix so the mark is not visual-only.
+enum RingPreviewCustomizationMarker {
+    static let dotDiameter: CGFloat = 6
+    /// Inset from the band's outer edge, keeping the dot clear of the
+    /// centroid glyph and caption.
+    static let dotEdgeInset: CGFloat = 7
+
+    static func accessibilitySuffix(
+        itemID: UUID, customizedItemIDs: Set<UUID>, appName: String?
+    ) -> String {
+        guard customizedItemIDs.contains(itemID) else { return "" }
+        guard let appName, !appName.isEmpty else { return ", customized" }
+        return ", customized for \(appName)"
+    }
+
+    /// The wedge's angular midpoint, just inside its band's outer edge, in the
+    /// ring's top-left-origin local space (`+y` down, like `RadialGeometry`).
+    static func dotPosition(
+        start: Angle, end: Angle, outerRadius: CGFloat, center: CGPoint
+    ) -> CGPoint {
+        let mid = CGFloat((start.radians + end.radians) / 2)
+        let r = outerRadius - dotEdgeInset
+        return CGPoint(x: center.x + r * cos(mid), y: center.y + r * sin(mid))
     }
 }
 
@@ -159,6 +188,11 @@ struct RingAccessibilitySnapshot {
 struct RingPreviewSelector: View {
     @Bindable var model: MenuEditorModel
     var appearance: AppearanceConfig = .default
+    /// Items the selected App HUD has customized. Empty (the default) leaves
+    /// the preview exactly as before: no dots and no label suffix.
+    var customizedItemIDs: Set<UUID> = []
+    /// App name for the ", customized for <App>" accessibility suffix.
+    var appName: String? = nil
     @State private var preview = RingViewModel()
     private let canvasSide: CGFloat = 448
 
@@ -186,9 +220,15 @@ struct RingPreviewSelector: View {
                 accessibilityIdentifierPrefix: "menuItems.preview.wedge",
                 exposesCenterSettings: false,
                 onAccessibilitySelection: applyAccessibilitySelection,
-                persistentSelection: editorActiveSelection
+                persistentSelection: editorActiveSelection,
+                accessibilityLabelSuffix: accessibilityLabelSuffix
             )
                 .allowsHitTesting(false)
+            if !customizedItemIDs.isEmpty {
+                customizationDots
+                    .allowsHitTesting(false)
+                    .accessibilityHidden(true)
+            }
             HUDPreviewInteractionView(
                 snapshot: snapshot,
                 onHover: { preview.activeSelection = $0 },
@@ -214,6 +254,67 @@ struct RingPreviewSelector: View {
             inner: model.inner, middle: model.middle,
             hudCustomization: model.hudCustomization, appearance: appearance
         )
+    }
+
+    // MARK: - Customization marks (App HUD only)
+
+    private var visibleOuterItems: [RingMenuItem] {
+        preview.isOuterRingVisible ? preview.outerItems : []
+    }
+
+    private func wedgeAngles(_ band: Band, _ index: Int) -> (start: Angle, end: Angle) {
+        RadialGeometry.wedgeAngles(
+            band: band, index: index, geometry: preview.geometry,
+            expandedParentIndex: preview.expandedParentIndex,
+            outerCount: preview.outerItems.count,
+            outerLayout: preview.outerRingLayout
+        )
+    }
+
+    private func bandRadii(_ band: Band) -> (inner: CGFloat, outer: CGFloat) {
+        switch band {
+        case .inner: (preview.radii.r0, preview.radii.r1)
+        case .middle: (preview.radii.r1, preview.radii.r2)
+        case .outer: (preview.radii.r2, preview.radii.r3)
+        }
+    }
+
+    /// Fixed-size overlay in the ring's own square: it cannot shift layout,
+    /// and the caller disables hit-testing and hides it from accessibility.
+    private var customizationDots: some View {
+        let side = 2 * preview.radii.r3
+        let center = CGPoint(x: side / 2, y: side / 2)
+        let marks: [(band: Band, index: Int, id: UUID)] =
+            preview.innerItems.enumerated().map { (.inner, $0.offset, $0.element.id) }
+            + preview.middleItems.enumerated().map { (.middle, $0.offset, $0.element.id) }
+            + visibleOuterItems.enumerated().map { (.outer, $0.offset, $0.element.id) }
+        return ZStack {
+            ForEach(marks.filter { customizedItemIDs.contains($0.id) }, id: \.id) { mark in
+                let angles = wedgeAngles(mark.band, mark.index)
+                Circle()
+                    .fill(Color.accentColor)
+                    .frame(width: RingPreviewCustomizationMarker.dotDiameter,
+                           height: RingPreviewCustomizationMarker.dotDiameter)
+                    .position(RingPreviewCustomizationMarker.dotPosition(
+                        start: angles.start, end: angles.end,
+                        outerRadius: bandRadii(mark.band).outer, center: center
+                    ))
+            }
+        }
+        .frame(width: side, height: side)
+    }
+
+    /// Handed to RingMenuView so its single wedge accessibility layer labels
+    /// marked items ", customized for <App>". Nil when nothing is marked.
+    private var accessibilityLabelSuffix: ((RingMenuItem) -> String)? {
+        guard !customizedItemIDs.isEmpty else { return nil }
+        let ids = customizedItemIDs
+        let name = appName
+        return { item in
+            RingPreviewCustomizationMarker.accessibilitySuffix(
+                itemID: item.id, customizedItemIDs: ids, appName: name
+            )
+        }
     }
 
     private var outerRingGuidePresentation: EditorOuterRingGuidePresentation {

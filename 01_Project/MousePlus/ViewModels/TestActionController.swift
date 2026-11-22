@@ -41,6 +41,21 @@ final class TestActionController {
         )
     }
 
+    /// Accessibility value for the Test Action button. `sourceLabel` names where
+    /// the item comes from (for example "from Global" or "only in Safari") and is
+    /// only added to a shown result; `nil` keeps the plain Global wording.
+    func accessibilityValue(
+        for displayedResult: SettingsActionResult?,
+        presentation: TestActionPresentation,
+        sourceLabel: String? = nil
+    ) -> String {
+        if let displayedResult {
+            let source = sourceLabel.map { " Item \($0)." } ?? ""
+            return "\(displayedResult.result.userFacingText).\(source) Activate to dismiss."
+        }
+        return presentation.explanation ?? (isRunning ? "Testing" : "Ready")
+    }
+
     /// The persistence flush is deliberately part of this orchestration method:
     /// no caller can accidentally execute a dirty editor value first.
     func test(

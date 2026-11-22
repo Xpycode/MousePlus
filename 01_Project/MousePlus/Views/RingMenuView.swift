@@ -84,6 +84,9 @@ struct RingMenuView: View {
     /// Preview-only editor selection, drawn as a neutral marker. Runtime leaves
     /// this nil and continues to use `activeSelection` exclusively for hover.
     var persistentSelection: ActiveSelection? = nil
+    /// Preview-only: appended to a wedge's accessibility label (for example
+    /// ", customized for Safari"). Runtime leaves this nil: no suffix.
+    var accessibilityLabelSuffix: ((RingMenuItem) -> String)? = nil
 
     // T11: sourced from `AppearanceConfig` via the view model (persisted in Settings):
     //   - `keepSpokeLit`: also keep inner wedge `p` lit on the live branch (§2.3).
@@ -689,7 +692,8 @@ struct RingMenuView: View {
             selected: persistentSelection.map { $0 == ActiveSelection(band: band, index: index) }
                 ?? isActive(band, index),
             unavailableReason: unavailableReason,
-            identifierPrefix: accessibilityIdentifierPrefix
+            identifierPrefix: accessibilityIdentifierPrefix,
+            labelSuffix: accessibilityLabelSuffix?(item) ?? ""
         )
     }
 

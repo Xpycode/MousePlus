@@ -88,4 +88,60 @@ final class MenuEditorPreviewSyncTests: XCTestCase {
         runtime.load(from: config)
         XCTAssertEqual(snapshot.geometry, runtime.geometry)
     }
+
+    // MARK: - Customized-item marks (App HUD inheritance, task 1.3)
+
+    private func wedgeLabel(
+        for item: RingMenuItem, customizedItemIDs: Set<UUID>, appName: String?
+    ) -> String {
+        RingWedgeAccessibility(
+            item: item, band: "Middle", position: 0, selected: false,
+            identifierPrefix: "menuItems.preview.wedge",
+            labelSuffix: RingPreviewCustomizationMarker.accessibilitySuffix(
+                itemID: item.id, customizedItemIDs: customizedItemIDs, appName: appName
+            )
+        ).label
+    }
+
+    func testMarkedItemLabelGetsCustomizedForAppSuffix() {
+        let item = RingMenuItem(label: "Copy", icon: "doc.on.doc", actionType: .appSwitch)
+        let label = wedgeLabel(for: item, customizedItemIDs: [item.id], appName: "Safari")
+        XCTAssertTrue(label.hasSuffix(", customized for Safari"), label)
+        let plain = RingWedgeAccessibility(item: item, band: "Middle", position: 0,
+                                           selected: false).label
+        XCTAssertEqual(label, plain + ", customized for Safari")
+    }
+
+    func testUnmarkedItemLabelHasNoSuffix() {
+        let marked = RingMenuItem(label: "Copy", icon: "doc.on.doc", actionType: .appSwitch)
+        let unmarked = RingMenuItem(label: "Paste", icon: "doc.on.clipboard", actionType: .appSwitch)
+        let label = wedgeLabel(for: unmarked, customizedItemIDs: [marked.id], appName: "Safari")
+        XCTAssertFalse(label.contains("customized"), label)
+        XCTAssertEqual(label, RingWedgeAccessibility(item: unmarked, band: "Middle",
+                                                     position: 0, selected: false).label)
+    }
+
+    func testDefaultEmptySetAddsNoSuffix() {
+        let model = MenuEditorModel(inner: RingMenuItem.sampleInnerItems,
+                                    middle: RingMenuItem.sampleItems)
+        let selector = RingPreviewSelector(model: model)
+        XCTAssertTrue(selector.customizedItemIDs.isEmpty)
+        XCTAssertNil(selector.appName)
+        for item in model.inner + model.middle {
+            XCTAssertEqual(
+                RingPreviewCustomizationMarker.accessibilitySuffix(
+                    itemID: item.id, customizedItemIDs: selector.customizedItemIDs,
+                    appName: selector.appName
+                ),
+                ""
+            )
+        }
+    }
+
+    func testNilAppNameFallsBackToCustomized() {
+        let item = RingMenuItem(label: "Copy", icon: "doc.on.doc", actionType: .appSwitch)
+        let label = wedgeLabel(for: item, customizedItemIDs: [item.id], appName: nil)
+        XCTAssertTrue(label.hasSuffix(", customized"), label)
+        XCTAssertFalse(label.contains("customized for"), label)
+    }
 }

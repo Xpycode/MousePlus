@@ -4,6 +4,9 @@ struct TestActionControl: View {
     let item: RingMenuItem
     let contextAvailability: SettingsActionContextAvailability
     @Bindable var controller: TestActionController
+    /// Where the item comes from, e.g. "from Global" or "only in Safari".
+    /// `nil` (the Global profile) shows no caption.
+    var sourceLabel: String? = nil
 
     var body: some View {
         let presentation = controller.presentation(
@@ -19,9 +22,11 @@ struct TestActionControl: View {
                     title: buttonTitle(for: displayedResult),
                     isEnabled: displayedResult != nil || presentation.isEnabled,
                     accessibilityIdentifier: "menuItems.testAction",
-                    accessibilityValue: displayedResult.map {
-                        "\($0.result.userFacingText). Activate to dismiss."
-                    } ?? presentation.explanation ?? (controller.isRunning ? "Testing" : "Ready")
+                    accessibilityValue: controller.accessibilityValue(
+                        for: displayedResult,
+                        presentation: presentation,
+                        sourceLabel: sourceLabel
+                    )
                 ) {
                     Task { @MainActor in
                         if displayedResult != nil {
@@ -37,6 +42,13 @@ struct TestActionControl: View {
                     Text("Target: \(targetName)")
                         .font(.caption)
                         .foregroundStyle(.secondary)
+                }
+
+                if let sourceLabel {
+                    Text(sourceLabel)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .accessibilityIdentifier("menuItems.testAction.source")
                 }
             }
 

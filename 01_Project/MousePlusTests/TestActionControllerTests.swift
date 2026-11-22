@@ -170,6 +170,58 @@ final class TestActionControllerTests: XCTestCase {
         XCTAssertNil(retained)
     }
 
+    func testSourceLabelIsAddedToResultAccessibilityValue() {
+        let controller = TestActionController(
+            coordinator: makeCoordinator(TestActionPersistence(configuration: Configuration()))
+        )
+        let result = SettingsActionResult(itemID: UUID(), result: .failed(message: "Denied"))
+        let presentation = TestActionPresentation(isEnabled: true, explanation: nil, targetName: nil)
+
+        XCTAssertEqual(
+            controller.accessibilityValue(
+                for: result, presentation: presentation, sourceLabel: "customized for Safari"
+            ),
+            "Denied. Item customized for Safari. Activate to dismiss."
+        )
+        XCTAssertEqual(
+            controller.accessibilityValue(
+                for: result, presentation: presentation, sourceLabel: "only in Safari"
+            ),
+            "Denied. Item only in Safari. Activate to dismiss."
+        )
+    }
+
+    func testNilSourceLabelLeavesAccessibilityValueUnchanged() {
+        let controller = TestActionController(
+            coordinator: makeCoordinator(TestActionPersistence(configuration: Configuration()))
+        )
+        let result = SettingsActionResult(itemID: UUID(), result: .failed(message: "Denied"))
+        let ready = TestActionPresentation(isEnabled: true, explanation: nil, targetName: nil)
+        let explained = TestActionPresentation(
+            isEnabled: false, explanation: "No target.", targetName: nil
+        )
+
+        XCTAssertEqual(
+            controller.accessibilityValue(for: result, presentation: ready, sourceLabel: nil),
+            "Denied. Activate to dismiss."
+        )
+        XCTAssertEqual(
+            controller.accessibilityValue(for: result, presentation: ready),
+            "Denied. Activate to dismiss."
+        )
+        XCTAssertEqual(controller.accessibilityValue(for: nil, presentation: ready), "Ready")
+        XCTAssertEqual(
+            controller.accessibilityValue(for: nil, presentation: explained), "No target."
+        )
+        // Before a result exists, the source label does not alter the status wording.
+        XCTAssertEqual(
+            controller.accessibilityValue(
+                for: nil, presentation: ready, sourceLabel: "from Global"
+            ),
+            "Ready"
+        )
+    }
+
     private func directItem() -> RingMenuItem {
         RingMenuItem(label: "Command", icon: "terminal", actionType: .custom, actionData: "true")
     }

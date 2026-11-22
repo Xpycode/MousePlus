@@ -4,7 +4,7 @@
 > Repair scheduling errors while preserving task IDs, completed evidence and approved scope.
 > Task state/evidence is authoritative here; TASKS links here and holds backlog/inbox.
 
-**Progress:** 0/11 tasks; external acceptance: E1 (Atlas Settings check), E2 (user live acceptance).
+**Progress:** 0/11 tasks complete (Wave 1 implemented, build-verified, tests not yet run); external acceptance: E1 (Atlas Settings check), E2 (user live acceptance).
 **Task states:** unchecked = pending / implemented-unverified / blocked (name gate);
 checked = complete with required evidence.
 
@@ -100,7 +100,7 @@ layouts. A Global-only edit leaves App HUD storage byte-equal.
 
 ## Execution schedule and ownership
 
-- **Execution scope/limits:** planning only. Execution has not been requested yet.
+- **Execution scope/limits:** user requested Wave 1 only (2026-11-22). Later waves need a new request.
 - **Testing limit:** `xcodebuild test` launches the app on the user's desktop. It is excluded
   from the standing permissions (`34_testing.md`), so each wave's test run needs the user to
   authorize it or to run it themselves. Building with `xcodebuild build` is allowed. Pure model
@@ -284,7 +284,11 @@ Paths: S = `01_Project/MousePlus`, T = `01_Project/MousePlusTests` (folders are 
 
 ## Operational Learnings
 
-- (none yet)
+- **Worktree agents** branch from the last commit; commit plan/spec docs before dispatch or agents read them from the main checkout.
+- **1.1 → 2.1/3.1 window:** the COMPAT `layout`/`inner`/`middle` accessors return an empty layout for a v2 profile, and assigning them reverts the profile to a v1 copy. Once 2.1 migrates at load, the coordinator's old paths (`SettingsWorkspaceCoordinator` ~lines 278, 538, 557) misbehave until 3.1 lands. Do not ship or live-test between 2.1 and 3.1; treat Waves 2–3 as one unit before any user build.
+- **`diff` contract (for 2.2/3.1):** `edited` must be the *complete* ring including not-shown items, or those Global items become hidden. Pass `origins` so `.customized` forces an override and `.inherited` drops an identical one (Revert to Global). Load-time fallback repair: `repairAfterGlobalChange(profile:, oldGlobal: g, newGlobal: g)`.
+- **Extra 1.1 API beyond the frozen list:** `AppHUDRings` container (`profile.rings`), `resolve(global:rings:)`, `AppHUDProfile.migrated(global:)`, `setRings`, `ringCapacity`, JSON-preservation helpers. A v1 profile passed to `resolve` is migrated in memory.
+- **1.3 hook:** `RingMenuView.accessibilityLabelSuffix: ((RingMenuItem) -> String)?` (nil at runtime). 4.1 must pass `customizedItemIDs`/`appName` at the preview call site (`MenuEditorView.swift:30`) and `sourceLabel:` to `TestActionControl`.
 
 ## Blocked Tasks
 
@@ -296,6 +300,7 @@ Paths: S = `01_Project/MousePlus`, T = `01_Project/MousePlusTests` (folders are 
 
 | Wave / task IDs | Assignments or serial reason | Validation / evidence | Commits or exception | Remaining gates / next action or stop reason |
 |---|---|---|---|---|
+| Wave 1: 1.1, 1.2, 1.3 | Three parallel fresh-context agents in isolated worktrees (one per task); 1.3 was reassigned `RingMenuView.swift` to replace a duplicate accessibility layer with a suffix hook | Integrated `build-for-testing` (Debug, unsigned) in the main checkout: TEST BUILD SUCCEEDED; no new warnings. 27 tests in 1.1, 2 in 1.2, 4 in 1.3 compiled, **not run** (needs user test authorization) | See the Wave 1 commit | Boxes stay unchecked until the focused tests pass: `-only-testing:` AppHUDInheritanceTests, AppSpecificHUDModelTests, TestActionControllerTests, MenuEditorPreviewSyncTests. Next: the test run, then Wave 2 on request |
 
 ---
 *Keep active while required work or acceptance is incomplete. On completion, archive with execution
