@@ -70,23 +70,28 @@ final class AppSpecificHUDModelTests: XCTestCase {
         XCTAssertEqual(decoded.middle, RingMenuItem.sampleItems)
     }
 
-    func testProfileCreatedFromGlobalHasIndependentValueSemantics() {
+    func testProfileCreatedFromGlobalHasIndependentValueSemantics() throws {
         var configuration = Configuration(
             inner: makeLayout("Global").inner,
             middle: makeLayout("Global").middle
         )
-        var finderProfile = configuration.makeAppHUDProfileFromGlobal()
+        let finderProfile = configuration.makeAppHUDProfileFromGlobal()
         XCTAssertTrue(configuration.setAppHUDProfile(finderProfile, forBundleIdentifier: finderBundleID))
 
-        finderProfile.inner[0].label = "Finder changed"
-        XCTAssertTrue(configuration.setAppHUDProfile(finderProfile, forBundleIdentifier: finderBundleID))
+        // Customizing the app's copy is an override; Global keeps its own value.
+        var customized = configuration.inner[0]
+        customized.label = "Finder changed"
+        var rings = try XCTUnwrap(finderProfile.rings)
+        rings.inner.setOverride(customized, preservingJSON: nil)
+        XCTAssertTrue(configuration.setAppHUDInheritance(rings, forBundleIdentifier: finderBundleID))
         configuration.inner[0].label = "Global changed"
+        configuration.middle[0].label = "Global middle changed"
 
         XCTAssertEqual(configuration.inner[0].label, "Global changed")
-        XCTAssertEqual(
-            configuration.appHUDProfile(forBundleIdentifier: finderBundleID)?.inner[0].label,
-            "Finder changed"
-        )
+        let resolved = try XCTUnwrap(configuration.resolvedAppLayout(forBundleIdentifier: finderBundleID))
+        XCTAssertEqual(resolved.layout.inner[0].label, "Finder changed")
+        // The untouched item still follows Global.
+        XCTAssertEqual(resolved.layout.middle[0].label, "Global middle changed")
     }
 
     func testGlobalUnknownItemFieldsSurviveSaveAndCreateByCopy() throws {
@@ -139,11 +144,24 @@ final class AppSpecificHUDModelTests: XCTestCase {
         )
         let profiles = try XCTUnwrap(saved["appHUDProfiles"] as? [String: Any])
         let finder = try XCTUnwrap(profiles[finderBundleID] as? [String: Any])
-        let layout = try XCTUnwrap(finder["layout"] as? [String: Any])
-        let copiedInner = try XCTUnwrap(layout["inner"] as? [[String: Any]])
+        // A created App HUD stores inheritance metadata only, never a copy.
+        XCTAssertNotNil(finder["rings"])
+        XCTAssertNil(finder["layout"])
+        // Its inherited items resolve with Global's unknown item JSON.
+        let resolved = try XCTUnwrap(decoded.resolvedAppLayout(forBundleIdentifier: finderBundleID))
+        let resolvedObject = try XCTUnwrap(
+            JSONSerialization.jsonObject(with: JSONEncoder().encode(resolved.layout)) as? [String: Any]
+        )
+        let resolvedInner = try XCTUnwrap(resolvedObject["inner"] as? [[String: Any]])
         XCTAssertEqual(
-            ((copiedInner[0]["futureInner"] as? [String: Any])?["token"] as? String),
+            ((resolvedInner[0]["futureInner"] as? [String: Any])?["token"] as? String),
             "inner-v2"
+        )
+        let resolvedMiddle = try XCTUnwrap(resolvedObject["middle"] as? [[String: Any]])
+        let resolvedChildren = try XCTUnwrap(resolvedMiddle[0]["subItems"] as? [[String: Any]])
+        XCTAssertEqual(
+            ((resolvedChildren[0]["futureChild"] as? [String: Any])?["token"] as? String),
+            "child-v2"
         )
     }
 
@@ -167,11 +185,23 @@ final class AppSpecificHUDModelTests: XCTestCase {
             frontmostApp: snapshot,
             mousePlusBundleIdentifier: mousePlusBundleID
         )
-        var changedProfile = try XCTUnwrap(
+        let storedProfile = try XCTUnwrap(
             configuration.appHUDProfile(forBundleIdentifier: finderBundleID)
         )
-        changedProfile.inner[0].label = "Changed after resolution"
+        var changedLayout = try XCTUnwrap(
+            configuration.resolvedAppLayout(forBundleIdentifier: finderBundleID)
+        ).layout
+        changedLayout.inner[0].label = "Changed after resolution"
+        let changedProfile = AppHUDResolver.diff(
+            edited: changedLayout,
+            previous: storedProfile,
+            global: configuration.globalHUDActionLayout
+        )
         XCTAssertTrue(configuration.setAppHUDProfile(changedProfile, forBundleIdentifier: finderBundleID))
+        XCTAssertEqual(
+            configuration.resolvedAppLayout(forBundleIdentifier: finderBundleID)?.layout.inner[0].label,
+            "Changed after resolution"
+        )
 
         XCTAssertEqual(resolved.profileReference, .app(bundleIdentifier: finderBundleID))
         XCTAssertEqual(resolved.resolution, .exactAppMatch)
@@ -334,27 +364,41 @@ final class AppSpecificHUDModelTests: XCTestCase {
         let source = try configurationJSON(appProfiles: [finderBundleID: profile])
         var decoded = try JSONDecoder().decode(Configuration.self, from: source)
 
-        var typed = try XCTUnwrap(decoded.appHUDProfile(forBundleIdentifier: finderBundleID))
-        XCTAssertEqual(typed.inner[0].actionType, .unavailable("futureAction"))
-        XCTAssertEqual(typed.inner[0].actionData, "opaque-payload")
-        typed.inner[0].label = "Edited Future A"
-        typed.inner[0].wedgeColor = nil
-        typed.middle[0].subItems?[1].label = "Edited Child B"
-        XCTAssertTrue(decoded.setAppHUDProfile(typed, forBundleIdentifier: finderBundleID))
+        // The v1 entry migrated at load; Global is empty, so every item is app-only.
+        let typed = try XCTUnwrap(decoded.appHUDProfile(forBundleIdentifier: finderBundleID))
+        XCTAssertTrue(typed.isInheriting)
+        var edited = try XCTUnwrap(decoded.resolvedAppLayout(forBundleIdentifier: finderBundleID)).layout
+        XCTAssertEqual(edited.inner[0].actionType, .unavailable("futureAction"))
+        XCTAssertEqual(edited.inner[0].actionData, "opaque-payload")
+        edited.inner[0].label = "Edited Future A"
+        edited.inner[0].wedgeColor = nil
+        edited.middle[0].subItems?[1].label = "Edited Child B"
+        let saved = AppHUDResolver.diff(
+            edited: edited,
+            previous: typed,
+            global: decoded.globalHUDActionLayout
+        )
+        XCTAssertTrue(decoded.setAppHUDInheritance(
+            try XCTUnwrap(saved.rings),
+            forBundleIdentifier: finderBundleID
+        ))
 
         let encoded = try JSONEncoder().encode(decoded)
         let object = try XCTUnwrap(JSONSerialization.jsonObject(with: encoded) as? [String: Any])
         let profiles = try XCTUnwrap(object["appHUDProfiles"] as? [String: Any])
         let savedProfile = try XCTUnwrap(profiles[finderBundleID] as? [String: Any])
         XCTAssertEqual(savedProfile["futureProfileSetting"] as? NSDictionary, ["mode": "v3"] as NSDictionary)
-        let savedLayout = try XCTUnwrap(savedProfile["layout"] as? [String: Any])
-        XCTAssertEqual(savedLayout["futureLayoutSetting"] as? NSDictionary, ["spacing": 12] as NSDictionary)
-        let savedInner = try XCTUnwrap(savedLayout["inner"] as? [[String: Any]])
+        XCTAssertNil(savedProfile["layout"])
+        // v1 layout-level unknown fields move to the rings record.
+        let savedRings = try XCTUnwrap(savedProfile["rings"] as? [String: Any])
+        XCTAssertEqual(savedRings["futureLayoutSetting"] as? NSDictionary, ["spacing": 12] as NSDictionary)
+        let savedInner = try appOnlyItems(savedRings, "inner")
+        XCTAssertEqual(savedInner.count, 2)
         XCTAssertEqual(savedInner[0]["label"] as? String, "Edited Future A")
         XCTAssertNil(savedInner[0]["wedgeColor"])
         XCTAssertEqual(savedInner[0]["futureItemSetting"] as? NSDictionary, ["slot": "first"] as NSDictionary)
         XCTAssertEqual(savedInner[1]["futureItemSetting"] as? NSDictionary, ["slot": "second"] as NSDictionary)
-        let savedMiddle = try XCTUnwrap(savedLayout["middle"] as? [[String: Any]])
+        let savedMiddle = try appOnlyItems(savedRings, "middle")
         let savedChildren = try XCTUnwrap(savedMiddle[0]["subItems"] as? [[String: Any]])
         XCTAssertEqual(savedChildren[1]["label"] as? String, "Edited Child B")
         XCTAssertEqual(savedChildren[0]["futureChildSetting"] as? String, "first-child")
@@ -371,7 +415,7 @@ final class AppSpecificHUDModelTests: XCTestCase {
 
         XCTAssertFalse(configuration.hasUnavailableAppHUDProfile(forBundleIdentifier: finderBundleID))
         XCTAssertEqual(
-            configuration.appHUDProfile(forBundleIdentifier: finderBundleID)?.inner[0].label,
+            configuration.resolvedAppLayout(forBundleIdentifier: finderBundleID)?.layout.inner[0].label,
             "Replacement inner"
         )
     }
@@ -432,6 +476,13 @@ final class AppSpecificHUDModelTests: XCTestCase {
             object["futureTopLevel"] = topLevelFuture
         }
         return try JSONSerialization.data(withJSONObject: object, options: [.sortedKeys])
+    }
+
+    /// The stored app-only item objects of one ring of a saved `rings` record.
+    private func appOnlyItems(_ rings: [String: Any], _ band: String) throws -> [[String: Any]] {
+        let ring = try XCTUnwrap(rings[band] as? [String: Any])
+        let records = try XCTUnwrap(ring["appOnly"] as? [[String: Any]])
+        return try records.map { try XCTUnwrap($0["item"] as? [String: Any]) }
     }
 
     private func makeLayout(_ prefix: String) -> HUDActionLayout {

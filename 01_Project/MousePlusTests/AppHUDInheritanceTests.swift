@@ -457,7 +457,7 @@ final class AppHUDInheritanceTests: XCTestCase {
         XCTAssertEqual(reloaded.migrated(global: global), once)
         XCTAssertEqual(
             AppHUDResolver.resolve(global: global, profile: reloaded).layout,
-            v1Profile.layout
+            v1Profile.v1Layout
         )
 
         let object = try jsonObject(once)
@@ -494,8 +494,8 @@ final class AppHUDInheritanceTests: XCTestCase {
         // Layout-level unknown fields live in storage (`rings`, asserted above); the resolved
         // runtime layout is never saved, so compare what is shown.
         let resolved = AppHUDResolver.resolve(global: global, profile: migrated)
-        XCTAssertEqual(resolved.layout.inner, v1.layout.inner)
-        XCTAssertEqual(resolved.layout.middle, v1.layout.middle)
+        XCTAssertEqual(resolved.layout.inner, v1.v1Layout?.inner)
+        XCTAssertEqual(resolved.layout.middle, v1.v1Layout?.middle)
         XCTAssertEqual(try savedItems(resolved.layout)[0]["futureItem"] as? Int, 1)
     }
 

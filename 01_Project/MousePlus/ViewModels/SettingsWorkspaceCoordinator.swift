@@ -39,6 +39,16 @@ final class SettingsWorkspaceCoordinator {
         case rejected
     }
 
+    /// One App HUD ring that resolves to more items than it can show (AC14).
+    /// The view turns `bundleIdentifier` into the app's display name with the
+    /// same lookup as the profile bar.
+    struct AppHUDOverflowWarning: Equatable, Hashable {
+        let bundleIdentifier: String
+        let band: Band
+        /// Items beyond the ring capacity, listed by the editor as not shown.
+        let count: Int
+    }
+
     enum Status: Equatable {
         case idle
         case loading
@@ -73,6 +83,11 @@ final class SettingsWorkspaceCoordinator {
     private(set) var isLoaded = false
     private(set) var workspaceState = SettingsWorkspaceState()
     private(set) var selectedHUDProfile: HUDProfileReference = .global
+    /// App HUD rings that overflow in the last loaded or saved configuration,
+    /// sorted by bundle identifier, inner before middle. Recomputed after every
+    /// load and every successful Menu Items save, so a Global save that pushes
+    /// an App HUD past 8 items publishes it and hiding or deleting there clears it.
+    private(set) var overflowWarnings: [AppHUDOverflowWarning] = []
     let menuEditorModel = MenuEditorModel(
         inner: RingMenuItem.sampleInnerItems,
         middle: RingMenuItem.sampleItems
@@ -108,6 +123,7 @@ final class SettingsWorkspaceCoordinator {
         do {
             configuration = try await persistence.loadResult().configuration
             menuItemsBaseline = configuration
+            overflowWarnings = Self.overflowWarnings(in: configuration)
             normalizeProfileSelection()
             loadSelectedProfileIntoEditor()
             dirtyFields.removeAll()
@@ -132,8 +148,10 @@ final class SettingsWorkspaceCoordinator {
         if fields.contains(.menuItems) {
             synchronizeEditorIfNeeded()
         }
+        let previousGlobal = configuration.globalHUDActionLayout
         mutation(&configuration)
         if fields.contains(.menuItems) {
+            configuration.repairAppHUDProfiles(afterGlobalChangeFrom: previousGlobal)
             normalizeProfileSelection()
             loadSelectedProfileIntoEditor()
         }
@@ -173,7 +191,7 @@ final class SettingsWorkspaceCoordinator {
         return true
     }
 
-    /// Creates one independent app layout from the current Global layout.
+    /// Creates an App HUD that inherits every Global item in Global's order.
     @discardableResult
     func createAppHUD(forBundleIdentifier bundleIdentifier: String) -> AppHUDCreationResult {
         guard isLoaded else { return .rejected }
@@ -265,19 +283,23 @@ final class SettingsWorkspaceCoordinator {
 
         switch selectedHUDProfile {
         case .global:
+            let previousGlobal = configuration.globalHUDActionLayout
             configuration.inner = RingMenuItem.sampleInnerItems
             configuration.middle = RingMenuItem.sampleItems
             configuration.hudCustomization = .default
+            configuration.repairAppHUDProfiles(afterGlobalChangeFrom: previousGlobal)
         case .app(let bundleIdentifier):
-            guard var profile = configuration.appHUDProfile(forBundleIdentifier: bundleIdentifier) else {
+            guard configuration.appHUDProfile(forBundleIdentifier: bundleIdentifier) != nil else {
                 selectedHUDProfile = .global
                 loadSelectedProfileIntoEditor()
                 workspaceState.reset = .failed("The selected App HUD is no longer available.")
                 return false
             }
-            profile.inner = configuration.inner
-            profile.middle = configuration.middle
-            guard configuration.setAppHUDProfile(profile, forBundleIdentifier: bundleIdentifier) else {
+            // Everything inherited again; profile-level unknown fields are kept.
+            guard configuration.setAppHUDInheritance(
+                AppHUDRings(),
+                forBundleIdentifier: bundleIdentifier
+            ) else {
                 workspaceState.reset = .failed("The selected App HUD could not be reset.")
                 return false
             }
@@ -456,6 +478,9 @@ final class SettingsWorkspaceCoordinator {
                 pendingAppHUDProfileRecovery = nil
             }
             menuItemsBaseline = merged
+            if fields.contains(.menuItems) {
+                overflowWarnings = Self.overflowWarnings(in: merged)
+            }
             configuration = try mergingUnsavedFields(from: configuration, into: merged)
             normalizeProfileSelection()
             loadSelectedProfileIntoEditor(preservingItemSelection: true)
@@ -492,6 +517,7 @@ final class SettingsWorkspaceCoordinator {
         into base: inout Configuration
     ) throws {
         if fields.contains(.menuItems) {
+            let freshGlobal = base.globalHUDActionLayout
             if pendingAppHUDProfileRecovery != nil {
                 // Recovery owns the complete saved menu snapshot, including
                 // forward-compatible raw fields attached to Global items.
@@ -517,27 +543,66 @@ final class SettingsWorkspaceCoordinator {
                 to: edited,
                 into: &base
             )
+            // After the per-profile reconcile, so its fresh-vs-baseline guards
+            // compare unrepaired disk profiles. Repairs every App HUD on the
+            // fresh base, including ones this workspace never loaded (AC7).
+            // Without a Global deletion nothing changes (AC19). A recovery
+            // snapshot's profiles belong to its own Global: load-time fallback.
+            base.repairAppHUDProfiles(
+                afterGlobalChangeFrom: pendingAppHUDProfileRecovery == nil
+                    ? freshGlobal
+                    : base.globalHUDActionLayout
+            )
         }
         if fields.contains(.triggers) { base.triggers = edited.triggers }
         if fields.contains(.appearance) { base.appearance = edited.appearance }
         if fields.contains(.behavior) { base.behavior = edited.behavior }
     }
 
+    /// True when the editor holds a change the selected profile does not.
+    /// App HUDs compare storage, not visible arrays: the edit is turned back into
+    /// inheritance metadata and only counts when it resolves differently from the
+    /// stored profile. Merely showing a profile therefore never dirties it, even
+    /// where `diff` would normalize storage (for example an anchor next to a
+    /// hidden item).
     private var editorDiffersFromSelectedProfile: Bool {
-        let layout = selectedActionLayout
-        return layout.inner != menuEditorModel.inner ||
-            layout.middle != menuEditorModel.middle ||
-            configuration.hudCustomization != menuEditorModel.hudCustomization
-    }
-
-    private var selectedActionLayout: HUDActionLayout {
+        if configuration.hudCustomization != menuEditorModel.hudCustomization { return true }
         switch selectedHUDProfile {
         case .global:
-            return configuration.globalHUDActionLayout
+            return configuration.inner != menuEditorModel.inner
+                || configuration.middle != menuEditorModel.middle
         case .app(let bundleIdentifier):
-            return configuration.appHUDProfile(forBundleIdentifier: bundleIdentifier)?.layout
-                ?? configuration.globalHUDActionLayout
+            guard let profile = configuration.appHUDProfile(forBundleIdentifier: bundleIdentifier),
+                  menuEditorModel.inheritanceEditState != nil else {
+                // Missing profile or an editor not loaded for it: let the merge
+                // path normalize the selection and reload.
+                return true
+            }
+            return editedAppHUDProfile(from: profile) != nil
         }
+    }
+
+    /// The selected App HUD resolved against the current Global; `nil` for
+    /// Global or a missing App HUD (the editor then shows Global).
+    private var selectedResolvedAppLayout: ResolvedAppLayout? {
+        guard let bundleIdentifier = selectedAppHUDBundleIdentifier else { return nil }
+        return configuration.resolvedAppLayout(forBundleIdentifier: bundleIdentifier)
+    }
+
+    /// The editor's App HUD edits as a stored profile, or `nil` when they resolve
+    /// exactly like `profile` (no change worth storing).
+    private func editedAppHUDProfile(from profile: AppHUDProfile) -> AppHUDProfile? {
+        guard let edit = menuEditorModel.inheritanceEditState else { return nil }
+        let edited = AppHUDResolver.diff(
+            edited: edit.edited,
+            previous: profile,
+            global: edit.global,
+            origins: edit.origins
+        )
+        guard edited != profile else { return nil }
+        let before = AppHUDResolver.resolve(global: edit.global, profile: profile)
+        let after = AppHUDResolver.resolve(global: edit.global, profile: edited)
+        return before == after ? nil : edited
     }
 
     @discardableResult
@@ -545,18 +610,28 @@ final class SettingsWorkspaceCoordinator {
         configuration.hudCustomization = menuEditorModel.hudCustomization
         switch selectedHUDProfile {
         case .global:
+            let previousGlobal = configuration.globalHUDActionLayout
             configuration.inner = menuEditorModel.inner
             configuration.middle = menuEditorModel.middle
+            // Keep every App HUD consistent with the new Global in memory, so an
+            // override of a deleted Global item becomes app-only before any App
+            // HUD is edited (AC7). Without a deletion nothing changes (AC19).
+            configuration.repairAppHUDProfiles(afterGlobalChangeFrom: previousGlobal)
             return true
         case .app(let bundleIdentifier):
-            guard var profile = configuration.appHUDProfile(forBundleIdentifier: bundleIdentifier) else {
+            guard let profile = configuration.appHUDProfile(forBundleIdentifier: bundleIdentifier) else {
                 selectedHUDProfile = .global
                 loadSelectedProfileIntoEditor()
                 return false
             }
-            profile.inner = menuEditorModel.inner
-            profile.middle = menuEditorModel.middle
-            return configuration.setAppHUDProfile(profile, forBundleIdentifier: bundleIdentifier)
+            guard menuEditorModel.inheritanceEditState != nil else {
+                loadSelectedProfileIntoEditor()
+                return false
+            }
+            // A customization-only change leaves the App HUD's storage untouched.
+            guard let edited = editedAppHUDProfile(from: profile) else { return true }
+            guard let rings = edited.rings else { return false }
+            return configuration.setAppHUDInheritance(rings, forBundleIdentifier: bundleIdentifier)
         }
     }
 
@@ -566,9 +641,12 @@ final class SettingsWorkspaceCoordinator {
         scheduleSave()
     }
 
+    /// Loads Global, or the selected App HUD resolved against the exact Global
+    /// it is resolved from (which the editor keeps for `diff`).
     private func loadSelectedProfileIntoEditor(preservingItemSelection: Bool = false) {
         menuEditorModel.load(
-            actionLayout: selectedActionLayout,
+            resolved: selectedResolvedAppLayout,
+            global: configuration.globalHUDActionLayout,
             hudCustomization: configuration.hudCustomization,
             preservingSelection: preservingItemSelection,
             normalizeStoredValues: false
@@ -586,6 +664,72 @@ final class SettingsWorkspaceCoordinator {
     private func normalizeProfileSelection() {
         if !profileExists(selectedHUDProfile) {
             selectedHUDProfile = .global
+        }
+    }
+
+    /// Whether two stored profiles hold the same inheritance metadata, ignoring
+    /// unknown JSON at every level (the old reconcile compared only the typed
+    /// action arrays, for the same reason).
+    private static func sameInheritance(_ lhs: AppHUDProfile, _ rhs: AppHUDProfile) -> Bool {
+        guard let left = lhs.rings, let right = rhs.rings else { return lhs.storage == rhs.storage }
+        return sameRing(left.inner, right.inner) && sameRing(left.middle, right.middle)
+    }
+
+    private static func sameRing(_ lhs: RingInheritance, _ rhs: RingInheritance) -> Bool {
+        lhs.overrides == rhs.overrides
+            && lhs.hidden == rhs.hidden
+            && lhs.customOrder == rhs.customOrder
+            && lhs.appOnly.map(\.item) == rhs.appOnly.map(\.item)
+            && lhs.appOnly.map(\.after) == rhs.appOnly.map(\.after)
+    }
+
+    /// `desired`'s metadata carrying `fresh`'s unknown JSON: rings- and
+    /// ring-level fields, override item JSON by ID and app-only records by ID
+    /// (each occurrence matched once, in order).
+    private static func rebase(_ desired: AppHUDRings, onto fresh: AppHUDRings) -> AppHUDRings {
+        AppHUDRings(
+            inner: rebase(desired.inner, onto: fresh.inner),
+            middle: rebase(desired.middle, onto: fresh.middle),
+            unknownFields: fresh.preservedUnknownFields
+        )
+    }
+
+    private static func rebase(_ desired: RingInheritance, onto fresh: RingInheritance) -> RingInheritance {
+        var result = RingInheritance(hidden: desired.hidden, customOrder: desired.customOrder)
+        for item in desired.overrides.values {
+            result.setOverride(
+                item,
+                preservingJSON: fresh.preservedJSON(forOverride: item.id)
+                    ?? desired.preservedJSON(forOverride: item.id)
+            )
+        }
+        var freshAppOnly: [UUID: [AppOnlyItem]] = [:]
+        for record in fresh.appOnly {
+            freshAppOnly[record.id, default: []].append(record)
+        }
+        result.appOnly = desired.appOnly.map { record in
+            guard var queue = freshAppOnly[record.id], !queue.isEmpty else { return record }
+            let freshRecord = queue.removeFirst()
+            freshAppOnly[record.id] = queue
+            return freshRecord.updated(
+                item: record.item,
+                after: record.after,
+                fallbackJSON: record.preservedJSON
+            )
+        }
+        result.setUnknownFields(fresh.preservedUnknownFields)
+        return result
+    }
+
+    private static func overflowWarnings(in configuration: Configuration) -> [AppHUDOverflowWarning] {
+        configuration.validAppHUDProfiles.keys.sorted().flatMap { bundleIdentifier -> [AppHUDOverflowWarning] in
+            guard let resolved = configuration.resolvedAppLayout(
+                forBundleIdentifier: bundleIdentifier
+            ) else { return [] }
+            return [Band.inner, .middle].compactMap { band in
+                guard let count = resolved.notShown[band]?.count, count > 0 else { return nil }
+                return AppHUDOverflowWarning(bundleIdentifier: bundleIdentifier, band: band, count: count)
+            }
         }
     }
 
@@ -682,17 +826,24 @@ final class SettingsWorkspaceCoordinator {
                 ) else {
                     throw MenuItemsMergeError.appProfilesChangedExternally
                 }
-                let freshMatchesOriginal = freshProfile.inner == originalProfile.inner
-                    && freshProfile.middle == originalProfile.middle
-                let freshMatchesDesired = freshProfile.inner == desiredProfile.inner
-                    && freshProfile.middle == desiredProfile.middle
+                // Stored inheritance metadata, never resolved layouts: a Global
+                // edit does not make an App HUD look changed here (AC19).
+                // Unknown JSON is not compared, so a newer writer's additions to
+                // this profile do not count as a conflicting edit.
+                let freshMatchesOriginal = Self.sameInheritance(freshProfile, originalProfile)
+                let freshMatchesDesired = Self.sameInheritance(freshProfile, desiredProfile)
                 guard freshMatchesOriginal || freshMatchesDesired else {
                     throw MenuItemsMergeError.appProfilesChangedExternally
                 }
-                // Apply only the action arrays to the fresh typed profile. Its
-                // forward-compatible profile/layout/item JSON remains the merge base.
-                freshProfile.inner = desiredProfile.inner
-                freshProfile.middle = desiredProfile.middle
+                // Apply only the inheritance metadata to the fresh typed profile.
+                // Its forward-compatible profile, rings, ring and item JSON
+                // remains the merge base.
+                guard let desiredRings = desiredProfile.rings else {
+                    throw MenuItemsMergeError.appProfilesChangedExternally
+                }
+                freshProfile.setRings(
+                    freshProfile.rings.map { Self.rebase(desiredRings, onto: $0) } ?? desiredRings
+                )
                 guard target.setAppHUDProfile(
                     freshProfile,
                     forBundleIdentifier: bundleIdentifier

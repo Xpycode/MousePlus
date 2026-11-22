@@ -4,7 +4,7 @@
 > Repair scheduling errors while preserving task IDs, completed evidence and approved scope.
 > Task state/evidence is authoritative here; TASKS links here and holds backlog/inbox.
 
-**Progress:** 5/11 tasks (Waves 1–2 complete); external acceptance: E1 (Atlas Settings check), E2 (user live acceptance).
+**Progress:** 6/11 tasks (Waves 1–3 complete); external acceptance: E1 (Atlas Settings check), E2 (user live acceptance).
 **Task states:** unchecked = pending / implemented-unverified / blocked (name gate);
 checked = complete with required evidence.
 
@@ -190,7 +190,7 @@ Paths: S = `01_Project/MousePlus`, T = `01_Project/MousePlusTests` (folders are 
 
 ### Wave 3 (serial — the riskiest integration, one owner)
 
-- [ ] **3.1**: The coordinator loads, merges, reconciles, creates, resets and restores with
+- [x] **3.1**: The coordinator loads, merges, reconciles, creates, resets and restores with
   inheritance. Overflow warnings.
   - Depends on: 2.1, 2.2
   - Serial reason: `SettingsWorkspaceCoordinator.swift` is the single owner of the save path and
@@ -290,6 +290,7 @@ Paths: S = `01_Project/MousePlus`, T = `01_Project/MousePlusTests` (folders are 
 - **Extra 1.1 API beyond the frozen list:** `AppHUDRings` container (`profile.rings`), `resolve(global:rings:)`, `AppHUDProfile.migrated(global:)`, `setRings`, `ringCapacity`, JSON-preservation helpers. A v1 profile passed to `resolve` is migrated in memory.
 - **2.1 API:** `resolvedAppLayout(forBundleIdentifier:)` (display), `setAppHUDInheritance(_ rings: AppHUDRings, forBundleIdentifier:) -> Bool` (existing readable profiles only), `repairAppHUDProfiles(afterGlobalChangeFrom:)` (for the Global-save repair). `appHUDProfile`/`validAppHUDProfiles` still return *stored* metadata (needed for the AC19 compare). Backup: `config.pre-app-hud-inheritance.json`, written once by `save()` when the on-disk file still needs migration.
 - **2.2 API:** `load(resolved:global:hudCustomization:preservingSelection:normalizeStoredValues:)`, `inheritanceEditState: AppHUDEditState?` (`edited` = full rings incl. not-shown, `origins`, `global`), `customizedItemIDs`, `origin(of:)`, `hiddenItems(band:)`, `hasCustomOrder(band:)` (derived), `notShown(band:)`, `customize/revertToGlobal/revertOrder/show(hidden:)`. Dirty check must compare `diff` output vs stored profile, not visible arrays. Reload with `load(resolved:)` after reset/create (`resetToDefaults` leaves stale origins).
+- **3.1:** `overflowWarnings: [AppHUDOverflowWarning]` (`bundleIdentifier`, `band`, `count`), recomputed on load and after each Menu Items save. 4.1 maps the bundle ID to a name with `MenuItemsPane.profileTitle`. Known residual risks (accepted, fail-closed): an external Global delete repairs orphans to the ring end; an in-memory repair can make an App HUD save be refused if another writer edited the same profile.
 - **1.3 hook:** `RingMenuView.accessibilityLabelSuffix: ((RingMenuItem) -> String)?` (nil at runtime). 4.1 must pass `customizedItemIDs`/`appName` at the preview call site (`MenuEditorView.swift:30`) and `sourceLabel:` to `TestActionControl`.
 
 ## Blocked Tasks
@@ -304,6 +305,7 @@ Paths: S = `01_Project/MousePlus`, T = `01_Project/MousePlusTests` (folders are 
 |---|---|---|---|---|
 | Wave 1: 1.1, 1.2, 1.3 | Three parallel fresh-context agents in isolated worktrees (one per task); 1.3 was reassigned `RingMenuView.swift` to replace a duplicate accessibility layer with a suffix hook | Integrated `build-for-testing` (Debug, unsigned) in the main checkout: TEST BUILD SUCCEEDED; no new warnings. 27 tests in 1.1, 2 in 1.2, 4 in 1.3 compiled, **not run** (needs user test authorization) | d495f9a; test fix in the next commit | Focused run (user-authorized): AppHUDInheritanceTests, AppSpecificHUDModelTests, TestActionControllerTests, MenuEditorPreviewSyncTests, **56/56 passed** after narrowing one over-strict assertion (the resolved runtime layout doesn't carry layout-level unknown JSON; storage does, and that's asserted). Complete. Next: Wave 2 |
 | Wave 2: 2.1, 2.2 | Two parallel fresh-context agents in worktrees (fast-forwarded to 5d7ff79) | Integrated focused run: AppSpecificHUDRuntimeTests, ConfigurationServiceTests, HUDTriggerRoutingTests, RingViewModelHUDTests, MenuEditorModelRegressionTests, AppHUDInheritanceTests, TestActionControllerTests, MenuEditorPreviewSyncTests, **152/152 passed**. AppSpecificHUDModelTests and SettingsWorkspaceCoordinatorTests are known-broken (crash on empty `makeAppHUDProfileFromGlobal().inner`); fixing them is in 3.1's scope | See the Wave 2 commit | 3.1 next. Interim: the coordinator shows empty App HUD rings and an edit would save a v1 copy. No build handoff until 3.1 |
+| Wave 3: 3.1 | One fresh-context agent (serial: single owner of the save path) | Integrated run of 12 classes (coordinator, state, model, inheritance, config service, runtime, routing, ring VM, editor model, test action, preview sync, workspace accessibility): **240/241**. The one failure, `WorkspaceAccessibilityTests.testFillUnusedSlots…`, also fails at e456859, so it was already broken (TASKS backlog) | See the Wave 3 commit | COMPAT accessors removed; `init(layout:)` kept as the v1 migration-input constructor for test fixtures. Next: Wave 4 (4.1, 4.2) |
 
 ---
 *Keep active while required work or acceptance is incomplete. On completion, archive with execution

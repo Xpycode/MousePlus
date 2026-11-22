@@ -139,7 +139,7 @@ struct HUDActionLayout: Codable, Equatable {
 /// additions made by a newer version.
 struct AppHUDProfile: Codable, Equatable {
     enum Storage: Equatable {
-        // COMPAT(1.1): remove in task 3.1 — v1 copied layout, kept until migration.
+        /// A version 1 copy as decoded, kept only until `migrated(global:)`.
         case copied(HUDActionLayout)
         case inheriting(AppHUDRings)
     }
@@ -155,7 +155,9 @@ struct AppHUDProfile: Codable, Equatable {
         unknownFields = [:]
     }
 
-    // COMPAT(1.1): remove in task 3.1
+    /// A version 1 copy: migration input only (what a v1 file decodes to; tests
+    /// use it to build v1 fixtures). Nothing in the app creates one; `Configuration`
+    /// migrates every copy at load. Read it back with `v1Layout`.
     init(layout: HUDActionLayout) {
         storage = .copied(layout)
         unknownFields = [:]
@@ -177,31 +179,6 @@ struct AppHUDProfile: Codable, Equatable {
 
     mutating func setRings(_ rings: AppHUDRings) {
         storage = .inheriting(rings)
-    }
-
-    // COMPAT(1.1): remove in task 3.1. An inheriting profile cannot be resolved
-    // without Global, so its getter returns an empty layout; assigning a layout
-    // turns the profile back into a version 1 copy. Use `AppHUDResolver` instead.
-    var layout: HUDActionLayout {
-        get {
-            switch storage {
-            case .copied(let layout): layout
-            case .inheriting: HUDActionLayout(inner: [], middle: [])
-            }
-        }
-        set { storage = .copied(newValue) }
-    }
-
-    // COMPAT(1.1): remove in task 3.1
-    var inner: [RingMenuItem] {
-        get { layout.inner }
-        set { layout.inner = newValue }
-    }
-
-    // COMPAT(1.1): remove in task 3.1
-    var middle: [RingMenuItem] {
-        get { layout.middle }
-        set { layout.middle = newValue }
     }
 
     /// Converts a version 1 copy into inheritance metadata without changing what
@@ -233,7 +210,7 @@ struct AppHUDProfile: Codable, Equatable {
             )
             unknownFields = try container.unknownJSONValues(excluding: Self.v2Keys)
         } else if version == nil || version == 1 {
-            // COMPAT(1.1): remove in task 3.1 (v1 `layout` stays decodable for migration).
+            // Version 1 `layout` stays decodable: it is the migration input.
             storage = .copied(
                 try container.decode(HUDActionLayout.self, forKey: DynamicCodingKey("layout"))
             )

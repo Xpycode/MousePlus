@@ -208,8 +208,7 @@ struct Configuration: Codable {
 
     /// The stored profile: inheritance metadata once loaded (a profile set in
     /// memory as a version 1 copy stays one until it is saved and reloaded).
-    /// Its COMPAT `layout` is empty for an inheriting profile; resolve with
-    /// `resolvedAppLayout(forBundleIdentifier:)` for anything shown.
+    /// Resolve with `resolvedAppLayout(forBundleIdentifier:)` for anything shown.
     func appHUDProfile(forBundleIdentifier bundleIdentifier: String) -> AppHUDProfile? {
         guard Self.isValidBundleIdentifier(bundleIdentifier),
               case .available(let profile) = storedAppHUDProfiles[bundleIdentifier] else { return nil }

@@ -61,7 +61,7 @@ final class ConfigurationServiceTests: XCTestCase {
         XCTAssertEqual(reloaded.validAppHUDProfiles, ["com.apple.finder": migrated])
         XCTAssertEqual(
             reloaded.resolvedAppLayout(forBundleIdentifier: "com.apple.finder")?.layout,
-            profile.layout
+            profile.v1Layout
         )
     }
 

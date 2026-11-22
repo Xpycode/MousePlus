@@ -4,7 +4,7 @@
 
 ## Active plan
 
-- App HUD inheritance: [`plans/app-hud-inheritance-implementation.md`](plans/app-hud-inheritance-implementation.md). First ready: 1.1, 1.2, 1.3. Status lives in the plan.
+- App HUD inheritance: [`plans/app-hud-inheritance-implementation.md`](plans/app-hud-inheritance-implementation.md). Waves 1–3 done; next ready: 4.1, 4.2. Status lives in the plan.
 
 ## Backlog
 <!-- Ideas and future work. Added by /interview, user input, or discovered during development. -->
@@ -18,6 +18,10 @@
 - [ ] **Awaiting recurrence check:** Menu Items preview showed the built-in sample ring while the
   status said "Saved". Cause not reproduced; precautionary remount-after-load added 2026-11-21.
   If it recurs, check the Selected Item tab before clicking the ring.
+
+- [ ] **Pre-existing test failure:** `WorkspaceAccessibilityTests.testFillUnusedSlotsUsesNativeCheckboxAndUpdatesSharedCustomization`
+  fails with `XCTAssertEqual failed: ("[]") is not equal to ("[...Field.menuItems]")`. It also fails
+  at e456859, before the App HUD inheritance work (checked 2026-11-22), so it isn't a regression from it.
   [2026-11-21 session](sessions/2026-11-21.md#progress).
 
 - [ ] Set up a stable local signing identity on the M4 Pro (self-signed certificate, or sign Xcode
