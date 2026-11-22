@@ -4,6 +4,24 @@ This file tracks the WHY behind technical and design decisions.
 
 ---
 
+## 2026-11-22 - App HUD slots inherit from Global unless overridden
+
+**Context:** An App HUD is a one-time copy of the Global HUD; later Global edits never reach it.
+The user recorded Cmd+C on the Global Copy item, then used the ring in Safari, which has its own
+App HUD whose Copy item had no keystroke. The ring failed with "Send Keystroke needs action
+details" and the user reasonably expected Global to apply. The existing hint ("New App HUDs copy
+Global once; later edits stay independent") was not enough.
+
+**Options:** (1) Keep copies, but warn when a Global edit doesn't reach App HUDs and offer to
+apply it there too; (2) per-slot inheritance: App HUD slots follow Global until edited for that app.
+
+**Decision:** Option 2, chosen by the user. It matches user expectations and the existing per-item
+Inherit pattern (wedge/icon color). Needs a spec first: storage model, migration of existing App
+HUDs (a slot identical to Global becomes inheriting), editor controls to override/revert a slot,
+and interaction with the external-change guards. Not started.
+
+---
+
 ## 2026-09-13 - Unused HUD slots use transparent backing with an optional complete-ring treatment
 
 **Context:** Fixed inner and middle slot counts preserve angular positions when fewer items are

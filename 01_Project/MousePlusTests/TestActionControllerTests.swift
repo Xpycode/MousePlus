@@ -71,6 +71,53 @@ final class TestActionControllerTests: XCTestCase {
         XCTAssertEqual(unavailable.explanation, "Return from another app first.")
     }
 
+    func testKeystrokeTargetsRememberedAppAndHandsFocusBack() async {
+        let events = TestActionEvents()
+        let coordinator = makeCoordinator(TestActionPersistence(configuration: Configuration()))
+        await coordinator.load()
+        let executor = TestActionExecutor(events: events, result: .completed)
+        let controller = TestActionController(coordinator: coordinator, actionService: executor)
+        let item = keystrokeItem()
+        let availability = SettingsActionContextAvailability.available(
+            target: SettingsActionTarget(name: "Safari", processIdentifier: 42),
+            context: ActionContext(frontmostPID: 42)
+        )
+
+        let presentation = controller.presentation(for: item, contextAvailability: availability)
+        XCTAssertTrue(presentation.isEnabled)
+        XCTAssertEqual(presentation.targetName, "Safari")
+
+        await controller.test(item, contextAvailability: availability)
+        let context = await executor.lastContext
+        XCTAssertEqual(context?.frontmostPID, 42)
+        XCTAssertEqual(context?.returnsFocusToTarget, true)
+    }
+
+    func testKeystrokeWithoutTargetIsDisabledAndNotSent() async {
+        let events = TestActionEvents()
+        let coordinator = makeCoordinator(TestActionPersistence(configuration: Configuration()))
+        await coordinator.load()
+        let executor = TestActionExecutor(events: events, result: .completed)
+        let controller = TestActionController(coordinator: coordinator, actionService: executor)
+        let item = keystrokeItem()
+        let availability = SettingsActionContextAvailability.unavailable(reason: "No target.")
+
+        let presentation = controller.presentation(for: item, contextAvailability: availability)
+        XCTAssertFalse(presentation.isEnabled)
+        XCTAssertEqual(presentation.explanation, "No target.")
+
+        await controller.test(item, contextAvailability: availability)
+        let recordedEvents = await events.snapshot()
+        XCTAssertFalse(recordedEvents.contains("execute"))
+    }
+
+    private func keystrokeItem() -> RingMenuItem {
+        RingMenuItem(
+            label: "Copy", icon: "doc.on.doc", actionType: .sendKeystroke,
+            actionData: "", keystrokePayload: .key(keyCode: 8, modifiers: 1 << 20)
+        )
+    }
+
     func testContainersAndUnavailableActionsCannotExecuteOrReportSuccess() async {
         let events = TestActionEvents()
         let coordinator = makeCoordinator(TestActionPersistence(configuration: Configuration()))
@@ -176,7 +223,10 @@ private actor TestActionExecutor: TestActionExecuting {
         self.result = result
     }
 
+    private(set) var lastContext: ActionContext?
+
     func execute(_ item: RingMenuItem, context: ActionContext) async -> ActionExecutionResult {
+        lastContext = context
         await events.append("execute")
         return result
     }

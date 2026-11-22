@@ -371,6 +371,65 @@ final class SettingsWorkspaceCoordinatorTests: XCTestCase {
         }
     }
 
+    func testFreshBaseRejectsConcurrentEditToLocallyEditedGlobalMenu() async throws {
+        let persistence = RecordingConfigurationPersistence(Configuration())
+        let coordinator = makeCoordinator(persistence)
+        await coordinator.load()
+        coordinator.menuEditorModel.middle[0].label = "Local Global"
+        coordinator.menuItemsDidChange()
+        await persistence.mutateCurrent { $0.middle[0].label = "External Global" }
+
+        let flushed = await coordinator.flush()
+        let saveCount = await persistence.saveCount
+        let saved = await persistence.current
+        XCTAssertFalse(flushed)
+        XCTAssertEqual(saveCount, 0)
+        XCTAssertEqual(saved.middle[0].label, "External Global")
+        XCTAssertEqual(coordinator.dirtyFields, [.menuItems])
+        guard case .saveFailed = coordinator.status else {
+            return XCTFail("A concurrent edit to the Global menu must fail closed")
+        }
+    }
+
+    func testFreshBasePreservesExternalGlobalEditWhenOnlyAppProfileChanged() async throws {
+        var initial = Configuration()
+        _ = initial.setAppHUDProfile(
+            AppHUDProfile(layout: labeledLayout("Finder")),
+            forBundleIdentifier: "com.apple.finder"
+        )
+        let persistence = RecordingConfigurationPersistence(initial)
+        let coordinator = makeCoordinator(persistence)
+        await coordinator.load()
+        XCTAssertTrue(coordinator.selectHUDProfile(.app(bundleIdentifier: "com.apple.finder")))
+        coordinator.menuEditorModel.middle[0].label = "Local Finder"
+        coordinator.menuItemsDidChange()
+        await persistence.mutateCurrent { $0.middle[0].label = "External Global" }
+
+        let flushed = await coordinator.flush()
+        XCTAssertTrue(flushed)
+        let saved = await persistence.current
+        XCTAssertEqual(saved.middle[0].label, "External Global")
+        XCTAssertEqual(
+            try XCTUnwrap(saved.appHUDProfile(forBundleIdentifier: "com.apple.finder")).middle[0].label,
+            "Local Finder"
+        )
+    }
+
+    func testFreshBaseAcceptsGlobalEditWhenDiskAlreadyMatchesIt() async {
+        let persistence = RecordingConfigurationPersistence(Configuration())
+        let coordinator = makeCoordinator(persistence)
+        await coordinator.load()
+        coordinator.menuEditorModel.middle[0].label = "Same Edit"
+        coordinator.menuItemsDidChange()
+        await persistence.mutateCurrent { $0.middle[0].label = "Same Edit" }
+
+        let flushed = await coordinator.flush()
+        XCTAssertTrue(flushed)
+        let saved = await persistence.current
+        XCTAssertEqual(saved.middle[0].label, "Same Edit")
+        XCTAssertTrue(coordinator.dirtyFields.isEmpty)
+    }
+
     func testSelectingNoncanonicalStoredProfileDoesNotNormalizeDirtyOrSave() async {
         var nestedInner = labeledLayout("Finder").inner[0]
         nestedInner.subItems = [RingMenuItem(

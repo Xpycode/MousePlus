@@ -6,6 +6,11 @@
 <!-- Ideas and future work. Added by /interview, user input, or discovered during development. -->
 <!-- Priority: top = highest, bottom = lowest -->
 
+- [ ] **App HUD slots inherit from Global unless overridden** (decided 2026-11-22, see
+  `decisions.md`). Today an App HUD is a one-time copy, so Global edits silently miss it (Cmd+C
+  on Global Copy never reached the Safari HUD). Write a spec first: storage, migration, override/
+  revert controls, merge-guard interaction.
+
 - [ ] **Awaiting recurrence check:** Menu Items preview showed the built-in sample ring while the
   status said "Saved". Cause not reproduced; precautionary remount-after-load added 2026-11-21.
   If it recurs, check the Selected Item tab before clicking the ring.

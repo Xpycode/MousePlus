@@ -18,10 +18,17 @@ struct ContinuousWorkspaceDebounceClock: WorkspaceDebounceClock {
 final class SettingsWorkspaceCoordinator {
     private enum MenuItemsMergeError: LocalizedError {
         case appProfilesChangedExternally
+        case globalMenuChangedExternally
 
         var errorDescription: String? {
-            "App HUD profiles changed on disk while you were editing. "
-                + "Reload Settings before saving these changes."
+            switch self {
+            case .appProfilesChangedExternally:
+                "App HUD profiles changed on disk while you were editing. "
+                    + "Reload Settings before saving these changes."
+            case .globalMenuChangedExternally:
+                "The Global menu changed on disk while you were editing. "
+                    + "Reload Settings before saving these changes."
+            }
         }
     }
 
@@ -491,8 +498,11 @@ final class SettingsWorkspaceCoordinator {
                 base.globalHUDActionLayout = edited.globalHUDActionLayout
             } else {
                 // Ordinary edits retain raw fields from the fresh disk base.
-                base.inner = edited.inner
-                base.middle = edited.middle
+                try reconcileGlobalMenuChanges(
+                    from: menuItemsBaseline,
+                    to: edited,
+                    into: &base
+                )
             }
             base.hudCustomization = edited.hudCustomization
             let profileBaseline: Configuration
@@ -583,6 +593,27 @@ final class SettingsWorkspaceCoordinator {
         target.globalHUDActionLayout = source.globalHUDActionLayout
         target.hudCustomization = source.hudCustomization
         target.replaceAppHUDProfileStorage(with: source)
+    }
+
+    /// Writes the Global rings only when this workspace changed them, and refuses
+    /// to overwrite a Global menu that another writer changed since the baseline.
+    private func reconcileGlobalMenuChanges(
+        from baseline: Configuration,
+        to edited: Configuration,
+        into target: inout Configuration
+    ) throws {
+        let editedMatchesBaseline = edited.inner == baseline.inner
+            && edited.middle == baseline.middle
+        guard !editedMatchesBaseline else { return }
+        let freshMatchesBaseline = target.inner == baseline.inner
+            && target.middle == baseline.middle
+        let freshMatchesEdited = target.inner == edited.inner
+            && target.middle == edited.middle
+        guard freshMatchesBaseline || freshMatchesEdited else {
+            throw MenuItemsMergeError.globalMenuChangedExternally
+        }
+        target.inner = edited.inner
+        target.middle = edited.middle
     }
 
     /// Applies only this workspace's app-profile differences to a fresh disk

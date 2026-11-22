@@ -35,7 +35,7 @@ final class TestActionController {
         let resolved = Self.resolveContext(for: item, availability: contextAvailability)
         let validation = ActionValidation.validate(item, context: resolved.context)
         return TestActionPresentation(
-            isEnabled: validation.isValid && !isRunning,
+            isEnabled: validation.isValid && !isRunning && !resolved.blocksExecution,
             explanation: resolved.unavailableReason ?? validation.userFacingText,
             targetName: resolved.targetName
         )
@@ -50,7 +50,7 @@ final class TestActionController {
         guard !isRunning else { return }
         let resolved = Self.resolveContext(for: item, availability: contextAvailability)
         let validation = ActionValidation.validate(item, context: resolved.context)
-        guard validation.isValid else { return }
+        guard validation.isValid, !resolved.blocksExecution else { return }
 
         isRunning = true
         saveFailureMessage = nil
@@ -97,13 +97,38 @@ final class TestActionController {
     private static func resolveContext(
         for item: RingMenuItem,
         availability: SettingsActionContextAvailability
-    ) -> (context: ActionContext, targetName: String?, unavailableReason: String?) {
-        guard item.actionType == .windowSnap else { return (.init(), nil, nil) }
-        switch availability {
-        case .available(let target, let context): return (context, target.name, nil)
-        case .unavailable(let reason): return (.init(), nil, reason)
+    ) -> ResolvedTestContext {
+        switch item.actionType {
+        case .windowSnap:
+            switch availability {
+            case .available(let target, let context):
+                return ResolvedTestContext(context: context, targetName: target.name)
+            case .unavailable(let reason):
+                return ResolvedTestContext(unavailableReason: reason)
+            }
+        case .sendKeystroke:
+            // Settings is frontmost while testing, so the keystroke would land on
+            // MousePlus itself. Hand focus to the remembered app before posting.
+            switch availability {
+            case .available(let target, var context):
+                context.returnsFocusToTarget = true
+                return ResolvedTestContext(context: context, targetName: target.name)
+            case .unavailable(let reason):
+                return ResolvedTestContext(unavailableReason: reason, blocksExecution: true)
+            }
+        default:
+            return ResolvedTestContext()
         }
     }
+}
+
+private struct ResolvedTestContext {
+    var context = ActionContext()
+    var targetName: String?
+    var unavailableReason: String?
+    /// Validation alone cannot reject a keystroke without a target, because the
+    /// live ring may legitimately post one to whatever is frontmost.
+    var blocksExecution = false
 }
 
 struct TestActionPresentation: Equatable {
