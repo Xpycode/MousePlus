@@ -12,18 +12,19 @@
 ## Now
 
 - **Phase:** Implementation — next task selection. <!-- Phase changed: 2026-09-11 -->
-- **Focus:** Choose the next task. The 2026-11-22 fixes (trigger button captured, Global menu save guard, Test Action keystroke target) are accepted and committed.
+- **Focus:** App HUD inheritance — spec approved (`../specs/app-hud-inheritance.md`), plan ready: [`plans/app-hud-inheritance-implementation.md`](plans/app-hud-inheritance-implementation.md) (11 tasks, 5 waves + 2 acceptance checks).
+- **Execution:** not yet requested. Wave 1 ready (1.1 model/resolver/migration, 1.2 Test Action source label, 1.3 preview dot; no prerequisites). Test runs need the user's OK (they open the app on the desktop).
 - **Blocker:** No signing certificates on the M4 Pro; every unsigned rebuild loses its Accessibility permission and must be re-added by hand.
-- **Next:** Spec App HUD inheritance from Global (decided 2026-11-22); local signing certificate once the 99-AUTH folder is on this Mac.
-- **Current handoff:** [2026-11-22 Resume](sessions/2026-11-22.md#resume)
+- **Next:** `/execute` Wave 1; local signing certificate once the 99-AUTH folder is on this Mac.
+- **Current handoff:** [2026-11-22 Resume (spec and plan)](sessions/2026-11-22.md#resume-spec-and-plan)
 
 ## Recent
 
+- **2026-11-22 (later):** Wrote and approved the App HUD inheritance spec (app menus follow Global unless customized, hidden or reordered) and an 11-task plan, using a code survey and web research on how other apps handle overrides.
 - **2026-11-22:** The mouse trigger button no longer also acts in other apps (Warp tab switching); Global menu saves no longer overwrite outside changes; Test Action sends keystrokes to the app you came from. User-verified and committed. Decided app menus will inherit from Global.
 - **2026-11-21:** Key labels now follow the keyboard layout; precautionary fix for the stale preview; fixed ring keystrokes going to MousePlus instead of the app underneath (ring panel no longer takes keyboard focus; user-accepted in Safari with Settings closed and open). Committed.
 - **2026-11-18:** Fresh clone and unsigned build on the reset M4 Pro; found a stale Menu Items preview and US-only key labels while setting it up.
 - **2026-09-26:** Verified plain/modifier recording, fixed preview dimensions, and passed 11 focused tests. Cleared a stuck macOS permission dialog; corrected signed build passed user-confirmed permission, trigger, and preview/layout acceptance. Changes merged and pushed to main.
-- **2026-09-25:** Exported a Developer ID-signed Release 0.1.0 (1) from the current working tree; Apple accepted notarization, and the stapled ZIP passed signature and Gatekeeper checks. Local artifact only.
 
 ## Progress
 
@@ -36,6 +37,7 @@
 - **HUD Opening Styles:** 7/7 tasks complete and signed-live verified on the supported BetterMouse-to-keyboard route. VoiceOver, direct MousePlus mouse triggering and the broad device/geometry performance matrix are deferred before release and remain untested.
 - **App-specific HUDs:** 5/5 implementation waves and signed-live Finder/Global acceptance complete on the supported BetterMouse-to-keyboard route.
 - **Trigger backend:** Keyboard and standard mouse paths work (the mouse trigger button is now consumed, not passed to other apps); advanced Logitech HID++ support remains undecided.
+- **App HUD inheritance:** spec approved; plan 0/11 tasks, Wave 1 ready.
 - **Task tracker:** no current sprint tasks; 9 backlog items, one of them a precautionary fix awaiting a recurrence check.
 
 ## Risks and Backlog
@@ -62,6 +64,7 @@
 - Current tracker and backlog: `TASKS.md`
 - App-specific HUD signed-live completion: `sessions/2026-09-17.md`
 - Unified Settings specification: `../specs/unified-settings-workspace.md`
+- App HUD inheritance specification (draft): `../specs/app-hud-inheritance.md`
 - Sustained-use HUD redesign specification: `../specs/sustained-use-hud-redesign.md`
 - HUD action roadmap: `HUD_ACTIONS_PLAN.md`
 - App menu-bar mirror (Feature A) implementation plan: `APP_COMMANDS_PLAN.md`
