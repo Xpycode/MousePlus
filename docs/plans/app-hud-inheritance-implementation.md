@@ -4,7 +4,7 @@
 > Repair scheduling errors while preserving task IDs, completed evidence and approved scope.
 > Task state/evidence is authoritative here; TASKS links here and holds backlog/inbox.
 
-**Progress:** 9/11 tasks (Waves 1–4 and 5.1 complete; 5.2 review in progress); external acceptance: E1 (Atlas Settings check), E2 (user live acceptance).
+**Progress:** 11/11 tasks; E1 passed; E2 (user live acceptance) pending; external acceptance: E1 (Atlas Settings check), E2 (user live acceptance).
 **Task states:** unchecked = pending / implemented-unverified / blocked (name gate);
 checked = complete with required evidence.
 
@@ -253,7 +253,7 @@ Paths: S = `01_Project/MousePlus`, T = `01_Project/MousePlusTests` (folders are 
   - Backpressure: the exact `xcodebuild … test -only-testing:` command and the pass count
     (needs test authorization).
 
-- [ ] **5.2**: Independent review of the save path and migration.
+- [x] **5.2**: Independent review of the save path and migration.
   - Depends on: 4.1, 4.2
   - Owns: the review report. Findings go back to the task owner.
   - Success: no unresolved findings on data loss, guard bypass, a migration that changes what is
@@ -262,7 +262,7 @@ Paths: S = `01_Project/MousePlus`, T = `01_Project/MousePlusTests` (folders are 
 
 ## External checks
 
-- [ ] **E1**: Atlas helper Settings check (standing Atlas authorization).
+- [x] **E1**: Atlas helper Settings check (standing Atlas authorization).
   - Depends on: 5.1
   - Requires: `atlas doctor` ready, and the fresh build copied into the helper.
   - Gates: the claims that the 4.1 and 4.2 UI renders correctly.
@@ -307,6 +307,8 @@ Paths: S = `01_Project/MousePlus`, T = `01_Project/MousePlusTests` (folders are 
 | Wave 2: 2.1, 2.2 | Two parallel fresh-context agents in worktrees (fast-forwarded to 5d7ff79) | Integrated focused run: AppSpecificHUDRuntimeTests, ConfigurationServiceTests, HUDTriggerRoutingTests, RingViewModelHUDTests, MenuEditorModelRegressionTests, AppHUDInheritanceTests, TestActionControllerTests, MenuEditorPreviewSyncTests, **152/152 passed**. AppSpecificHUDModelTests and SettingsWorkspaceCoordinatorTests are known-broken (crash on empty `makeAppHUDProfileFromGlobal().inner`); fixing them is in 3.1's scope | See the Wave 2 commit | 3.1 next. Interim: the coordinator shows empty App HUD rings and an edit would save a v1 copy. No build handoff until 3.1 |
 | Wave 3: 3.1 | One fresh-context agent (serial: single owner of the save path) | Integrated run of 12 classes (coordinator, state, model, inheritance, config service, runtime, routing, ring VM, editor model, test action, preview sync, workspace accessibility): **240/241**. The one failure, `WorkspaceAccessibilityTests.testFillUnusedSlots…`, also fails at e456859, so it was already broken (TASKS backlog) | See the Wave 3 commit | COMPAT accessors removed; `init(layout:)` kept as the v1 migration-input constructor for test fixtures. Next: Wave 4 (4.1, 4.2) |
 | Wave 4: 4.1, 4.2 + 5.1 | Two parallel fresh-context agents in worktrees; the coordinator merged both edits to `WorkspaceAccessibilityTests` and wired `SlotEditorForm(appName:)`. A fresh agent fixed the new tests' failures: the test helpers' `XCTUnwrap` recorded failures for misses inside `try?`, plus a render-lag wait. The UI was fine | 5.1: 14 classes, **250/251**; the only failure is the one that was already broken (`testFillUnusedSlots…`). Result: `$TMPDIR/mp-wave1-dd/Logs/Test/Test-MousePlus-2026.11.22_20-20-15-+0100.xcresult` | See the Wave 4 commit | UI claims still need E1 (Atlas). Next: 5.2 review |
+| 5.2 | Fresh-context `feature-dev:code-reviewer` (read-only, files at HEAD) | No findings at confidence ≥80 across data loss, guard bypass/AC19, migration, orphaned overrides and resolver. Two sub-threshold observations moved to the TASKS backlog | n/a (review only) | — |
+| E1 | Atlas helper, fresh Debug build `$TMPDIR/mp-wave1-dd/Build/Products/Debug/MousePlus.app` (31d9f3b) | Activity Monitor App HUD (Safari isn't offered by the app picker in the helper). Global: new hint shown, no Hidden Items button. App HUD: Hidden Items (0) disabled; "Follows Global" + Customize; "from Global" caption → Customize → "Customized for Activity Monitor" + Revert to Global, preview dot, wedge AX suffix, caption; Move Later → Revert Order appears; "Hide in Activity Monitor" → Hidden Items (1) popover "Copy (inner ring)" + Show → back to (0), disabled. Screenshots: `~/Library/Application Support/Atlas/runs/1795375362083829000-capture.png`, `…1795375369364074000…`, `…1795375387425999000…`, `…1795375396894892000…`. **Found two layout bugs:** the App HUD semantics text is clipped to one line, and the four-button footer overflows the editor column (right edge clipped) | Layout fixes (wrapping `MenuItemsProfileLabel.sizeThatFits`, `SlotEditorFooterLayout`) in the E1 fix commit; WorkspaceAccessibilityTests 16/17 (the one failure was already broken) | Re-checked in Atlas: the semantics text wraps to 2 lines and the footer wraps to 2 rows with nothing clipped (`…/runs/1795376506075372000-capture.png`). Cosmetic follow-ups are in the TASKS backlog. The overflow warning (needs 9+ items) is covered by tests only. Next: E2 |
 
 ---
 *Keep active while required work or acceptance is incomplete. On completion, archive with execution

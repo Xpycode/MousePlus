@@ -501,9 +501,34 @@ private struct MenuItemsProfileLabel: NSViewRepresentable {
             label.font = .systemFont(ofSize: NSFont.smallSystemFontSize)
             label.textColor = .secondaryLabelColor
         }
-        label.maximumNumberOfLines = style == .secondaryWrapping ? 2 : 1
-        label.lineBreakMode = style == .secondaryWrapping ? .byWordWrapping : .byTruncatingTail
+        label.maximumNumberOfLines = wraps ? 0 : 1
+        label.lineBreakMode = wraps ? .byWordWrapping : .byTruncatingTail
+        label.cell?.wraps = wraps
+        label.cell?.truncatesLastVisibleLine = !wraps
+        // A truncated single-line label (for example a long app name) still
+        // exposes its full text on hover and to VoiceOver.
+        label.toolTip = wraps ? nil : text
+        label.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
         label.setAccessibilityLabel(text)
         label.setAccessibilityIdentifier(accessibilityIdentifier)
     }
+
+    /// An `NSTextField` reports a single-line intrinsic size, so SwiftUI would
+    /// lay it out on one line and clip it. Measure against the offered width
+    /// instead: wrapping labels grow taller, single-line labels truncate.
+    func sizeThatFits(_ proposal: ProposedViewSize, nsView label: NSTextField, context: Context) -> CGSize? {
+        guard let width = proposal.width, width.isFinite, width > 0, let cell = label.cell else {
+            return nil
+        }
+        if wraps {
+            let fitted = cell.cellSize(
+                forBounds: NSRect(x: 0, y: 0, width: width, height: .greatestFiniteMagnitude)
+            )
+            return CGSize(width: width, height: ceil(fitted.height))
+        }
+        let natural = cell.cellSize
+        return CGSize(width: min(ceil(natural.width), width), height: ceil(natural.height))
+    }
+
+    private var wraps: Bool { style == .secondaryWrapping }
 }

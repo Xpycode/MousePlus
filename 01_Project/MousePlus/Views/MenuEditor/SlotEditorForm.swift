@@ -26,6 +26,8 @@ struct SlotEditorForm<ActionAccessory: View>: View {
     var appName: String? = nil
     @ViewBuilder var actionAccessory: () -> ActionAccessory
     @State private var labelFocused = false
+    /// Width available to the footer row, used to pick a delete title that fits.
+    @State private var footerWidth: CGFloat?
 
     var body: some View {
         Group {
@@ -344,9 +346,14 @@ struct SlotEditorForm<ActionAccessory: View>: View {
 
     // MARK: - Footer controls
 
+    /// Item operations, in order: Move Earlier · Move Later · Revert Order ·
+    /// Delete/Hide (trailing). The flow layout wraps buttons onto further rows
+    /// instead of widening the form, and a "Hide in <App>" title that cannot fit
+    /// on a row of its own falls back to a short title; the accessibility label
+    /// and tooltip keep the full app name.
     @ViewBuilder
     private var footerControls: some View {
-        HStack {
+        SlotEditorFooterLayout(spacing: 8, rowSpacing: 6) {
             // Reorder is only meaningful for top-level slots (sub-item reorder is
             // out of scope for v1), so hide the move buttons when editing a sub-item.
             if !isSubItem, let sel = model.selection, let id = sel.itemID {
@@ -383,10 +390,8 @@ struct SlotEditorForm<ActionAccessory: View>: View {
                 }
             }
 
-            Spacer()
-
             AppKitButton(
-                title: deleteTitle,
+                title: fittingDeleteTitle,
                 systemImageName: "trash",
                 accessibilityLabel: deleteDescription,
                 accessibilityIdentifier: "menuItems.delete"
@@ -395,7 +400,25 @@ struct SlotEditorForm<ActionAccessory: View>: View {
                 model.removeSelectedItem()
             }
             .help(deleteDescription)
+            .layoutValue(key: SlotEditorFooterTrailing.self, value: true)
         }
+        .frame(maxWidth: .infinity)
+        .background {
+            GeometryReader { proxy in
+                Color.clear
+                    .onAppear { footerWidth = proxy.size.width }
+                    .onChange(of: proxy.size.width) { _, width in footerWidth = width }
+            }
+        }
+    }
+
+    /// The delete/hide title that fits the footer. Until the footer has been
+    /// measured, the full title is used.
+    private var fittingDeleteTitle: String {
+        let full = deleteTitle
+        guard deleteHides, let footerWidth, footerWidth > 0 else { return full }
+        let needed = SlotEditorFooterLayout.buttonWidth(title: full, systemImageName: "trash")
+        return needed <= footerWidth ? full : "Hide in App HUD"
     }
 
     /// `true` when the selected top-level item is a Global item in an App HUD,
@@ -507,8 +530,106 @@ private struct SlotEditorStatusLabel: NSViewRepresentable {
         label.stringValue = text
         label.font = .systemFont(ofSize: NSFont.systemFontSize)
         label.textColor = .secondaryLabelColor
-        label.lineBreakMode = .byTruncatingTail
+        label.lineBreakMode = .byWordWrapping
+        label.maximumNumberOfLines = 0
+        label.cell?.wraps = true
+        label.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
         label.setAccessibilityLabel(accessibilityLabel)
         label.setAccessibilityIdentifier(accessibilityIdentifier)
+    }
+
+    /// Wraps a long status ("Customized for Microsoft PowerPoint") within the
+    /// offered width instead of reporting a single-line width that widens the form.
+    func sizeThatFits(_ proposal: ProposedViewSize, nsView label: NSTextField, context: Context) -> CGSize? {
+        guard let width = proposal.width, width.isFinite, width > 0, let cell = label.cell else {
+            return nil
+        }
+        let natural = cell.cellSize
+        if natural.width <= width {
+            return CGSize(width: ceil(natural.width), height: ceil(natural.height))
+        }
+        let fitted = cell.cellSize(forBounds: NSRect(x: 0, y: 0, width: width, height: .greatestFiniteMagnitude))
+        return CGSize(width: width, height: ceil(fitted.height))
+    }
+}
+
+/// Marks the footer subview that sits at the trailing edge of its row.
+private struct SlotEditorFooterTrailing: LayoutValueKey {
+    static let defaultValue = false
+}
+
+/// Flow layout for the item footer: subviews keep their order and wrap onto a
+/// new row when the current one is full, so the footer is never wider than the
+/// form column. The trailing-marked subview (Delete/Hide) is right-aligned on
+/// whichever row it lands on.
+private struct SlotEditorFooterLayout: Layout {
+    var spacing: CGFloat
+    var rowSpacing: CGFloat
+
+    private struct Row {
+        var indices: [Int] = []
+        var width: CGFloat = 0
+        var height: CGFloat = 0
+    }
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        let sizes = subviews.map { $0.sizeThatFits(.unspecified) }
+        let maxWidth = proposal.width ?? .infinity
+        let rows = makeRows(sizes: sizes, maxWidth: maxWidth)
+        let height = rows.map(\.height).reduce(0, +) + rowSpacing * CGFloat(max(rows.count - 1, 0))
+        let contentWidth = rows.map(\.width).max() ?? 0
+        let width = maxWidth.isFinite ? maxWidth : contentWidth
+        return CGSize(width: width, height: height)
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        let sizes = subviews.map { $0.sizeThatFits(.unspecified) }
+        let rows = makeRows(sizes: sizes, maxWidth: bounds.width)
+        var y = bounds.minY
+        for row in rows {
+            var x = bounds.minX
+            for index in row.indices {
+                let size = sizes[index]
+                let width = min(size.width, bounds.width)
+                let originX = subviews[index][SlotEditorFooterTrailing.self]
+                    ? max(x, bounds.maxX - width)
+                    : x
+                subviews[index].place(
+                    at: CGPoint(x: originX, y: y + (row.height - size.height) / 2),
+                    anchor: .topLeading,
+                    proposal: ProposedViewSize(width: width, height: size.height)
+                )
+                x = originX + width + spacing
+            }
+            y += row.height + rowSpacing
+        }
+    }
+
+    private func makeRows(sizes: [CGSize], maxWidth: CGFloat) -> [Row] {
+        var rows: [Row] = []
+        var current = Row()
+        for (index, size) in sizes.enumerated() {
+            let added = current.indices.isEmpty ? size.width : current.width + spacing + size.width
+            if !current.indices.isEmpty, added > maxWidth {
+                rows.append(current)
+                current = Row()
+            }
+            current.width = current.indices.isEmpty ? size.width : current.width + spacing + size.width
+            current.height = max(current.height, size.height)
+            current.indices.append(index)
+        }
+        if !current.indices.isEmpty { rows.append(current) }
+        return rows
+    }
+
+    /// Natural width of a rounded AppKit button with a leading SF Symbol,
+    /// measured with the same configuration `AppKitButton` uses.
+    @MainActor
+    static func buttonWidth(title: String, systemImageName: String) -> CGFloat {
+        let button = NSButton(title: title, target: nil, action: nil)
+        button.bezelStyle = .rounded
+        button.image = NSImage(systemSymbolName: systemImageName, accessibilityDescription: nil)
+        button.imagePosition = .imageLeading
+        return ceil(button.fittingSize.width)
     }
 }
