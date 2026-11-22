@@ -346,7 +346,7 @@ struct SlotEditorForm<ActionAccessory: View>: View {
 
     // MARK: - Footer controls
 
-    /// Item operations, in order: Move Earlier · Move Later · Revert Order ·
+    /// Item operations, in order: Earlier · Later · Revert Order ·
     /// Delete/Hide (trailing). The flow layout wraps buttons onto further rows
     /// instead of widening the form, and a "Hide in <App>" title that cannot fit
     /// on a row of its own falls back to a short title; the accessibility label
@@ -358,8 +358,9 @@ struct SlotEditorForm<ActionAccessory: View>: View {
             // out of scope for v1), so hide the move buttons when editing a sub-item.
             if !isSubItem, let sel = model.selection, let id = sel.itemID {
                 AppKitButton(
-                    title: "Move Earlier",
+                    title: "Earlier",
                     systemImageName: "chevron.left",
+                    accessibilityLabel: "Move slot earlier",
                     accessibilityIdentifier: "menuItems.moveEarlier"
                 ) {
                     model.moveItem(id: id, in: sel.band, by: -1)
@@ -367,8 +368,9 @@ struct SlotEditorForm<ActionAccessory: View>: View {
                 .help("Move slot earlier")
 
                 AppKitButton(
-                    title: "Move Later",
+                    title: "Later",
                     systemImageName: "chevron.right",
+                    accessibilityLabel: "Move slot later",
                     accessibilityIdentifier: "menuItems.moveLater"
                 ) {
                     model.moveItem(id: id, in: sel.band, by: 1)
