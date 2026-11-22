@@ -20,6 +20,10 @@ import SwiftUI
 struct SlotEditorForm<ActionAccessory: View>: View {
 
     @Bindable var model: MenuEditorModel
+    /// Display name of the App HUD's app, used in the inheritance text
+    /// ("Customized for <App>", "Hide in <App>"). Ignored in Global; falls back
+    /// to "this app" when an App HUD is edited without a name.
+    var appName: String? = nil
     @ViewBuilder var actionAccessory: () -> ActionAccessory
     @State private var labelFocused = false
 
@@ -102,6 +106,7 @@ struct SlotEditorForm<ActionAccessory: View>: View {
                         .foregroundStyle(.secondary)
                     Spacer()
                 }
+                inheritanceStatusRow
             }
 
             // 2. Icon + (optional) label.
@@ -362,19 +367,148 @@ struct SlotEditorForm<ActionAccessory: View>: View {
                     model.moveItem(id: id, in: sel.band, by: 1)
                 }
                 .help("Move slot later")
+
+                // App HUD only: the ring has its own order (AC12). Always
+                // false in Global, so nothing new appears there (AC13).
+                if model.hasCustomOrder(band: sel.band) {
+                    AppKitButton(
+                        title: "Revert Order",
+                        systemImageName: "arrow.uturn.backward",
+                        accessibilityLabel: "Revert this ring to Global's order",
+                        accessibilityIdentifier: "menuItems.revertOrder"
+                    ) {
+                        model.revertOrder(band: sel.band)
+                    }
+                    .help("Make this ring follow Global's order again")
+                }
             }
 
             Spacer()
 
             AppKitButton(
-                title: isSubItem ? "Delete Outer Item" : "Delete Item",
+                title: deleteTitle,
                 systemImageName: "trash",
-                accessibilityLabel: isSubItem ? "Delete this outer item" : "Delete this item",
+                accessibilityLabel: deleteDescription,
                 accessibilityIdentifier: "menuItems.delete"
             ) {
+                // Hides a Global-linked item in an App HUD; deletes otherwise.
                 model.removeSelectedItem()
             }
-            .help(isSubItem ? "Delete this outer item" : "Delete this item")
+            .help(deleteDescription)
         }
+    }
+
+    /// `true` when the selected top-level item is a Global item in an App HUD,
+    /// so removing it hides it rather than deleting it (AC10).
+    private var deleteHides: Bool {
+        guard !isSubItem, let id = model.selection?.itemID else { return false }
+        switch model.origin(of: id) {
+        case .inherited, .customized: return true
+        case .appOnly, nil: return false
+        }
+    }
+
+    private var deleteTitle: String {
+        if isSubItem { return "Delete Outer Item" }
+        return deleteHides ? "Hide in \(displayAppName)" : "Delete Item"
+    }
+
+    private var deleteDescription: String {
+        if isSubItem { return "Delete this outer item" }
+        return deleteHides ? "Hide this item in \(displayAppName)" : "Delete this item"
+    }
+
+    // MARK: - Inheritance status (App HUD only)
+
+    private var displayAppName: String {
+        guard let appName, !appName.isEmpty else { return "this app" }
+        return appName
+    }
+
+    /// Origin of the selected item. A sub-item reports its top-level parent's
+    /// origin, because inheritance is tracked per top-level item. `nil` in Global.
+    private var selectedOrigin: (id: UUID, origin: ItemOrigin)? {
+        guard model.isEditingAppHUD,
+              let id = model.selection?.itemID,
+              let origin = model.origin(of: id) else { return nil }
+        return (id, origin)
+    }
+
+    /// "Follows Global" / "Customized for <App>" / "Only in <App>", plus the
+    /// matching action. Absent in Global (AC13). For a sub-item the parent's
+    /// status is shown without buttons: the parent is the unit that is
+    /// customized or reverted, and acting on it from here would be surprising.
+    @ViewBuilder
+    private var inheritanceStatusRow: some View {
+        if let selected = selectedOrigin {
+            let id = selected.id
+            let origin = selected.origin
+            HStack {
+                SlotEditorStatusLabel(
+                    text: statusText(for: origin),
+                    accessibilityLabel: statusAccessibilityLabel(for: origin),
+                    accessibilityIdentifier: "menuItems.editor.inheritance.status"
+                )
+                Spacer()
+                if !isSubItem {
+                    switch origin {
+                    case .inherited:
+                        AppKitButton(
+                            title: "Customize",
+                            accessibilityLabel: "Customize for \(displayAppName)",
+                            accessibilityIdentifier: "menuItems.editor.inheritance.customize"
+                        ) {
+                            model.customize(id: id)
+                        }
+                        .help("Make an app copy of this item; later Global edits no longer reach it")
+                    case .customized:
+                        AppKitButton(
+                            title: "Revert to Global",
+                            accessibilityLabel: "Revert to Global",
+                            accessibilityIdentifier: "menuItems.editor.inheritance.revertToGlobal"
+                        ) {
+                            model.revertToGlobal(id: id)
+                        }
+                        .help("Replace this item with the Global item and follow Global again")
+                    case .appOnly:
+                        EmptyView()
+                    }
+                }
+            }
+        }
+    }
+
+    private func statusText(for origin: ItemOrigin) -> String {
+        switch origin {
+        case .inherited: return "Follows Global"
+        case .customized: return "Customized for \(displayAppName)"
+        case .appOnly: return "Only in \(displayAppName)"
+        }
+    }
+
+    private func statusAccessibilityLabel(for origin: ItemOrigin) -> String {
+        let text = statusText(for: origin)
+        return isSubItem ? "Parent item: \(text)" : text
+    }
+}
+
+/// Native label for the inheritance status so it exposes a stable AppKit
+/// accessibility identifier, like the rest of the editor's controls.
+private struct SlotEditorStatusLabel: NSViewRepresentable {
+    let text: String
+    let accessibilityLabel: String
+    let accessibilityIdentifier: String
+
+    func makeNSView(context: Context) -> NSTextField {
+        NSTextField(labelWithString: text)
+    }
+
+    func updateNSView(_ label: NSTextField, context: Context) {
+        label.stringValue = text
+        label.font = .systemFont(ofSize: NSFont.systemFontSize)
+        label.textColor = .secondaryLabelColor
+        label.lineBreakMode = .byTruncatingTail
+        label.setAccessibilityLabel(accessibilityLabel)
+        label.setAccessibilityIdentifier(accessibilityIdentifier)
     }
 }

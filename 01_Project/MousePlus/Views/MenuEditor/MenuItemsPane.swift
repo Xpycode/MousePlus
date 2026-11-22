@@ -16,6 +16,7 @@ struct MenuItemsPane: View {
     @State private var testActionController: TestActionController
     @State private var showingAppHUDPicker = false
     @State private var profileMessage: String?
+    @State private var showingHiddenItems = false
 
     init(coordinator: SettingsWorkspaceCoordinator, requestedItemID: Binding<UUID?> = .constant(nil)) {
         self.coordinator = coordinator
@@ -30,13 +31,15 @@ struct MenuItemsPane: View {
             MenuEditorWorkspace(
                 model: coordinator.menuEditorModel,
                 appearance: coordinator.configuration.appearance,
+                appName: editedAppName,
                 onReset: resetMenuItems,
                 actionAccessory: {
                     if let selectedItem {
                         TestActionControl(
                             item: selectedItem,
                             contextAvailability: contextProvider.availability,
-                            controller: testActionController
+                            controller: testActionController,
+                            sourceLabel: selectedItemSourceLabel
                         )
                     }
                 },
@@ -112,6 +115,10 @@ struct MenuItemsPane: View {
                     confirmDeleteSelectedAppHUD()
                 }
 
+                if coordinator.menuEditorModel.isEditingAppHUD {
+                    hiddenItemsButton
+                }
+
                 Spacer(minLength: 8)
 
                 MenuItemsProfileLabel(
@@ -122,7 +129,7 @@ struct MenuItemsPane: View {
             }
 
             MenuItemsProfileLabel(
-                text: "New App HUDs copy Global once; later edits stay independent.",
+                text: "App HUDs follow Global until you edit an item.",
                 style: .secondary,
                 accessibilityIdentifier: "menuItems.profile.copyExplanation"
             )
@@ -132,6 +139,10 @@ struct MenuItemsPane: View {
                 style: .secondaryWrapping,
                 accessibilityIdentifier: "menuItems.profile.semantics"
             )
+
+            ForEach(coordinator.overflowWarnings, id: \.self) { warning in
+                overflowWarningRow(warning)
+            }
 
             if let profileMessage {
                 Text(profileMessage)
@@ -153,6 +164,7 @@ struct MenuItemsPane: View {
                 let profiles = coordinator.editableHUDProfiles
                 guard profiles.indices.contains(index) else { return }
                 profileMessage = nil
+                showingHiddenItems = false
                 _ = coordinator.selectHUDProfile(profiles[index])
             }
         )
@@ -189,12 +201,110 @@ struct MenuItemsPane: View {
         }
     }
 
+    /// Opens the list of Global items hidden in the selected App HUD (AC10, AC11).
+    private var hiddenItemsButton: some View {
+        let count = coordinator.menuEditorModel.hiddenItems.count
+        return AppKitButton(
+            title: "Hidden Items (\(count))…",
+            isEnabled: count > 0,
+            accessibilityLabel: "Hidden Items in \(selectedProfileTitle) HUD, \(count)",
+            accessibilityIdentifier: "menuItems.profile.hiddenItems"
+        ) {
+            showingHiddenItems = true
+        }
+        .fixedSize()
+        .popover(isPresented: $showingHiddenItems, arrowEdge: .bottom) {
+            hiddenItemsList
+        }
+    }
+
+    private var hiddenItemsList: some View {
+        let model = coordinator.menuEditorModel
+        let rows = [EditorBand.inner, .middle].flatMap { band in
+            model.hiddenItems(band: band).map { (band: band, item: $0) }
+        }
+        return VStack(alignment: .leading, spacing: 8) {
+            MenuItemsProfileLabel(
+                text: "Hidden in \(selectedProfileTitle) HUD",
+                style: .headline,
+                accessibilityIdentifier: "menuItems.profile.hiddenItems.title"
+            )
+            if rows.isEmpty {
+                MenuItemsProfileLabel(
+                    text: "No hidden items.",
+                    style: .secondary,
+                    accessibilityIdentifier: "menuItems.profile.hiddenItems.empty"
+                )
+            }
+            ForEach(rows, id: \.item.id) { row in
+                let name = row.item.label.isEmpty ? "(no label)" : row.item.label
+                let ring = row.band == .inner ? "inner" : "middle"
+                HStack(spacing: 8) {
+                    MenuItemsProfileLabel(
+                        text: "\(name) (\(ring) ring)",
+                        style: .body,
+                        accessibilityIdentifier: "menuItems.profile.hiddenItems.label.\(row.item.id.uuidString)"
+                    )
+                    Spacer(minLength: 12)
+                    AppKitButton(
+                        title: "Show",
+                        accessibilityLabel: "Show \(name) in \(selectedProfileTitle) HUD",
+                        accessibilityIdentifier: "menuItems.profile.hiddenItems.show.\(row.item.id.uuidString)"
+                    ) {
+                        model.show(hidden: row.item)
+                        if model.hiddenItems.isEmpty { showingHiddenItems = false }
+                    }
+                    .fixedSize()
+                }
+            }
+        }
+        .padding(12)
+        .frame(minWidth: 260, alignment: .leading)
+    }
+
+    private func overflowWarningRow(_ warning: SettingsWorkspaceCoordinator.AppHUDOverflowWarning) -> some View {
+        let app = profileTitle(.app(bundleIdentifier: warning.bundleIdentifier))
+        let ring = warning.band == .inner ? "inner" : warning.band == .middle ? "middle" : "outer"
+        let noun = warning.count == 1 ? "item" : "items"
+        let text = "Not enough space in \(app) HUD's \(ring) ring: \(warning.count) \(noun) not shown"
+        return HStack(alignment: .firstTextBaseline, spacing: 8) {
+            Image(systemName: "exclamationmark.triangle.fill")
+                .foregroundStyle(.orange)
+                .accessibilityHidden(true)
+            MenuItemsProfileLabel(
+                text: text,
+                style: .secondaryWrapping,
+                accessibilityIdentifier: "menuItems.profile.overflow.\(warning.bundleIdentifier).\(ring)"
+            )
+        }
+    }
+
+    /// The selected App HUD's name for preview labels; `nil` in Global.
+    private var editedAppName: String? {
+        coordinator.menuEditorModel.isEditingAppHUD ? profileTitle(coordinator.selectedHUDProfile) : nil
+    }
+
+    /// Where the selected item comes from, for Test Action (AC12b); `nil` in Global.
+    /// A sub-item reports its top-level item's origin.
+    private var selectedItemSourceLabel: String? {
+        let model = coordinator.menuEditorModel
+        guard model.isEditingAppHUD,
+              let itemID = model.selection?.itemID,
+              let origin = model.origin(of: itemID) else { return nil }
+        let app = profileTitle(coordinator.selectedHUDProfile)
+        switch origin {
+        case .inherited: return "from Global"
+        case .customized: return "customized for \(app)"
+        case .appOnly: return "only in \(app)"
+        }
+    }
+
     private var profileSemantics: String {
         if coordinator.selectedAppHUDBundleIdentifier == nil {
             return "Reset restores Global items and shared HUD customization to defaults. "
                 + "Restore Backup replaces Global items, every App HUD, and shared HUD customization."
         }
-        return "Reset copies current Global items into \(selectedProfileTitle) HUD; shared HUD customization is unchanged. "
+        return "Reset makes \(selectedProfileTitle) HUD follow Global again, removing its customized, hidden and app-only items and its own order; shared HUD customization is unchanged. "
             + "Restore Backup replaces Global items, every App HUD, and shared HUD customization."
     }
 
@@ -208,11 +318,11 @@ struct MenuItemsPane: View {
         showingAppHUDPicker = false
         switch coordinator.createAppHUD(forBundleIdentifier: bundleIdentifier) {
         case .created:
-            profileMessage = "Added \(name) HUD as an independent copy of Global. It will apply after Saved."
+            profileMessage = "Added \(name) HUD. It follows Global until you edit an item, and will apply after Saved."
         case .selectedExisting:
             profileMessage = "\(selectedProfileTitle) HUD already existed and was selected without being overwritten."
         case .replacedUnavailable:
-            profileMessage = "Replaced the unreadable \(name) HUD with a copy of Global. It will apply after Saved."
+            profileMessage = "Replaced the unreadable \(name) HUD with one that follows Global. It will apply after Saved."
         case .rejected:
             profileMessage = "Could not add an App HUD for \(bundleIdentifier). No changes were saved."
         }
@@ -365,6 +475,7 @@ private struct MenuItemsProfileLabel: NSViewRepresentable {
         case headline
         case secondary
         case secondaryWrapping
+        case body
     }
 
     let text: String
@@ -379,10 +490,17 @@ private struct MenuItemsProfileLabel: NSViewRepresentable {
 
     func updateNSView(_ label: NSTextField, context: Context) {
         label.stringValue = text
-        label.font = style == .headline
-            ? .systemFont(ofSize: NSFont.systemFontSize, weight: .semibold)
-            : .systemFont(ofSize: NSFont.smallSystemFontSize)
-        label.textColor = style == .headline ? .labelColor : .secondaryLabelColor
+        switch style {
+        case .headline:
+            label.font = .systemFont(ofSize: NSFont.systemFontSize, weight: .semibold)
+            label.textColor = .labelColor
+        case .body:
+            label.font = .systemFont(ofSize: NSFont.systemFontSize)
+            label.textColor = .labelColor
+        case .secondary, .secondaryWrapping:
+            label.font = .systemFont(ofSize: NSFont.smallSystemFontSize)
+            label.textColor = .secondaryLabelColor
+        }
         label.maximumNumberOfLines = style == .secondaryWrapping ? 2 : 1
         label.lineBreakMode = style == .secondaryWrapping ? .byWordWrapping : .byTruncatingTail
         label.setAccessibilityLabel(text)

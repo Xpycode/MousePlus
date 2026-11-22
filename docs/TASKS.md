@@ -4,7 +4,7 @@
 
 ## Active plan
 
-- App HUD inheritance: [`plans/app-hud-inheritance-implementation.md`](plans/app-hud-inheritance-implementation.md). Waves 1–3 done; next ready: 4.1, 4.2. Status lives in the plan.
+- App HUD inheritance: [`plans/app-hud-inheritance-implementation.md`](plans/app-hud-inheritance-implementation.md). Implementation done; 5.2 review, E1 and E2 remain. Status lives in the plan.
 
 ## Backlog
 <!-- Ideas and future work. Added by /interview, user input, or discovered during development. -->

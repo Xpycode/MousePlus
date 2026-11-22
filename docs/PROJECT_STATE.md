@@ -13,9 +13,9 @@
 
 - **Phase:** Implementation — next task selection. <!-- Phase changed: 2026-09-11 -->
 - **Focus:** App HUD inheritance — spec approved (`../specs/app-hud-inheritance.md`), plan ready: [`plans/app-hud-inheritance-implementation.md`](plans/app-hud-inheritance-implementation.md) (11 tasks, 5 waves + 2 acceptance checks).
-- **Execution:** [plan](plans/app-hud-inheritance-implementation.md) Waves 1–3 complete (240/241 focused; the one failure was already broken); Wave 4 (4.1, 4.2 Settings UI) next.
+- **Execution:** [plan](plans/app-hud-inheritance-implementation.md) Waves 1–4 and 5.1 complete (250/251 focused; the one failure was already broken); 5.2 review, then E1 (Atlas) and E2 (user).
 - **Blocker:** No signing certificates on the M4 Pro; every unsigned rebuild loses its Accessibility permission and must be re-added by hand.
-- **Next:** Wave 4 UI, then 5.1/5.2 and the Atlas check; local signing certificate once the 99-AUTH folder is on this Mac.
+- **Next:** 5.2 review, E1 Atlas Settings check, E2 your live acceptance; local signing certificate once the 99-AUTH folder is on this Mac.
 - **Current handoff:** [2026-11-22 Resume (spec and plan)](sessions/2026-11-22.md#resume-spec-and-plan)
 
 ## Recent
@@ -37,7 +37,7 @@
 - **HUD Opening Styles:** 7/7 tasks complete and signed-live verified on the supported BetterMouse-to-keyboard route. VoiceOver, direct MousePlus mouse triggering and the broad device/geometry performance matrix are deferred before release and remain untested.
 - **App-specific HUDs:** 5/5 implementation waves and signed-live Finder/Global acceptance complete on the supported BetterMouse-to-keyboard route.
 - **Trigger backend:** Keyboard and standard mouse paths work (the mouse trigger button is now consumed, not passed to other apps); advanced Logitech HID++ support remains undecided.
-- **App HUD inheritance:** spec approved; 6/11 tasks (Waves 1–3 complete).
+- **App HUD inheritance:** spec approved; 9/11 tasks (implementation done; review and acceptance remain).
 - **Task tracker:** no current sprint tasks; 9 backlog items, one of them a precautionary fix awaiting a recurrence check.
 
 ## Risks and Backlog

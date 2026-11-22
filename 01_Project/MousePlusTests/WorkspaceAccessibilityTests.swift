@@ -314,13 +314,52 @@ final class WorkspaceAccessibilityTests: XCTestCase {
         let host = MenuItemsSettingsTestHost(coordinator)
 
         let copy = try host.view("menuItems.profile.copyExplanation")
-        XCTAssertTrue((copy.accessibilityLabel() ?? "").contains("copy Global once"))
-        XCTAssertTrue((copy.accessibilityLabel() ?? "").contains("independent"))
+        XCTAssertEqual(copy.accessibilityLabel(), "App HUDs follow Global until you edit an item.")
 
         let semantics = try host.view("menuItems.profile.semantics")
         let explanation = semantics.accessibilityLabel() ?? ""
         XCTAssertTrue(explanation.contains("every App HUD"))
         XCTAssertTrue(explanation.contains("shared HUD customization"))
+    }
+
+    func testHiddenItemsButtonAppearsOnlyForAppHUDAndTracksHiddenCount() async throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let persistence = ConfigurationService(store: ConfigurationStore(directoryURL: directory))
+        var configuration = Configuration()
+        let bundleIdentifier = "invalid.uninstalled.mouseplus-tests"
+        _ = configuration.setAppHUDProfile(
+            AppHUDProfile(layout: configuration.globalHUDActionLayout),
+            forBundleIdentifier: bundleIdentifier
+        )
+        try await persistence.save(configuration)
+
+        let coordinator = SettingsWorkspaceCoordinator(persistence: persistence)
+        await coordinator.load()
+        let host = MenuItemsSettingsTestHost(coordinator)
+
+        XCTAssertThrowsError(
+            try host.control("menuItems.profile.hiddenItems") as NSButton,
+            "Global shows no Hidden Items button (AC13)"
+        )
+
+        XCTAssertTrue(coordinator.selectHUDProfile(.app(bundleIdentifier: bundleIdentifier)))
+        await host.waitUntil { coordinator.menuEditorModel.isEditingAppHUD }
+        await host.waitUntil { (try? host.control("menuItems.profile.hiddenItems") as NSButton) != nil }
+        let hiddenItems: NSButton = try host.control("menuItems.profile.hiddenItems")
+        XCTAssertEqual(hiddenItems.title, "Hidden Items (0)…")
+        XCTAssertFalse(hiddenItems.isEnabled)
+
+        let model = coordinator.menuEditorModel
+        let item = try XCTUnwrap(model.inner.first)
+        model.selection = SlotSelection(band: .inner, itemID: item.id, subItemID: nil)
+        model.removeSelectedItem()
+        await host.waitUntil { hiddenItems.isEnabled }
+        XCTAssertEqual(hiddenItems.title, "Hidden Items (1)…")
+
+        model.show(hidden: item)
+        await host.waitUntil { !hiddenItems.isEnabled }
+        XCTAssertEqual(hiddenItems.title, "Hidden Items (0)…")
     }
 
     func testFillUnusedSlotsUsesNativeCheckboxAndUpdatesSharedCustomization() async throws {
@@ -443,6 +482,14 @@ private final class TriggersSettingsTestHost {
     }
 }
 
+/// Thrown (not recorded) when a hosted element is absent, so `try?` and
+/// `XCTAssertThrowsError` can probe for absence or poll for appearance
+/// without `XCTUnwrap` logging a failure on every miss. A presence lookup
+/// that misses still fails the test through the thrown error.
+private struct MissingNativeElement: Error, CustomStringConvertible {
+    let description: String
+}
+
 @MainActor
 private final class MenuItemsSettingsTestHost {
     private let host: NSHostingView<AnyView>
@@ -472,7 +519,8 @@ private final class MenuItemsSettingsTestHost {
             if view.accessibilityIdentifier() == identifier, let control = view as? T { return control }
             return view.subviews.lazy.compactMap { find($0) }.first
         }
-        return try XCTUnwrap(find(host), "Missing native control: \(identifier)")
+        guard let control = find(host) else { throw MissingNativeElement(description: "Missing native control: \(identifier)") }
+        return control
     }
 
     func view(_ identifier: String) throws -> NSView {
@@ -481,7 +529,8 @@ private final class MenuItemsSettingsTestHost {
             if candidate.accessibilityIdentifier() == identifier { return candidate }
             return candidate.subviews.lazy.compactMap { find($0) }.first
         }
-        return try XCTUnwrap(find(host), "Missing native view: \(identifier)")
+        guard let view = find(host) else { throw MissingNativeElement(description: "Missing native view: \(identifier)") }
+        return view
     }
 
     func waitUntil(_ predicate: () -> Bool) async {
@@ -492,5 +541,44 @@ private final class MenuItemsSettingsTestHost {
         }
         host.layoutSubtreeIfNeeded()
         XCTAssertTrue(predicate(), "Menu Items did not update its native controls")
+    }
+}
+
+// MARK: - 4.2
+
+extension WorkspaceAccessibilityTests {
+    func testSelectedItemInheritanceStatusUsesNativeControlsOnlyInAppHUD() async throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let coordinator = SettingsWorkspaceCoordinator(
+            persistence: ConfigurationService(store: ConfigurationStore(directoryURL: directory))
+        )
+        await coordinator.load()
+        let host = MenuItemsSettingsTestHost(coordinator)
+        let model = coordinator.menuEditorModel
+        let itemID = try XCTUnwrap(model.middle.first?.id)
+
+        // Global: no inheritance controls, unchanged Delete label (AC13).
+        model.selection = SlotSelection(band: .middle, itemID: itemID, subItemID: nil)
+        await host.waitUntil { (try? host.control("menuItems.delete") as NSButton) != nil }
+        let globalDelete: NSButton = try host.control("menuItems.delete")
+        XCTAssertEqual(globalDelete.title, "Delete Item")
+        XCTAssertNil(try? host.view("menuItems.editor.inheritance.status"))
+        XCTAssertNil(try? host.view("menuItems.revertOrder"))
+
+        // App HUD: an inherited item follows Global and offers Customize.
+        _ = coordinator.createAppHUD(forBundleIdentifier: "invalid.uninstalled.mouseplus-tests-4-2")
+        model.selection = SlotSelection(band: .middle, itemID: itemID, subItemID: nil)
+        await host.waitUntil { (try? host.view("menuItems.editor.inheritance.status")) != nil }
+        let status = try host.view("menuItems.editor.inheritance.status")
+        XCTAssertEqual(status.accessibilityLabel(), "Follows Global")
+        let delete: NSButton = try host.control("menuItems.delete")
+        XCTAssertTrue(delete.title.hasPrefix("Hide in "))
+
+        let customize: NSButton = try host.control("menuItems.editor.inheritance.customize")
+        customize.performClick(nil)
+        await host.waitUntil { (try? host.view("menuItems.editor.inheritance.revertToGlobal")) != nil }
+        let customized = try host.view("menuItems.editor.inheritance.status")
+        XCTAssertTrue((customized.accessibilityLabel() ?? "").hasPrefix("Customized for "))
     }
 }

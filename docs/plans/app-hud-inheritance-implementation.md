@@ -4,7 +4,7 @@
 > Repair scheduling errors while preserving task IDs, completed evidence and approved scope.
 > Task state/evidence is authoritative here; TASKS links here and holds backlog/inbox.
 
-**Progress:** 6/11 tasks (Waves 1–3 complete); external acceptance: E1 (Atlas Settings check), E2 (user live acceptance).
+**Progress:** 9/11 tasks (Waves 1–4 and 5.1 complete; 5.2 review in progress); external acceptance: E1 (Atlas Settings check), E2 (user live acceptance).
 **Task states:** unchecked = pending / implemented-unverified / blocked (name gate);
 checked = complete with required evidence.
 
@@ -213,7 +213,7 @@ Paths: S = `01_Project/MousePlus`, T = `01_Project/MousePlusTests` (folders are 
 
 ### Wave 4 (parallel — both consume 3.1; disjoint files)
 
-- [ ] **4.1**: Profile bar, Hidden Items, messages, warnings and wiring.
+- [x] **4.1**: Profile bar, Hidden Items, messages, warnings and wiring.
   - Depends on: 3.1, 1.2, 1.3
   - Owns: `S/Views/MenuEditor/MenuItemsPane.swift`.
   - Work:
@@ -227,7 +227,7 @@ Paths: S = `01_Project/MousePlus`, T = `01_Project/MousePlusTests` (folders are 
     are used.
   - Backpressure: build succeeds; `WorkspaceAccessibilityTests`.
 
-- [ ] **4.2**: Status row and footer controls in the selected-item editor.
+- [x] **4.2**: Status row and footer controls in the selected-item editor.
   - Depends on: 3.1 (2.2's actions)
   - Owns: `S/Views/MenuEditor/SlotEditorForm.swift`.
   - Work:
@@ -244,7 +244,7 @@ Paths: S = `01_Project/MousePlus`, T = `01_Project/MousePlusTests` (folders are 
 
 ### Wave 5 (verification)
 
-- [ ] **5.1**: Full focused suite plus build.
+- [x] **5.1**: Full focused suite plus build.
   - Depends on: 4.1, 4.2
   - Owns: test evidence (coordinator).
   - Success: all focused classes pass with a count no lower than before. The list is the
@@ -306,6 +306,7 @@ Paths: S = `01_Project/MousePlus`, T = `01_Project/MousePlusTests` (folders are 
 | Wave 1: 1.1, 1.2, 1.3 | Three parallel fresh-context agents in isolated worktrees (one per task); 1.3 was reassigned `RingMenuView.swift` to replace a duplicate accessibility layer with a suffix hook | Integrated `build-for-testing` (Debug, unsigned) in the main checkout: TEST BUILD SUCCEEDED; no new warnings. 27 tests in 1.1, 2 in 1.2, 4 in 1.3 compiled, **not run** (needs user test authorization) | d495f9a; test fix in the next commit | Focused run (user-authorized): AppHUDInheritanceTests, AppSpecificHUDModelTests, TestActionControllerTests, MenuEditorPreviewSyncTests, **56/56 passed** after narrowing one over-strict assertion (the resolved runtime layout doesn't carry layout-level unknown JSON; storage does, and that's asserted). Complete. Next: Wave 2 |
 | Wave 2: 2.1, 2.2 | Two parallel fresh-context agents in worktrees (fast-forwarded to 5d7ff79) | Integrated focused run: AppSpecificHUDRuntimeTests, ConfigurationServiceTests, HUDTriggerRoutingTests, RingViewModelHUDTests, MenuEditorModelRegressionTests, AppHUDInheritanceTests, TestActionControllerTests, MenuEditorPreviewSyncTests, **152/152 passed**. AppSpecificHUDModelTests and SettingsWorkspaceCoordinatorTests are known-broken (crash on empty `makeAppHUDProfileFromGlobal().inner`); fixing them is in 3.1's scope | See the Wave 2 commit | 3.1 next. Interim: the coordinator shows empty App HUD rings and an edit would save a v1 copy. No build handoff until 3.1 |
 | Wave 3: 3.1 | One fresh-context agent (serial: single owner of the save path) | Integrated run of 12 classes (coordinator, state, model, inheritance, config service, runtime, routing, ring VM, editor model, test action, preview sync, workspace accessibility): **240/241**. The one failure, `WorkspaceAccessibilityTests.testFillUnusedSlots…`, also fails at e456859, so it was already broken (TASKS backlog) | See the Wave 3 commit | COMPAT accessors removed; `init(layout:)` kept as the v1 migration-input constructor for test fixtures. Next: Wave 4 (4.1, 4.2) |
+| Wave 4: 4.1, 4.2 + 5.1 | Two parallel fresh-context agents in worktrees; the coordinator merged both edits to `WorkspaceAccessibilityTests` and wired `SlotEditorForm(appName:)`. A fresh agent fixed the new tests' failures: the test helpers' `XCTUnwrap` recorded failures for misses inside `try?`, plus a render-lag wait. The UI was fine | 5.1: 14 classes, **250/251**; the only failure is the one that was already broken (`testFillUnusedSlots…`). Result: `$TMPDIR/mp-wave1-dd/Logs/Test/Test-MousePlus-2026.11.22_20-20-15-+0100.xcresult` | See the Wave 4 commit | UI claims still need E1 (Atlas). Next: 5.2 review |
 
 ---
 *Keep active while required work or acceptance is incomplete. On completion, archive with execution

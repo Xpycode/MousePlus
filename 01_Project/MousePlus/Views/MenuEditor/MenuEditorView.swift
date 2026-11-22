@@ -11,6 +11,9 @@ import SwiftUI
 struct MenuEditorWorkspace<ActionAccessory: View, MenuAccessory: View>: View {
     @Bindable var model: MenuEditorModel
     var appearance: AppearanceConfig = .default
+    /// The App HUD being edited, for the preview's ", customized for <App>"
+    /// labels; `nil` for Global.
+    var appName: String? = nil
     var onReset: () -> Void
     @ViewBuilder var actionAccessory: () -> ActionAccessory
     @ViewBuilder var menuAccessory: () -> MenuAccessory
@@ -27,7 +30,12 @@ struct MenuEditorWorkspace<ActionAccessory: View, MenuAccessory: View>: View {
                 // The default ring is 448pt square. A stable 480pt column leaves
                 // breathing room without coupling its position to the form.
                 VStack(spacing: 8) {
-                    RingPreviewSelector(model: model, appearance: appearance)
+                    RingPreviewSelector(
+                        model: model,
+                        appearance: appearance,
+                        customizedItemIDs: model.isEditingAppHUD ? model.customizedItemIDs : [],
+                        appName: model.isEditingAppHUD ? appName : nil
+                    )
                         .frame(maxHeight: .infinity)
                 }
                 .frame(width: 480)
@@ -62,7 +70,7 @@ struct MenuEditorWorkspace<ActionAccessory: View, MenuAccessory: View>: View {
                         }
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                     } else {
-                        SlotEditorForm(model: model, actionAccessory: actionAccessory)
+                        SlotEditorForm(model: model, appName: appName, actionAccessory: actionAccessory)
                             .frame(maxWidth: .infinity, maxHeight: .infinity)
                     }
                 }
