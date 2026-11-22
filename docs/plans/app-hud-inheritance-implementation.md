@@ -1,5 +1,7 @@
 # Implementation Plan — App HUD Inheritance
 
+**Completed:** 2026-11-22 · **Status:** Closed. All 11 tasks, E1 and E2 passed. The Use Global ring addendum (AC20–AC27) is not part of this plan.
+
 > **Persists across sessions.** Execute using the shared `commands/execute.md` procedure.
 > Repair scheduling errors while preserving task IDs, completed evidence and approved scope.
 > Task state/evidence is authoritative here; TASKS links here and holds backlog/inbox.

@@ -4,16 +4,18 @@
 
 ## Active plan
 
-- App HUD inheritance: [`plans/app-hud-inheritance-implementation.md`](plans/app-hud-inheritance-implementation.md). All tasks and E1 done; E2 (your live acceptance) remains. Status lives in the plan.
+- None. App HUD inheritance is complete (2026-11-22): [`plans/app-hud-inheritance-implementation.md`](plans/app-hud-inheritance-implementation.md).
 
 ## Backlog
 <!-- Ideas and future work. Added by /interview, user input, or discovered during development. -->
 <!-- Priority: top = highest, bottom = lowest -->
 
-- [ ] **App HUD slots inherit from Global unless overridden** (decided 2026-11-22, see
-  `decisions.md`). Today an App HUD is a one-time copy, so Global edits silently miss it (Cmd+C
-  on Global Copy never reached the Safari HUD). Spec drafted 2026-11-22:
-  [`specs/app-hud-inheritance.md`](../specs/app-hud-inheritance.md); planned in the active plan above.
+- [ ] **Use Global ring switch for App HUDs** (decided 2026-11-22): per-ring "Use Global inner/middle
+  ring" checkbox, edits blocked while on. Spec addendum AC20–AC27 in
+  [`specs/app-hud-inheritance.md`](../specs/app-hud-inheritance.md). Needs checkbox placement confirmed, then a plan.
+
+- [ ] **Clearer Test Action target label (2026-11-22):** "Target: Notes" confused the user on a Global item.
+  Consider "Test sends to: <App>", and for an App HUD test against that app when it is running.
 
 - [ ] **Awaiting recurrence check:** Menu Items preview showed the built-in sample ring while the
   status said "Saved". Cause not reproduced; precautionary remount-after-load added 2026-11-21.
