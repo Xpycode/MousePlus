@@ -4,7 +4,7 @@
 > Repair scheduling errors while preserving task IDs, completed evidence and approved scope.
 > Task state/evidence is authoritative here; TASKS links here and holds backlog/inbox.
 
-**Progress:** 0/11 tasks complete (Wave 1 implemented, build-verified, tests not yet run); external acceptance: E1 (Atlas Settings check), E2 (user live acceptance).
+**Progress:** 3/11 tasks (Wave 1 complete); external acceptance: E1 (Atlas Settings check), E2 (user live acceptance).
 **Task states:** unchecked = pending / implemented-unverified / blocked (name gate);
 checked = complete with required evidence.
 
@@ -100,7 +100,7 @@ layouts. A Global-only edit leaves App HUD storage byte-equal.
 
 ## Execution schedule and ownership
 
-- **Execution scope/limits:** user requested Wave 1 only (2026-11-22). Later waves need a new request.
+- **Execution scope/limits:** Wave 1 requested, then "continue" (2026-11-22). Focused test runs authorized for this execution run.
 - **Testing limit:** `xcodebuild test` launches the app on the user's desktop. It is excluded
   from the standing permissions (`34_testing.md`), so each wave's test run needs the user to
   authorize it or to run it themselves. Building with `xcodebuild build` is allowed. Pure model
@@ -118,7 +118,7 @@ Paths: S = `01_Project/MousePlus`, T = `01_Project/MousePlusTests` (folders are 
 
 ### Wave 1 (parallel — no mutual dependencies)
 
-- [ ] **1.1**: Inheritance model, resolver, inverse diff, migration and repair (pure, no UI).
+- [x] **1.1**: Inheritance model, resolver, inverse diff, migration and repair (pure, no UI).
   - Depends on / external gates: none
   - Owns: `S/Models/AppHUDProfile.swift` (v2 coding: `rings`, `schemaVersion`, unknown-field
     preservation, v1 `layout` still decoded for migration) and new `S/Models/AppHUDResolver.swift`.
@@ -138,7 +138,7 @@ Paths: S = `01_Project/MousePlus`, T = `01_Project/MousePlusTests` (folders are 
     `-only-testing:MousePlusTests/AppHUDInheritanceTests -only-testing:MousePlusTests/AppSpecificHUDModelTests`
     (needs test authorization).
 
-- [ ] **1.2**: Test Action shows where the item comes from (AC12b).
+- [x] **1.2**: Test Action shows where the item comes from (AC12b).
   - Depends on / external gates: none
   - Owns: `S/Views/MenuEditor/TestActionControl.swift`, `S/ViewModels/TestActionController.swift`
     and `T/TestActionControllerTests.swift`.
@@ -148,7 +148,7 @@ Paths: S = `01_Project/MousePlus`, T = `01_Project/MousePlusTests` (folders are 
   - Success: the label shows only when non-nil. Existing behavior is unchanged when nil.
   - Backpressure: build succeeds; `-only-testing:MousePlusTests/TestActionControllerTests`.
 
-- [ ] **1.3**: Ring preview marks customized items (spec, Editor controls).
+- [x] **1.3**: Ring preview marks customized items (spec, Editor controls).
   - Depends on / external gates: none
   - Owns: `S/Views/MenuEditor/RingPreviewSelector.swift` and `T/MenuEditorPreviewSyncTests.swift`.
   - Interface: a new input `customizedItemIDs: Set<UUID>` and an `appName: String?` used in the
@@ -300,7 +300,7 @@ Paths: S = `01_Project/MousePlus`, T = `01_Project/MousePlusTests` (folders are 
 
 | Wave / task IDs | Assignments or serial reason | Validation / evidence | Commits or exception | Remaining gates / next action or stop reason |
 |---|---|---|---|---|
-| Wave 1: 1.1, 1.2, 1.3 | Three parallel fresh-context agents in isolated worktrees (one per task); 1.3 was reassigned `RingMenuView.swift` to replace a duplicate accessibility layer with a suffix hook | Integrated `build-for-testing` (Debug, unsigned) in the main checkout: TEST BUILD SUCCEEDED; no new warnings. 27 tests in 1.1, 2 in 1.2, 4 in 1.3 compiled, **not run** (needs user test authorization) | See the Wave 1 commit | Boxes stay unchecked until the focused tests pass: `-only-testing:` AppHUDInheritanceTests, AppSpecificHUDModelTests, TestActionControllerTests, MenuEditorPreviewSyncTests. Next: the test run, then Wave 2 on request |
+| Wave 1: 1.1, 1.2, 1.3 | Three parallel fresh-context agents in isolated worktrees (one per task); 1.3 was reassigned `RingMenuView.swift` to replace a duplicate accessibility layer with a suffix hook | Integrated `build-for-testing` (Debug, unsigned) in the main checkout: TEST BUILD SUCCEEDED; no new warnings. 27 tests in 1.1, 2 in 1.2, 4 in 1.3 compiled, **not run** (needs user test authorization) | d495f9a; test fix in the next commit | Focused run (user-authorized): AppHUDInheritanceTests, AppSpecificHUDModelTests, TestActionControllerTests, MenuEditorPreviewSyncTests, **56/56 passed** after narrowing one over-strict assertion (the resolved runtime layout doesn't carry layout-level unknown JSON; storage does, and that's asserted). Complete. Next: Wave 2 |
 
 ---
 *Keep active while required work or acceptance is incomplete. On completion, archive with execution

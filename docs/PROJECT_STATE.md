@@ -13,9 +13,9 @@
 
 - **Phase:** Implementation — next task selection. <!-- Phase changed: 2026-09-11 -->
 - **Focus:** App HUD inheritance — spec approved (`../specs/app-hud-inheritance.md`), plan ready: [`plans/app-hud-inheritance-implementation.md`](plans/app-hud-inheritance-implementation.md) (11 tasks, 5 waves + 2 acceptance checks).
-- **Execution:** [plan](plans/app-hud-inheritance-implementation.md) Wave 1 (1.1–1.3) implemented and build-verified; awaiting the focused test run (needs user OK, because it opens the app). Wave 2 is ready after that, on request.
+- **Execution:** [plan](plans/app-hud-inheritance-implementation.md) Wave 1 complete (56/56 focused tests); Wave 2 (2.1, 2.2) in progress.
 - **Blocker:** No signing certificates on the M4 Pro; every unsigned rebuild loses its Accessibility permission and must be re-added by hand.
-- **Next:** run the Wave 1 focused tests, then `/execute` Wave 2; local signing certificate once the 99-AUTH folder is on this Mac.
+- **Next:** Waves 2–3 together (don't hand out a build between them); local signing certificate once the 99-AUTH folder is on this Mac.
 - **Current handoff:** [2026-11-22 Resume (spec and plan)](sessions/2026-11-22.md#resume-spec-and-plan)
 
 ## Recent
@@ -37,7 +37,7 @@
 - **HUD Opening Styles:** 7/7 tasks complete and signed-live verified on the supported BetterMouse-to-keyboard route. VoiceOver, direct MousePlus mouse triggering and the broad device/geometry performance matrix are deferred before release and remain untested.
 - **App-specific HUDs:** 5/5 implementation waves and signed-live Finder/Global acceptance complete on the supported BetterMouse-to-keyboard route.
 - **Trigger backend:** Keyboard and standard mouse paths work (the mouse trigger button is now consumed, not passed to other apps); advanced Logitech HID++ support remains undecided.
-- **App HUD inheritance:** spec approved; Wave 1 implemented (tests pending); 0/11 complete.
+- **App HUD inheritance:** spec approved; 3/11 tasks (Wave 1 complete).
 - **Task tracker:** no current sprint tasks; 9 backlog items, one of them a precautionary fix awaiting a recurrence check.
 
 ## Risks and Backlog

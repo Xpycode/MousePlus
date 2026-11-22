@@ -491,8 +491,11 @@ final class AppHUDInheritanceTests: XCTestCase {
         let rings = try XCTUnwrap(object["rings"] as? [String: Any])
         XCTAssertEqual(rings["futureLayoutSetting"] as? NSDictionary, ["spacing": 12] as NSDictionary)
 
+        // Layout-level unknown fields live in storage (`rings`, asserted above); the resolved
+        // runtime layout is never saved, so compare what is shown.
         let resolved = AppHUDResolver.resolve(global: global, profile: migrated)
-        XCTAssertEqual(resolved.layout, v1.layout)
+        XCTAssertEqual(resolved.layout.inner, v1.layout.inner)
+        XCTAssertEqual(resolved.layout.middle, v1.layout.middle)
         XCTAssertEqual(try savedItems(resolved.layout)[0]["futureItem"] as? Int, 1)
     }
 
