@@ -16,15 +16,8 @@
   If it recurs, check the Selected Item tab before clicking the ring.
   [2026-11-21 session](sessions/2026-11-21.md#progress).
 
-- [ ] Guard Global menu saves against external changes. A Menu Items save replaces the whole
-  Global menu on disk with no changed-externally check (app HUDs have one). No second writer
-  exists today. Found 2026-11-21; code path in the session log.
-
 - [ ] Set up a stable local signing identity on the M4 Pro (self-signed certificate, or sign Xcode
   into the Apple ID) so Accessibility permission survives rebuilds. Offered 2026-11-21; undecided.
-
-- [ ] Settings "Test Action" for Send Keystroke does not bring the target app forward first, so
-  the keystroke may land on Settings itself. Read from code 2026-11-21; not reproduced.
 
 - [ ] Test HID++ button diversion next to BetterMouse (MX Master 3S gesture button `0x00C3`) to
   settle the Logitech trigger-backend question; then spec a minimal Swift port. Call sequence,

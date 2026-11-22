@@ -1,8 +1,11 @@
 # Completed Tasks
 
-**Total archived:** 44
-**Last updated:** 2026-09-26
+**Total archived:** 47
+**Last updated:** 2026-11-22
 
+- [x] (2026-11-22) Mouse trigger button is consumed by an event tap so other apps (Warp) no longer also act on it; user-verified.
+- [x] (2026-11-22) Global menu saves write only when changed and refuse to overwrite external Global changes; 3 tests.
+- [x] (2026-11-22) Settings Test Action for Send Keystroke targets the remembered app and hands focus to it; user-verified.
 - [x] (2026-09-26) Corrected signed build: user confirmed no recurring permission dialog, normal HUD triggering, and Global preview/layout parity. Recorder plain/modifier acceptance also passed. Merged into main.
 - [x] (2026-09-11) App-Specific HUDs — Task 5.1: Closed AC1–AC18 automated evidence, full-suite/build gates, and independent persistence/runtime adversarial review; signed-live Finder acceptance remains E1.
 - [x] (2026-09-11) App-Specific HUDs — Task 4.1: Presented the frozen app or Global context in the existing native center Settings action while preserving geometry, hit testing, drag ownership, accessibility, and preview isolation.

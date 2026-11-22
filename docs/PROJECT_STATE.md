@@ -1,6 +1,6 @@
 # Project State
 
-**Last updated:** 2026-11-21
+**Last updated:** 2026-11-22
 
 ## Identity
 
@@ -12,18 +12,18 @@
 ## Now
 
 - **Phase:** Implementation — next task selection. <!-- Phase changed: 2026-09-11 -->
-- **Focus:** Choose the next task. The 2026-11-21 fixes (key labels, preview precaution, ring keystrokes reaching the app underneath) are accepted and committed.
+- **Focus:** Choose the next task. The 2026-11-22 fixes (trigger button captured, Global menu save guard, Test Action keystroke target) are accepted and committed.
 - **Blocker:** No signing certificates on the M4 Pro; every unsigned rebuild loses its Accessibility permission and must be re-added by hand.
-- **Next:** Decide on a local self-signed signing certificate and the Global-menu overwrite guard.
-- **Current handoff:** [2026-11-21 Resume](sessions/2026-11-21.md#resume)
+- **Next:** Spec App HUD inheritance from Global (decided 2026-11-22); local signing certificate once the 99-AUTH folder is on this Mac.
+- **Current handoff:** [2026-11-22 Resume](sessions/2026-11-22.md#resume)
 
 ## Recent
 
+- **2026-11-22:** The mouse trigger button no longer also acts in other apps (Warp tab switching); Global menu saves no longer overwrite outside changes; Test Action sends keystrokes to the app you came from. User-verified and committed. Decided app menus will inherit from Global.
 - **2026-11-21:** Key labels now follow the keyboard layout; precautionary fix for the stale preview; fixed ring keystrokes going to MousePlus instead of the app underneath (ring panel no longer takes keyboard focus; user-accepted in Safari with Settings closed and open). Committed.
 - **2026-11-18:** Fresh clone and unsigned build on the reset M4 Pro; found a stale Menu Items preview and US-only key labels while setting it up.
 - **2026-09-26:** Verified plain/modifier recording, fixed preview dimensions, and passed 11 focused tests. Cleared a stuck macOS permission dialog; corrected signed build passed user-confirmed permission, trigger, and preview/layout acceptance. Changes merged and pushed to main.
 - **2026-09-25:** Exported a Developer ID-signed Release 0.1.0 (1) from the current working tree; Apple accepted notarization, and the stapled ZIP passed signature and Gatekeeper checks. Local artifact only.
-- **2026-09-17:** App-specific HUD acceptance passed through post-delete relaunch; a signed Release 0.1.0 (1) build was installed and launched from `/Applications` on M1-Max.
 
 ## Progress
 
@@ -35,8 +35,8 @@
 - **HUD Motion v1:** 5/5 waves complete; automated checks and independent review passed, with overall signed-live acceptance from the user.
 - **HUD Opening Styles:** 7/7 tasks complete and signed-live verified on the supported BetterMouse-to-keyboard route. VoiceOver, direct MousePlus mouse triggering and the broad device/geometry performance matrix are deferred before release and remain untested.
 - **App-specific HUDs:** 5/5 implementation waves and signed-live Finder/Global acceptance complete on the supported BetterMouse-to-keyboard route.
-- **Trigger backend:** Keyboard and standard mouse paths work; advanced Logitech HID++ support remains undecided.
-- **Task tracker:** no current sprint tasks; 10 backlog items, one of them a precautionary fix awaiting a recurrence check.
+- **Trigger backend:** Keyboard and standard mouse paths work (the mouse trigger button is now consumed, not passed to other apps); advanced Logitech HID++ support remains undecided.
+- **Task tracker:** no current sprint tasks; 9 backlog items, one of them a precautionary fix awaiting a recurrence check.
 
 ## Risks and Backlog
 
