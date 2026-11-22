@@ -1,6 +1,7 @@
 # App HUD Inheritance Specification
 
-**Status:** Approved 2026-11-22 — planned in `docs/plans/app-hud-inheritance-implementation.md`.
+**Status:** Approved 2026-11-22. Per-item inheritance is planned in `docs/plans/app-hud-inheritance-implementation.md`.
+The whole-ring **Use Global ring** addendum (AC20–AC27) was added after E1 on 2026-11-22 and is not planned yet.
 **Created:** 2026-11-22
 **Last Updated:** 2026-11-22
 **Decision:** [2026-11-22 — App HUD slots inherit from Global unless overridden](../docs/decisions.md)
@@ -90,6 +91,72 @@ hidden and app-only items stay as you set them.
   <App>".
 - Profile messages (`addAppHUD`, and the Reset text in `profileSemantics`) are rewritten to say
   that the HUD follows Global instead of being an independent copy.
+
+### Addendum: Use Global ring (added 2026-11-22, during E2)
+
+**Why:** during live acceptance, the user's migrated Safari HUD had a Copy item that was
+customized with no keystroke (correctly preserved, per AC16), so Copy failed in Safari. Fixing
+that item by item is fine, but what the user wants is coarser: "inner ring global, middle ring
+app-specific". A per-ring switch says that directly and can't drift.
+
+**Rules (approved 2026-11-22):**
+
+| Question | Decision |
+|---|---|
+| What the switch covers | One ring of one App HUD: **inner** or **middle**. The middle switch also covers the middle items' outer-ring sub-items. There is no whole-HUD switch; turning on both rings gives the same result. |
+| What "on" means | That ring in the app is exactly Global's ring: same items, same order, same content. Global edits, additions, deletions and reorders always reach it. |
+| Turning it on | Removes that ring's overrides, hidden items, app-only items and custom order for that app. If the ring has any, Settings asks for confirmation first, naming the counts. Otherwise it turns on silently. |
+| Editing a ring that is on | **Blocked** (the user accepted the recommendation; auto-unticking was rejected). Item fields, Customize, Revert, Hide/Delete, Move, Revert Order and Add Item are disabled for that ring. Selecting items and Test Action still work. To change one item, untick the switch first. |
+| Turning it off | Nothing visible changes: every item in the ring becomes an ordinary inherited item following Global's order. Per-item customizing works again from there. |
+| Default | Off for every existing and newly created App HUD. Per-item inheritance already makes an untouched ring follow Global. The switch only adds the lock and the one-step cleanup. |
+
+**Editor controls (approved in principle 2026-11-22; exact placement to be confirmed under the
+UI-change protocol before implementation):**
+
+- **Menu & Rings tab, App HUD only:** above each ring's item list (Inner and Middle sections), a
+  checkbox **Use Global inner ring** / **Use Global middle ring**. It is hidden for the Global
+  profile (as in AC13).
+- **Selected-item editor:** for an item in a ring that is on, the top row reads "Follows Global
+  (whole ring)" with no Customize button, and the editable controls are disabled with a caption:
+  "Untick Use Global <ring> ring to edit this item here."
+- **Ring preview:** no customized dots appear in a ring that is on, because none can exist.
+
+**Acceptance criteria:**
+
+- **AC20.** Given a Safari HUD whose inner ring has a customized Copy with no keystroke, when the
+  user ticks Use Global inner ring, confirms and saves, then Copy in Safari sends Global's
+  keystroke, and Settings shows every inner item as "Follows Global (whole ring)".
+- **AC21.** Given Use Global inner ring is on for Safari, when an item is added to, deleted from,
+  edited in or reordered in Global's inner ring and saved, then the next Safari HUD shows Global's
+  inner ring exactly.
+- **AC22.** Given Use Global inner ring is on for Safari, then the Safari middle ring keeps its
+  customizations, hidden items, app-only items and custom order, unaffected.
+- **AC23.** Given a ring with no overrides, hidden items, app-only items or custom order, when the
+  switch is ticked, then no confirmation appears. Given a ring with any of these, the confirmation
+  names what will be removed, and Cancel leaves the ring and the checkbox unchanged.
+- **AC24.** Given the switch is on, then the editing controls listed in the rules are disabled for
+  that ring's items, and selecting an item and Test Action still work.
+- **AC25.** Given the switch is on, when the user unticks it and saves, then the ring shows the same
+  items in the same order, all inherited, and editing an item customizes it as in AC9.
+- **AC26.** Given a saved configuration with the switch on, when it is reloaded, then the switch is
+  still on and the stored ring has no overrides, hidden items, app-only items or custom order.
+  The configuration migrated from 0.1.0 loads with every switch off (AC16 still holds).
+- **AC27.** Given the switch is on, then AC14 overflow warnings never name that ring (Global's
+  ring is already within the limit).
+
+**Technical notes:**
+
+- **Storage:** a per-ring `followsGlobal: true` flag in the App HUD's `rings.inner` /
+  `rings.middle` (schema v2). When it is true, the ring's `overrides`, `hidden`, `appOnly` and
+  order are written empty, and the resolver ignores them defensively if present. An absent flag
+  means false, so no schema bump is needed; the reader must keep unknown keys as it does today.
+- **Resolution:** `resolve(global:rings:)` returns Global's band verbatim for a ring that is on.
+  `diff` must not produce overrides for that band; the coordinator rejects editor mutations there
+  as a second line of defence.
+- **Global-save repair:** `repairAppHUDProfiles(afterGlobalChangeFrom:)` skips a ring that is on.
+  A Global-only save must still leave stored App HUD profiles byte-equal (AC19).
+- **Older builds:** builds without this feature ignore the unknown flag and see an ordinary empty
+  ring, which resolves to Global. That is the same result, so no compatibility work is needed.
 
 ---
 
@@ -199,6 +266,7 @@ hidden and app-only items stay as you set them.
 - Changing presentation, motion, triggers or behavior settings (already global).
 - Warnings that a Global edit "didn't reach" an App HUD (option 1, rejected).
 - Syncing configuration between Macs.
+- A whole-HUD "Use Global" switch (both ring switches cover it) and an outer-ring-only switch.
 
 ---
 

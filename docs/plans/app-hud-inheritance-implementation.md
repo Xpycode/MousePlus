@@ -4,7 +4,7 @@
 > Repair scheduling errors while preserving task IDs, completed evidence and approved scope.
 > Task state/evidence is authoritative here; TASKS links here and holds backlog/inbox.
 
-**Progress:** 11/11 tasks; E1 passed; E2 (user live acceptance) pending; external acceptance: E1 (Atlas Settings check), E2 (user live acceptance).
+**Progress:** 11/11 tasks; E1 and E2 passed; external acceptance: E1 (Atlas Settings check), E2 (user live acceptance).
 **Task states:** unchecked = pending / implemented-unverified / blocked (name gate);
 checked = complete with required evidence.
 
@@ -271,7 +271,7 @@ Paths: S = `01_Project/MousePlus`, T = `01_Project/MousePlusTests` (folders are 
     Revert Order after a move, and "Hide in Safari".
   - While unavailable: model and coordinator work stays valid. UI claims stay unverified.
 
-- [ ] **E2**: User live acceptance on real apps.
+- [x] **E2**: User live acceptance on real apps. **Passed 2026-11-22:** after Revert to Global on Safari's migrated Copy (which had no keystroke), Copy in Safari copies; HUDs looked unchanged after upgrade. AC2/AC7/AC14 left to automated tests.
   - Depends on: E1, 5.2
   - Requires: the user, and an unsigned build, which means granting Accessibility again by hand.
     If a signing identity exists by then, that step goes away.

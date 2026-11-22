@@ -4,6 +4,22 @@ This file tracks the WHY behind technical and design decisions.
 
 ---
 
+## 2026-11-22 - Per-ring "Use Global ring" switch for App HUDs
+
+**Context:** During E2 live acceptance, the migrated Safari HUD kept a customized Copy item with
+no keystroke (correct under AC16), so Copy failed in Safari. The user wants a coarser rule,
+"inner ring global, middle ring app-specific", rather than reverting items one by one.
+
+**Options:** (1) Per-item Revert to Global only; (2) smarter migration that inherits
+incomplete app items; (3) a per-ring checkbox that locks a ring to Global. For (3): block edits
+while it's on, or auto-untick and customize on edit.
+
+**Decision:** Option 3, with edits **blocked** while it's on, so the checkbox always means exactly
+what it says. Turning it on removes that ring's customizations after confirmation. Spec
+addendum: `specs/app-hud-inheritance.md` AC20–AC27. Not planned yet.
+
+---
+
 ## 2026-11-22 - App HUD slots inherit from Global unless overridden
 
 **Context:** An App HUD is a one-time copy of the Global HUD; later Global edits never reach it.
