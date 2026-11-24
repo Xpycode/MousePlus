@@ -53,15 +53,20 @@ struct AppHUDEditState: Equatable {
     var edited: HUDActionLayout
     /// The editor's origin per item. Pass as `origins:`.
     var origins: [UUID: ItemOrigin]
+    var originsByBand: [Band: [UUID: ItemOrigin]]
     /// The Global layout the editor was loaded against.
     var global: HUDActionLayout
+    var lockedBands: Set<Band>
+    var customOrderBands: Set<Band>
 }
 
 /// The editor's App HUD inheritance state (private to `MenuEditorModel`).
 private struct InheritanceState {
     var global: HUDActionLayout
-    var origins: [UUID: ItemOrigin]
+    var originsByBand: [Band: [UUID: ItemOrigin]]
     var notShown: [EditorBand: [RingMenuItem]]
+    var lockedBands: Set<Band>
+    var storedOrderBands: Set<Band>
 
     func globalItems(_ band: EditorBand) -> [RingMenuItem] {
         band == .inner ? global.inner : global.middle
@@ -101,10 +106,18 @@ final class MenuEditorModel {
     // MARK: State
 
     /// Working copy of the inner ring (symbol-only quick actions).
-    var inner: [RingMenuItem]
+    var inner: [RingMenuItem] {
+        get { workingInner }
+        set { if !followsGlobal(.inner) { workingInner = newValue } }
+    }
+    private var workingInner: [RingMenuItem]
 
     /// Working copy of the middle ring (primary actions, may drill into sub-items).
-    var middle: [RingMenuItem]
+    var middle: [RingMenuItem] {
+        get { workingMiddle }
+        set { if !followsGlobal(.middle) { workingMiddle = newValue } }
+    }
+    private var workingMiddle: [RingMenuItem]
 
     /// Working copy of menu/ring HUD layout and appearance customization.
     var hudCustomization: HUDCustomization
@@ -129,8 +142,8 @@ final class MenuEditorModel {
         middle: [RingMenuItem],
         hudCustomization: HUDCustomization = .default
     ) {
-        self.inner = inner
-        self.middle = middle
+        workingInner = inner
+        workingMiddle = middle
         self.hudCustomization = hudCustomization
         enforceInnerInvariants()
         normalizeSnapPayloads()
@@ -197,16 +210,31 @@ final class MenuEditorModel {
             actionLayout: resolved.layout,
             hudCustomization: hudCustomization,
             preservingSelection: preservingSelection,
-            normalizeStoredValues: normalizeStoredValues
+            normalizeStoredValues: false
         )
+        func loadedOrigins(_ band: Band, shown: [RingMenuItem]) -> [UUID: ItemOrigin] {
+            if let origins = resolved.originsByBand[band] { return origins }
+            let ids = Set((shown + (resolved.notShown[band] ?? [])).map(\.id))
+            return resolved.origins.filter { ids.contains($0.key) }
+        }
         inheritance = InheritanceState(
             global: global,
-            origins: resolved.origins,
+            originsByBand: [
+                .inner: loadedOrigins(.inner, shown: inner),
+                .middle: loadedOrigins(.middle, shown: middle),
+            ],
             notShown: [
                 .inner: resolved.notShown[.inner] ?? [],
                 .middle: resolved.notShown[.middle] ?? [],
-            ]
+            ],
+            lockedBands: resolved.lockedBands,
+            storedOrderBands: resolved.customOrderBands
         )
+        if normalizeStoredValues {
+            enforceInnerInvariants()
+            normalizeSnapPayloads()
+            selection = selection.flatMap(validSelection)
+        }
     }
 
     var actionLayout: HUDActionLayout {
@@ -284,14 +312,14 @@ final class MenuEditorModel {
                 return self[keyPath: keyPath].first(where: { $0.id == id }) ?? Self.placeholder
             },
             set: { [weak self] newValue in
-                guard let self else { return }
+                guard let self, !self.followsGlobal(band) else { return }
                 guard let index = self[keyPath: keyPath].firstIndex(where: { $0.id == id }) else { return }
                 let old = self[keyPath: keyPath][index]
                 self[keyPath: keyPath][index] = Self.normalizingTypeSwitch(old: old, new: newValue)
                 // Re-assert inner invariants if we just wrote to the inner ring.
                 if band == .inner { self.enforceInnerInvariants() }
                 // A write that changes nothing (a SwiftUI echo) must not customize.
-                if self[keyPath: keyPath][index] != old { self.markEdited(id) }
+                if self[keyPath: keyPath][index] != old { self.markEdited(id, band: band) }
             }
         )
     }
@@ -316,7 +344,7 @@ final class MenuEditorModel {
                 return sub
             },
             set: { [weak self] newValue in
-                guard let self,
+                guard let self, !self.followsGlobal(.middle),
                       let parentIndex = self.middle.firstIndex(where: { $0.id == parentID }),
                       let subIndex = self.middle[parentIndex].subItems?.firstIndex(where: { $0.id == id }),
                       let old = self.middle[parentIndex].subItems?[subIndex] else {
@@ -324,7 +352,7 @@ final class MenuEditorModel {
                 }
                 let normalized = Self.normalizingTypeSwitch(old: old, new: newValue)
                 self.middle[parentIndex].subItems?[subIndex] = normalized
-                if normalized != old { self.markEdited(parentID) }
+                if normalized != old { self.markEdited(parentID, band: .middle) }
             }
         )
     }
@@ -418,7 +446,7 @@ final class MenuEditorModel {
     /// the button — invariant 3). The cap is per-band: middle at 8 must not
     /// block inner from growing toward 8.
     func addItem(to band: EditorBand) {
-        guard !atCap(for: band) else { return }
+        guard !followsGlobal(band), !atCap(for: band) else { return }
 
         // Inner items are symbol-only and never carry sub-items (invariant 1).
         let newItem = RingMenuItem(
@@ -434,7 +462,7 @@ final class MenuEditorModel {
         case .middle:
             middle.append(newItem)
         }
-        inheritance?.origins[newItem.id] = .appOnly
+        inheritance?.originsByBand[band.ringBand, default: [:]][newItem.id] = .appOnly
 
         selection = SlotSelection(band: band, itemID: newItem.id, subItemID: nil)
     }
@@ -448,7 +476,7 @@ final class MenuEditorModel {
     /// dropped, so Show brings back the Global item. An app-only item is
     /// deleted. In Global every removal deletes.
     func removeSelectedItem() {
-        guard let selection else { return }
+        guard let selection, !followsGlobal(selection.band) else { return }
 
         // Sub-item removal.
         if let subItemID = selection.subItemID, let parentID = selection.itemID {
@@ -469,7 +497,7 @@ final class MenuEditorModel {
         self[keyPath: keyPath].remove(at: index)
         if band == .inner { enforceInnerInvariants() }
         if inheritance != nil {
-            inheritance?.origins[itemID] = nil
+            inheritance?.originsByBand[band.ringBand]?[itemID] = nil
             // A Global ID now missing from the ring resolves as hidden; a
             // not-shown item moves up into the freed slot.
             reresolve(band) { _ in }
@@ -495,6 +523,7 @@ final class MenuEditorModel {
     /// items gives the band its own order (``hasCustomOrder(band:)``); moving
     /// only an app-only item just changes the item it follows.
     func moveItem(id: UUID, in band: EditorBand, by offset: Int) {
+        guard !followsGlobal(band) else { return }
         let keyPath = arrayKeyPath(for: band)
         let count = self[keyPath: keyPath].count
         guard count > 0,
@@ -524,7 +553,8 @@ final class MenuEditorModel {
     /// Creates the `subItems` array if it was `nil`. Only middle items may carry
     /// sub-items (invariant 2); there is deliberately no inner equivalent.
     func addSubItem(toMiddle parentID: UUID) {
-        guard let parentIndex = middle.firstIndex(where: { $0.id == parentID }) else { return }
+        guard !followsGlobal(.middle),
+              let parentIndex = middle.firstIndex(where: { $0.id == parentID }) else { return }
         guard !subItemsAtCap(for: parentID) else { return }   // invariant 3, outer band
 
         let newSub = RingMenuItem(label: "New", icon: "questionmark", actionType: .custom)
@@ -533,14 +563,15 @@ final class MenuEditorModel {
         } else {
             middle[parentIndex].subItems?.append(newSub)
         }
-        markEdited(parentID)
+        markEdited(parentID, band: .middle)
 
         selection = SlotSelection(band: .middle, itemID: parentID, subItemID: newSub.id)
     }
 
     /// Remove a sub-item from the middle item `parentID`, repointing selection.
     func removeSubItem(_ id: UUID, fromMiddle parentID: UUID) {
-        guard let parentIndex = middle.firstIndex(where: { $0.id == parentID }),
+        guard !followsGlobal(.middle),
+              let parentIndex = middle.firstIndex(where: { $0.id == parentID }),
               let subIndex = middle[parentIndex].subItems?.firstIndex(where: { $0.id == id }) else {
             return
         }
@@ -556,7 +587,7 @@ final class MenuEditorModel {
         // snap item with no zone — give it a real one so it doesn't silently no-op
         // while the detail form claims "Left" (invariant 4).
         normalizeSnapPayloads()
-        markEdited(parentID)
+        markEdited(parentID, band: .middle)
 
         // Repoint selection to the parent middle item.
         selection = SlotSelection(band: .middle, itemID: parentID, subItemID: nil)
@@ -582,18 +613,66 @@ final class MenuEditorModel {
     /// Whether an App HUD (rather than Global) is loaded.
     var isEditingAppHUD: Bool { inheritance != nil }
 
-    /// The editor's origin for every item in the App HUD, not-shown items
-    /// included. Empty in Global.
-    var origins: [UUID: ItemOrigin] { inheritance?.origins ?? [:] }
+    func followsGlobal(_ band: EditorBand) -> Bool {
+        inheritance?.lockedBands.contains(band.ringBand) == true
+    }
+
+    /// Locking replaces this ring's complete working copy, including overflow.
+    /// Unlocking keeps that exact copy as ordinary inherited items.
+    func setFollowsGlobal(_ value: Bool, for band: EditorBand) {
+        guard inheritance != nil, value != followsGlobal(band) else { return }
+        if value {
+            reresolve(band) { $0 = RingInheritance(followsGlobal: true) }
+        } else {
+            inheritance?.lockedBands.remove(band.ringBand)
+        }
+    }
+
+    /// Describe the unsaved and saved choices that turning on this switch would discard.
+    func globalRingConfirmation(for band: EditorBand) -> String? {
+        guard let state = inheritance, !followsGlobal(band) else { return nil }
+        let ring = workingInheritance(for: band, state: state)
+        let counts = [
+            (ring.overrides.count, "customized item"),
+            (ring.hidden.count, "hidden item"),
+            (ring.appOnly.count, "app-only item"),
+            (ring.customOrder == nil ? 0 : 1, "custom order"),
+        ]
+        let changes = counts.compactMap { count, name in
+            count > 0 ? "\(count) \(name)\(count == 1 ? "" : "s")" : nil
+        }
+        guard !changes.isEmpty else { return nil }
+        let ringName = band == .inner ? "inner" : "middle"
+        return "This will remove \(changes.formatted(.list(type: .and))) from this app’s \(ringName) ring."
+    }
+
+    /// ID-only projection for existing clients. Per-band editors use `origin(of:band:)`
+    /// because an imported Global layout can use the same UUID in both rings.
+    var origins: [UUID: ItemOrigin] {
+        guard let byBand = inheritance?.originsByBand else { return [:] }
+        return (byBand[.inner] ?? [:]).merging(byBand[.middle] ?? [:]) { inner, _ in inner }
+    }
 
     /// Where a top-level item comes from; `nil` in Global or for an unknown ID.
-    func origin(of id: UUID) -> ItemOrigin? {
-        inheritance?.origins[id]
+    func origin(of id: UUID, band: EditorBand? = nil) -> ItemOrigin? {
+        guard let band = band ?? editorBand(for: id) else { return nil }
+        return inheritance?.originsByBand[band.ringBand]?[id]
+    }
+
+    private func editorBand(for id: UUID) -> EditorBand? {
+        guard let inheritance else { return nil }
+        if let selection, selection.itemID == id { return selection.band }
+        return [EditorBand.inner, .middle].first { inheritance.originsByBand[$0.ringBand]?[id] != nil }
     }
 
     /// IDs of customized items, for the ring preview's dot.
     var customizedItemIDs: Set<UUID> {
-        Set(origins.compactMap { $0.value == .customized ? $0.key : nil })
+        customizedItemIDs(band: .inner).union(customizedItemIDs(band: .middle))
+    }
+
+    func customizedItemIDs(band: EditorBand) -> Set<UUID> {
+        guard let origins = inheritance?.originsByBand[band.ringBand] else { return [] }
+        return Set(origins.compactMap { $0.value == .customized ? $0.key : nil })
     }
 
     /// Global items hidden in this App HUD (inner first, then middle, each in
@@ -612,10 +691,11 @@ final class MenuEditorModel {
         }
     }
 
-    /// Whether `band` has its own order: the relative order of its Global-linked
-    /// items differs from Global's. Always `false` in Global.
+    /// An explicit saved order stays custom even if Global later matches it.
+    /// An unsaved move is custom when the Global-linked items change order.
     func hasCustomOrder(band: EditorBand) -> Bool {
-        guard let inheritance else { return false }
+        guard let inheritance, !followsGlobal(band) else { return false }
+        if inheritance.storedOrderBands.contains(band.ringBand) { return true }
         let global = inheritance.globalItems(band)
         let globalIDs = Set(global.map(\.id))
         var linkedOrder: [UUID] = []
@@ -647,61 +727,64 @@ final class MenuEditorModel {
     /// this App HUD's edits back into storage; `nil` in Global.
     var inheritanceEditState: AppHUDEditState? {
         guard let inheritance else { return nil }
+        let customOrders = [EditorBand.inner, .middle].filter { hasCustomOrder(band: $0) }
         return AppHUDEditState(
             edited: HUDActionLayout(inner: fullRing(band: .inner), middle: fullRing(band: .middle)),
-            origins: inheritance.origins,
-            global: inheritance.global
+            origins: origins,
+            originsByBand: inheritance.originsByBand,
+            global: inheritance.global,
+            lockedBands: inheritance.lockedBands,
+            customOrderBands: Set(customOrders.map(\.ringBand))
         )
     }
 
     /// Detach an inherited item as an app copy, even with identical content
     /// (AC12a). No-op for customized or app-only items and in Global.
-    func customize(id: UUID) {
-        guard inheritance?.origins[id] == .inherited else { return }
-        inheritance?.origins[id] = .customized
+    func customize(id: UUID, band: EditorBand? = nil) {
+        guard let band = band ?? editorBand(for: id), !followsGlobal(band) else { return }
+        markEdited(id, band: band)
     }
 
     /// Replace a customized item with the current Global item and follow Global
     /// again (AC3). No-op for an item without a Global ID and in Global.
-    func revertToGlobal(id: UUID) {
-        guard let inheritance else { return }
-        for band in [EditorBand.inner, .middle] {
-            guard let globalItem = inheritance.globalItems(band).first(where: { $0.id == id }) else { continue }
-            let keyPath = arrayKeyPath(for: band)
-            if let index = self[keyPath: keyPath].firstIndex(where: { $0.id == id }) {
-                self[keyPath: keyPath][index] = globalItem
-                if band == .inner { enforceInnerInvariants() }
-            } else if let index = inheritance.notShown[band]?.firstIndex(where: { $0.id == id }) {
-                self.inheritance?.notShown[band]?[index] = globalItem
-            } else {
-                continue
-            }
-            self.inheritance?.origins[id] = .inherited
-            selection = selection.flatMap(validSelection)
+    func revertToGlobal(id: UUID, band: EditorBand? = nil) {
+        guard let inheritance, let band = band ?? editorBand(for: id), !followsGlobal(band),
+              let globalItem = inheritance.globalItems(band).first(where: { $0.id == id }) else { return }
+        let keyPath = arrayKeyPath(for: band)
+        if let index = self[keyPath: keyPath].firstIndex(where: { $0.id == id }) {
+            self[keyPath: keyPath][index] = globalItem
+            if band == .inner { enforceInnerInvariants() }
+        } else if let index = inheritance.notShown[band]?.firstIndex(where: { $0.id == id }) {
+            self.inheritance?.notShown[band]?[index] = globalItem
+        } else {
             return
         }
+        self.inheritance?.originsByBand[band.ringBand, default: [:]][id] = .inherited
+        selection = selection.flatMap(validSelection)
     }
 
     /// Make `band` follow Global's order again (AC12). App-only items stay next
     /// to the item they currently follow, per the resolver's anchor rule.
     func revertOrder(band: EditorBand) {
+        guard !followsGlobal(band) else { return }
         reresolve(band) { $0.customOrder = nil }
     }
 
     /// Bring back a hidden Global item as inherited, at its Global position, or
     /// at the end of the ring when the ring has its own order (AC11).
-    func show(hidden item: RingMenuItem) {
-        for band in [EditorBand.inner, .middle]
-        where hiddenItems(band: band).contains(where: { $0.id == item.id }) {
-            reresolve(band) { $0.hidden.remove(item.id) }
-            return
+    func show(hidden item: RingMenuItem, band: EditorBand? = nil) {
+        let destination = band ?? [EditorBand.inner, .middle].first { band in
+            hiddenItems(band: band).contains { $0.id == item.id }
         }
+        guard let destination, !followsGlobal(destination),
+              hiddenItems(band: destination).contains(where: { $0.id == item.id }) else { return }
+        reresolve(destination) { $0.hidden.remove(item.id) }
     }
 
     /// Any edit to an inherited item (fields or sub-items) customizes it (AC9).
-    private func markEdited(_ id: UUID) {
-        guard inheritance?.origins[id] == .inherited else { return }
-        inheritance?.origins[id] = .customized
+    private func markEdited(_ id: UUID, band: EditorBand) {
+        guard origin(of: id, band: band) == .inherited else { return }
+        inheritance?.originsByBand[band.ringBand, default: [:]][id] = .customized
     }
 
     /// Turn `band` into inheritance metadata, apply `transform`, and resolve it
@@ -709,26 +792,36 @@ final class MenuEditorModel {
     /// unchanged; only the shown / not-shown split is recomputed.
     private func reresolve(_ band: EditorBand, _ transform: (inout RingInheritance) -> Void) {
         guard var state = inheritance else { return }
-        let current = fullRing(band: band)
-        var ring = AppHUDResolver.diff(
-            edited: current,
-            previous: RingInheritance(),
-            global: state.globalItems(band),
-            origins: state.origins
-        )
+        var ring = workingInheritance(for: band, state: state)
         transform(&ring)
         let rings = band == .inner ? AppHUDRings(inner: ring) : AppHUDRings(middle: ring)
         let resolved = AppHUDResolver.resolve(global: state.global, rings: rings)
         let shown = band == .inner ? resolved.layout.inner : resolved.layout.middle
         let more = resolved.notShown[band.ringBand] ?? []
 
-        for item in current { state.origins[item.id] = nil }
-        for item in shown + more { state.origins[item.id] = resolved.origins[item.id] }
+        state.originsByBand[band.ringBand] = resolved.originsByBand[band.ringBand]
         state.notShown[band] = more
-        inheritance = state
+        if ring.followsGlobal { state.lockedBands.insert(band.ringBand) }
+        if ring.customOrder == nil { state.storedOrderBands.remove(band.ringBand) }
         self[keyPath: arrayKeyPath(for: band)] = shown
+        inheritance = state
         if band == .inner { enforceInnerInvariants() }
         selection = selection.flatMap(validSelection)
+    }
+
+    private func workingInheritance(for band: EditorBand, state: InheritanceState) -> RingInheritance {
+        let items = fullRing(band: band)
+        var ring = AppHUDResolver.diff(
+            edited: items,
+            previous: RingInheritance(),
+            global: state.globalItems(band),
+            origins: state.originsByBand[band.ringBand]
+        )
+        // A saved order can still be intentional when Global currently has the same order.
+        if ring.customOrder == nil, state.storedOrderBands.contains(band.ringBand) {
+            ring.customOrder = items.map(\.id)
+        }
+        return ring
     }
 
     // MARK: - Merge
@@ -780,6 +873,7 @@ final class MenuEditorModel {
     /// Called after any mutation to `inner` so the inner ring can never accumulate
     /// nested sub-items, even via an arbitrary binding write.
     private func enforceInnerInvariants() {
+        guard !followsGlobal(.inner) else { return }
         for index in inner.indices where inner[index].subItems != nil {
             inner[index].subItems = nil
         }
@@ -800,7 +894,10 @@ final class MenuEditorModel {
                   SnapZone(rawValue: item.actionData) == nil else { return }
             item.actionData = SnapZone.left.rawValue
         }
-        for i in inner.indices { fix(&inner[i]) }
+        if !followsGlobal(.inner) {
+            for i in inner.indices { fix(&inner[i]) }
+        }
+        guard !followsGlobal(.middle) else { return }
         for i in middle.indices {
             fix(&middle[i])
             if var subs = middle[i].subItems {

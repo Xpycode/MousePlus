@@ -289,6 +289,8 @@ struct AppHUDRings: Codable, Equatable {
 /// How one App HUD ring differs from the Global ring of the same band.
 /// Items are matched to Global by ID; anything not recorded here is inherited.
 struct RingInheritance: Codable, Equatable {
+    /// Locks this ring to the entire Global band, including future edits.
+    var followsGlobal: Bool
     /// Whole-item app copies of Global items, keyed by the Global item ID.
     var overrides: [UUID: RingMenuItem]
     /// Global item IDs hidden in this app.
@@ -302,11 +304,13 @@ struct RingInheritance: Codable, Equatable {
     private var unknownFields: [String: JSONValue]
 
     init(
+        followsGlobal: Bool = false,
         overrides: [UUID: RingMenuItem] = [:],
         hidden: Set<UUID> = [],
         appOnly: [AppOnlyItem] = [],
         customOrder: [UUID]? = nil
     ) {
+        self.followsGlobal = followsGlobal
         self.overrides = overrides
         self.hidden = hidden
         self.appOnly = appOnly
@@ -326,6 +330,13 @@ struct RingInheritance: Codable, Equatable {
         unknownFields = fields
     }
 
+    /// Discard every app-specific item and order while retaining future ring keys.
+    func cleared(followsGlobal: Bool) -> Self {
+        var ring = Self(followsGlobal: followsGlobal)
+        ring.unknownFields = unknownFields
+        return ring
+    }
+
     func preservedJSON(forOverride id: UUID) -> JSONValue? {
         preservedOverrideJSON[id]
     }
@@ -343,17 +354,22 @@ struct RingInheritance: Codable, Equatable {
     }
 
     static func == (lhs: Self, rhs: Self) -> Bool {
-        lhs.overrides == rhs.overrides
+        lhs.followsGlobal == rhs.followsGlobal
+            && lhs.overrides == rhs.overrides
             && lhs.hidden == rhs.hidden
             && lhs.appOnly == rhs.appOnly
             && lhs.customOrder == rhs.customOrder
             && lhs.unknownFields == rhs.unknownFields
     }
 
-    private static let knownKeys: Set<String> = ["overrides", "hidden", "appOnly", "customOrder"]
+    private static let knownKeys: Set<String> = ["followsGlobal", "overrides", "hidden", "appOnly", "customOrder"]
 
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: DynamicCodingKey.self)
+        let lock = try container.decodeIfPresent(Bool.self, forKey: DynamicCodingKey("followsGlobal"))
+        self.init(followsGlobal: lock ?? false)
+        unknownFields = try container.unknownJSONValues(excluding: Self.knownKeys)
+        guard !followsGlobal else { return }
         let overridesKey = DynamicCodingKey("overrides")
         let rawOverrides = try container.decodeIfPresent([JSONValue].self, forKey: overridesKey) ?? []
         var overrides: [UUID: RingMenuItem] = [:]
@@ -375,7 +391,6 @@ struct RingInheritance: Codable, Equatable {
         hidden = Set(try container.decodeIfPresent([UUID].self, forKey: DynamicCodingKey("hidden")) ?? [])
         appOnly = try container.decodeIfPresent([AppOnlyItem].self, forKey: DynamicCodingKey("appOnly")) ?? []
         customOrder = try container.decodeIfPresent([UUID].self, forKey: DynamicCodingKey("customOrder"))
-        unknownFields = try container.unknownJSONValues(excluding: Self.knownKeys)
     }
 
     /// Deterministic: overrides and hidden IDs are sorted by UUID string, so an
@@ -383,6 +398,13 @@ struct RingInheritance: Codable, Equatable {
     func encode(to encoder: Encoder) throws {
         var container = encoder.container(keyedBy: DynamicCodingKey.self)
         try container.encode(unknownFields, excluding: Self.knownKeys)
+        if followsGlobal {
+            try container.encode(true, forKey: DynamicCodingKey("followsGlobal"))
+            try container.encode([JSONValue](), forKey: DynamicCodingKey("overrides"))
+            try container.encode([UUID](), forKey: DynamicCodingKey("hidden"))
+            try container.encode([AppOnlyItem](), forKey: DynamicCodingKey("appOnly"))
+            return
+        }
         let sortedOverrides = overrides.values.sorted { $0.id.uuidString < $1.id.uuidString }
         let encodedOverrides = try sortedOverrides.map { item in
             try HUDActionLayout.mergedItems(

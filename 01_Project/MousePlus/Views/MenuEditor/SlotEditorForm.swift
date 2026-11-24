@@ -82,6 +82,11 @@ struct SlotEditorForm<ActionAccessory: View>: View {
         model.selection?.subItemID != nil
     }
 
+    private var isRingLocked: Bool {
+        guard let band = model.selection?.band else { return false }
+        return model.followsGlobal(band)
+    }
+
     // MARK: - Empty state
 
     private var emptyState: some View {
@@ -129,12 +134,14 @@ struct SlotEditorForm<ActionAccessory: View>: View {
                 }
                 itemColorControls(item: item)
             }
+            .disabled(isRingLocked)
 
             // 3. Action type + type-aware data control. A dynamic parent is a
             // fixed runtime source, not a direct action with editable payload.
             if item.wrappedValue.dynamicSource == .none {
                 Section("Action") {
                     ActionDataEditor(item: item)
+                        .disabled(isRingLocked)
                     actionAccessory()
                 }
             } else {
@@ -154,6 +161,7 @@ struct SlotEditorForm<ActionAccessory: View>: View {
             // 5. Footer controls: selected-item operations stay together.
             Section {
                 footerControls
+                    .disabled(isRingLocked)
             }
         }
         .formStyle(.grouped)
@@ -323,6 +331,7 @@ struct SlotEditorForm<ActionAccessory: View>: View {
                         AppKitButton(
                             title: "",
                             systemImageName: "minus.circle",
+                            isEnabled: !isRingLocked,
                             accessibilityLabel: "Remove \(sub.label.isEmpty ? "sub-item" : sub.label)"
                         ) {
                             model.removeSubItem(sub.id, fromMiddle: parentID)
@@ -336,7 +345,7 @@ struct SlotEditorForm<ActionAccessory: View>: View {
                 Text("Maximum 12 outer items.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
-            } else {
+            } else if !isRingLocked {
                 Text("Add outer items from Menu & Rings → Outer.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
@@ -426,10 +435,10 @@ struct SlotEditorForm<ActionAccessory: View>: View {
     /// `true` when the selected top-level item is a Global item in an App HUD,
     /// so removing it hides it rather than deleting it (AC10).
     private var deleteHides: Bool {
-        guard !isSubItem, let id = model.selection?.itemID else { return false }
-        switch model.origin(of: id) {
+        guard !isSubItem, let selectedOrigin else { return false }
+        switch selectedOrigin.origin {
         case .inherited, .customized: return true
-        case .appOnly, nil: return false
+        case .appOnly: return false
         }
     }
 
@@ -452,11 +461,11 @@ struct SlotEditorForm<ActionAccessory: View>: View {
 
     /// Origin of the selected item. A sub-item reports its top-level parent's
     /// origin, because inheritance is tracked per top-level item. `nil` in Global.
-    private var selectedOrigin: (id: UUID, origin: ItemOrigin)? {
+    private var selectedOrigin: (id: UUID, band: EditorBand, origin: ItemOrigin)? {
         guard model.isEditingAppHUD,
-              let id = model.selection?.itemID,
-              let origin = model.origin(of: id) else { return nil }
-        return (id, origin)
+              let selection = model.selection, let id = selection.itemID,
+              let origin = model.origin(of: id, band: selection.band) else { return nil }
+        return (id, selection.band, origin)
     }
 
     /// "Follows Global" / "Customized for <App>" / "Only in <App>", plus the
@@ -465,7 +474,17 @@ struct SlotEditorForm<ActionAccessory: View>: View {
     /// customized or reverted, and acting on it from here would be surprising.
     @ViewBuilder
     private var inheritanceStatusRow: some View {
-        if let selected = selectedOrigin {
+        if isRingLocked, let band = model.selection?.band {
+            SlotEditorStatusLabel(
+                text: "Follows Global (whole ring)",
+                accessibilityLabel: "Follows Global (whole ring)",
+                accessibilityIdentifier: "menuItems.editor.inheritance.status"
+            )
+            Text("Untick Use Global \(band == .inner ? "inner" : "middle") ring to edit this item here.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .accessibilityIdentifier("menuItems.editor.inheritance.wholeRingHint")
+        } else if let selected = selectedOrigin {
             let id = selected.id
             let origin = selected.origin
             HStack {
@@ -483,7 +502,7 @@ struct SlotEditorForm<ActionAccessory: View>: View {
                             accessibilityLabel: "Customize for \(displayAppName)",
                             accessibilityIdentifier: "menuItems.editor.inheritance.customize"
                         ) {
-                            model.customize(id: id)
+                            model.customize(id: id, band: selected.band)
                         }
                         .help("Make an app copy of this item; later Global edits no longer reach it")
                     case .customized:
@@ -492,7 +511,7 @@ struct SlotEditorForm<ActionAccessory: View>: View {
                             accessibilityLabel: "Revert to Global",
                             accessibilityIdentifier: "menuItems.editor.inheritance.revertToGlobal"
                         ) {
-                            model.revertToGlobal(id: id)
+                            model.revertToGlobal(id: id, band: selected.band)
                         }
                         .help("Replace this item with the Global item and follow Global again")
                     case .appOnly:

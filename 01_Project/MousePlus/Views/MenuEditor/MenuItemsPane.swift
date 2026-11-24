@@ -33,6 +33,7 @@ struct MenuItemsPane: View {
                 appearance: coordinator.configuration.appearance,
                 appName: editedAppName,
                 onReset: resetMenuItems,
+                onSetFollowsGlobal: setFollowsGlobal,
                 actionAccessory: {
                     if let selectedItem {
                         TestActionControl(
@@ -61,10 +62,14 @@ struct MenuItemsPane: View {
         .frame(minWidth: 880, minHeight: 600)
         .onChange(of: coordinator.menuEditorModel.inner) { _, _ in
             dismissTestResultForEditedSelection()
-            coordinator.menuItemsDidChange()
+            if !coordinator.menuEditorModel.isEditingAppHUD { coordinator.menuItemsDidChange() }
         }
         .onChange(of: coordinator.menuEditorModel.middle) { _, _ in
             dismissTestResultForEditedSelection()
+            if !coordinator.menuEditorModel.isEditingAppHUD { coordinator.menuItemsDidChange() }
+        }
+        .onChange(of: coordinator.menuEditorModel.inheritanceEditState) { _, _ in
+            // Customize, Revert Order and ring locks can leave every visible item identical.
             coordinator.menuItemsDidChange()
         }
         .onChange(of: coordinator.menuEditorModel.hudCustomization) { _, _ in
@@ -236,7 +241,8 @@ struct MenuItemsPane: View {
                     accessibilityIdentifier: "menuItems.profile.hiddenItems.empty"
                 )
             }
-            ForEach(rows, id: \.item.id) { row in
+            ForEach(rows.indices, id: \.self) { index in
+                let row = rows[index]
                 let name = row.item.label.isEmpty ? "(no label)" : row.item.label
                 let ring = row.band == .inner ? "inner" : "middle"
                 HStack(spacing: 8) {
@@ -251,7 +257,7 @@ struct MenuItemsPane: View {
                         accessibilityLabel: "Show \(name) in \(selectedProfileTitle) HUD",
                         accessibilityIdentifier: "menuItems.profile.hiddenItems.show.\(row.item.id.uuidString)"
                     ) {
-                        model.show(hidden: row.item)
+                        model.show(hidden: row.item, band: row.band)
                         if model.hiddenItems.isEmpty { showingHiddenItems = false }
                     }
                     .fixedSize()
@@ -289,8 +295,8 @@ struct MenuItemsPane: View {
     private var selectedItemSourceLabel: String? {
         let model = coordinator.menuEditorModel
         guard model.isEditingAppHUD,
-              let itemID = model.selection?.itemID,
-              let origin = model.origin(of: itemID) else { return nil }
+              let selection = model.selection, let itemID = selection.itemID,
+              let origin = model.origin(of: itemID, band: selection.band) else { return nil }
         let app = profileTitle(coordinator.selectedHUDProfile)
         switch origin {
         case .inherited: return "from Global"
@@ -349,6 +355,36 @@ struct MenuItemsPane: View {
             confirmTitle: "Restore Menu Items"
         ) {
             Task { _ = await coordinator.restoreMenuItemsFromBackup() }
+        }
+    }
+
+    private func setFollowsGlobal(_ enabled: Bool, for band: EditorBand) {
+        let model = coordinator.menuEditorModel
+        guard model.isEditingAppHUD, model.followsGlobal(band) != enabled else { return }
+        let profile = coordinator.selectedHUDProfile
+        let apply = {
+            guard self.coordinator.selectedHUDProfile == profile else { return }
+            model.setFollowsGlobal(enabled, for: band)
+            // A clean ring can change its lock without changing a single item.
+            self.coordinator.menuItemsDidChange()
+        }
+        if enabled, let information = model.globalRingConfirmation(for: band) {
+            let name = band == .inner ? "inner" : "middle"
+            presentConfirmation(
+                message: "Use Global \(name) ring for \(selectedProfileTitle)?",
+                information: information,
+                confirmTitle: "Use Global \(name) ring"
+            ) {
+                guard coordinator.selectedHUDProfile == profile else { return }
+                // An autosave can reload this profile while the sheet is open.
+                if model.globalRingConfirmation(for: band) != information {
+                    setFollowsGlobal(enabled, for: band)
+                } else {
+                    apply()
+                }
+            }
+        } else {
+            apply()
         }
     }
 

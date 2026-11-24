@@ -4,15 +4,11 @@
 
 ## Active plan
 
-- None. App HUD inheritance is complete (2026-11-22): [`plans/app-hud-inheritance-implementation.md`](plans/app-hud-inheritance-implementation.md).
+- None. [Use Global ring](plans/use-global-ring.md) is complete.
 
 ## Backlog
 <!-- Ideas and future work. Added by /interview, user input, or discovered during development. -->
 <!-- Priority: top = highest, bottom = lowest -->
-
-- [ ] **Use Global ring switch for App HUDs** (decided 2026-11-22): per-ring "Use Global inner/middle
-  ring" checkbox, edits blocked while on. Spec addendum AC20–AC27 in
-  [`specs/app-hud-inheritance.md`](../specs/app-hud-inheritance.md). Needs checkbox placement confirmed, then a plan.
 
 - [ ] **Clearer Test Action target label (2026-11-22):** "Target: Notes" confused the user on a Global item.
   Consider "Test sends to: <App>", and for an App HUD test against that app when it is running.

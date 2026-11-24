@@ -1317,6 +1317,69 @@ final class SettingsWorkspaceCoordinatorTests: XCTestCase {
 
     // MARK: - App HUD inheritance (task 3.1)
 
+    func testWholeRingLockSavesAndUnlocksWithIdenticalVisibleItems() async throws {
+        let bundleID = "com.apple.Safari"
+        var initial = Configuration()
+        _ = initial.setAppHUDProfile(AppHUDProfile(), forBundleIdentifier: bundleID)
+        let persistence = RecordingConfigurationPersistence(initial)
+        let coordinator = makeCoordinator(persistence)
+        await coordinator.load()
+        XCTAssertTrue(coordinator.selectHUDProfile(.app(bundleIdentifier: bundleID)))
+        let editor = coordinator.menuEditorModel
+        editor.setFollowsGlobal(true, for: .inner)
+        coordinator.menuItemsDidChange()
+        XCTAssertEqual(coordinator.dirtyFields, [.menuItems])
+        var saved = await coordinator.flush()
+        XCTAssertTrue(saved)
+        await coordinator.load()
+        XCTAssertTrue(editor.followsGlobal(.inner))
+        XCTAssertFalse(editor.followsGlobal(.middle))
+        XCTAssertEqual(editor.inner, initial.inner)
+
+        // A stale editor write must never become an override on a locked ring.
+        editor.inner[0].label = "Discard stale write"
+        editor.middle[0].label = "Keep middle change"
+        coordinator.menuItemsDidChange()
+        saved = await coordinator.flush()
+        XCTAssertTrue(saved)
+        let persisted = await persistence.current
+        let rings = try XCTUnwrap(persisted.appHUDProfile(forBundleIdentifier: bundleID)?.rings)
+        XCTAssertTrue(rings.inner.followsGlobal)
+        XCTAssertTrue(rings.inner.overrides.isEmpty)
+        XCTAssertEqual(editor.inner, initial.inner)
+        XCTAssertEqual(editor.middle[0].label, "Keep middle change")
+
+        editor.setFollowsGlobal(false, for: .inner)
+        coordinator.menuItemsDidChange()
+        saved = await coordinator.flush()
+        XCTAssertTrue(saved)
+        await coordinator.load()
+        XCTAssertFalse(editor.followsGlobal(.inner))
+        XCTAssertEqual(editor.inner, initial.inner)
+        XCTAssertEqual(editor.middle[0].label, "Keep middle change")
+    }
+
+    func testExternalWholeRingLockConflictsWithAnEditToTheSameProfile() async {
+        let bundleID = "com.apple.Safari"
+        var initial = Configuration()
+        _ = initial.setAppHUDProfile(AppHUDProfile(), forBundleIdentifier: bundleID)
+        let persistence = RecordingConfigurationPersistence(initial)
+        let coordinator = makeCoordinator(persistence)
+        await coordinator.load()
+        XCTAssertTrue(coordinator.selectHUDProfile(.app(bundleIdentifier: bundleID)))
+        coordinator.menuEditorModel.middle[0].label = "Pending edit"
+        coordinator.menuItemsDidChange()
+        await persistence.mutateCurrent { config in
+            _ = config.setAppHUDInheritance(
+                AppHUDRings(middle: RingInheritance(followsGlobal: true)), forBundleIdentifier: bundleID
+            )
+        }
+        let saved = await coordinator.flush()
+        XCTAssertFalse(saved)
+        let disk = await persistence.current
+        XCTAssertEqual(disk.appHUDProfile(forBundleIdentifier: bundleID)?.rings?.middle.followsGlobal, true)
+    }
+
     func testGlobalOnlyEditLeavesAppHUDStorageByteEqual() async throws {
         var initial = Configuration()
         _ = initial.setAppHUDProfile(appHUD(labeledLayout("Finder")), forBundleIdentifier: "com.apple.finder")

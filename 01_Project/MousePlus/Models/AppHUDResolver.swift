@@ -12,7 +12,7 @@ enum ItemOrigin: Hashable, Sendable {
 
 /// One App HUD resolved against Global.
 struct ResolvedAppLayout: Equatable {
-    /// What the HUD shows: at most `AppHUDResolver.ringCapacity` items per ring.
+    /// What the HUD shows. Locked rings exactly mirror their Global band.
     /// Item-level unknown JSON comes from Global for inherited items and from the
     /// app's own copy for customized and app-only items.
     var layout: HUDActionLayout
@@ -21,6 +21,11 @@ struct ResolvedAppLayout: Equatable {
     /// Items beyond the ring capacity, per band, in resolved order. Bands that
     /// fit have no entry.
     var notShown: [Band: [RingMenuItem]]
+    var lockedBands: Set<Band> = []
+    /// Includes stored orders which happen to match Global's current order.
+    var customOrderBands: Set<Band> = []
+    /// An ID can appear in both bands with a different origin in each.
+    var originsByBand: [Band: [UUID: ItemOrigin]] = [:]
 }
 
 /// Pure functions that turn Global plus per-app inheritance metadata into a
@@ -54,19 +59,20 @@ enum AppHUDResolver {
             ring: rings.middle
         )
 
-        var origins: [UUID: ItemOrigin] = [:]
-        for entry in inner + middle where origins[entry.item.id] == nil {
-            origins[entry.item.id] = entry.origin
+        func itemOrigins(_ entries: [Entry]) -> [UUID: ItemOrigin] {
+            Dictionary(entries.map { ($0.item.id, $0.origin) }, uniquingKeysWith: { first, _ in first })
         }
+        let innerOrigins = itemOrigins(inner)
+        let middleOrigins = itemOrigins(middle)
 
-        let shownInner = inner.prefix(ringCapacity)
-        let shownMiddle = middle.prefix(ringCapacity)
+        let shownInner = inner.prefix(rings.inner.followsGlobal ? inner.count : ringCapacity)
+        let shownMiddle = middle.prefix(rings.middle.followsGlobal ? middle.count : ringCapacity)
         var notShown: [Band: [RingMenuItem]] = [:]
-        if inner.count > ringCapacity {
-            notShown[.inner] = inner.dropFirst(ringCapacity).map(\.item)
+        if inner.count > shownInner.count {
+            notShown[.inner] = inner.dropFirst(shownInner.count).map(\.item)
         }
-        if middle.count > ringCapacity {
-            notShown[.middle] = middle.dropFirst(ringCapacity).map(\.item)
+        if middle.count > shownMiddle.count {
+            notShown[.middle] = middle.dropFirst(shownMiddle.count).map(\.item)
         }
 
         return ResolvedAppLayout(
@@ -76,8 +82,14 @@ enum AppHUDResolver {
                 preservingInner: shownInner.compactMap(\.json),
                 preservingMiddle: shownMiddle.compactMap(\.json)
             ),
-            origins: origins,
-            notShown: notShown
+            origins: innerOrigins.merging(middleOrigins) { first, _ in first },
+            notShown: notShown,
+            lockedBands: Set([Band.inner, .middle].filter { rings.ring($0).followsGlobal }),
+            customOrderBands: Set([Band.inner, .middle].filter {
+                let ring = rings.ring($0)
+                return !ring.followsGlobal && ring.customOrder != nil
+            }),
+            originsByBand: [.inner: innerOrigins, .middle: middleOrigins]
         )
     }
 
@@ -93,6 +105,9 @@ enum AppHUDResolver {
         ring: RingInheritance
     ) -> [Entry] {
         let pairedGlobalJSON = pairedJSON(global, globalJSON)
+        if ring.followsGlobal {
+            return global.indices.map { Entry(item: global[$0], origin: .inherited, json: pairedGlobalJSON[$0]) }
+        }
         let globalIndexByID = firstIndexByID(global)
         var entries: [Entry] = []
         var emittedGlobal = Set<UUID>()
@@ -195,6 +210,9 @@ enum AppHUDResolver {
         editedItemsJSON: [JSONValue] = [],
         globalItemsJSON: [JSONValue] = []
     ) -> RingInheritance {
+        if previous.followsGlobal {
+            return previous.cleared(followsGlobal: true)
+        }
         let editedJSON = pairedJSON(edited, editedItemsJSON)
         let pairedGlobalJSON = pairedJSON(global, globalItemsJSON)
         var previousAppOnly: [UUID: [AppOnlyItem]] = [:]
@@ -240,25 +258,50 @@ enum AppHUDResolver {
         edited: HUDActionLayout,
         previous: AppHUDProfile,
         global: HUDActionLayout,
-        origins: [UUID: ItemOrigin]? = nil
+        origins: [UUID: ItemOrigin]? = nil,
+        lockedBands: Set<Band>? = nil,
+        customOrderBands: Set<Band>? = nil,
+        originsByBand: [Band: [UUID: ItemOrigin]]? = nil
     ) -> AppHUDProfile {
         var result = previous.migrated(global: global)
         guard var rings = result.rings else { return result }
-        rings.inner = diff(
-            edited: edited.inner,
-            previous: rings.inner,
-            global: global.inner,
-            origins: origins,
-            editedItemsJSON: edited.preservedInnerItemsJSON,
-            globalItemsJSON: global.preservedInnerItemsJSON
+        func editedRing(
+            _ band: Band, previous: RingInheritance, items: [RingMenuItem], json: [JSONValue],
+            globalItems: [RingMenuItem], globalJSON: [JSONValue]
+        ) -> RingInheritance {
+            if lockedBands?.contains(band) ?? previous.followsGlobal {
+                return previous.cleared(followsGlobal: true)
+            }
+
+            // Preserve the original anchors and partial order in an untouched
+            // sibling ring. A round trip through visible items loses that detail.
+            let before = resolvedEntries(global: globalItems, globalJSON: globalJSON, ring: previous)
+            let wantsCustomOrder = customOrderBands?.contains(band)
+            let bandOrigins = originsByBand?[band] ?? origins
+            if !previous.followsGlobal,
+               before.map(\.item) == items,
+               before.allSatisfy({ bandOrigins?[$0.item.id] == nil || bandOrigins?[$0.item.id] == $0.origin }),
+               wantsCustomOrder == nil || wantsCustomOrder == (previous.customOrder != nil) {
+                return previous
+            }
+
+            let baseline = previous.followsGlobal ? previous.cleared(followsGlobal: false) : previous
+            var ring = diff(
+                edited: items, previous: baseline, global: globalItems, origins: bandOrigins,
+                editedItemsJSON: json, globalItemsJSON: globalJSON
+            )
+            if let wantsCustomOrder {
+                ring.customOrder = wantsCustomOrder ? ring.customOrder ?? items.map(\.id) : nil
+            }
+            return ring
+        }
+        rings.inner = editedRing(
+            .inner, previous: rings.inner, items: edited.inner, json: edited.preservedInnerItemsJSON,
+            globalItems: global.inner, globalJSON: global.preservedInnerItemsJSON
         )
-        rings.middle = diff(
-            edited: edited.middle,
-            previous: rings.middle,
-            global: global.middle,
-            origins: origins,
-            editedItemsJSON: edited.preservedMiddleItemsJSON,
-            globalItemsJSON: global.preservedMiddleItemsJSON
+        rings.middle = editedRing(
+            .middle, previous: rings.middle, items: edited.middle, json: edited.preservedMiddleItemsJSON,
+            globalItems: global.middle, globalJSON: global.preservedMiddleItemsJSON
         )
         result.setRings(rings)
         return result
@@ -340,6 +383,7 @@ enum AppHUDResolver {
         oldGlobal: [RingMenuItem],
         newGlobal: [RingMenuItem]
     ) -> RingInheritance {
+        guard !ring.followsGlobal else { return ring }
         let newIDs = Set(newGlobal.map(\.id))
         let oldIndexByID = firstIndexByID(oldGlobal)
         let endAnchor = newGlobal.last?.id

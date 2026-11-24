@@ -188,9 +188,6 @@ struct RingAccessibilitySnapshot {
 struct RingPreviewSelector: View {
     @Bindable var model: MenuEditorModel
     var appearance: AppearanceConfig = .default
-    /// Items the selected App HUD has customized. Empty (the default) leaves
-    /// the preview exactly as before: no dots and no label suffix.
-    var customizedItemIDs: Set<UUID> = []
     /// App name for the ", customized for <App>" accessibility suffix.
     var appName: String? = nil
     @State private var preview = RingViewModel()
@@ -224,7 +221,7 @@ struct RingPreviewSelector: View {
                 accessibilityLabelSuffix: accessibilityLabelSuffix
             )
                 .allowsHitTesting(false)
-            if !customizedItemIDs.isEmpty {
+            if !model.customizedItemIDs.isEmpty {
                 customizationDots
                     .allowsHitTesting(false)
                     .accessibilityHidden(true)
@@ -234,7 +231,8 @@ struct RingPreviewSelector: View {
                 onHover: { preview.activeSelection = $0 },
                 onRevealChange: { if $0 { revealPreviewOuterRing() } },
                 onIntent: apply,
-                onDeleteIntent: delete
+                deleteTarget: deleteTarget,
+                onDelete: delete
             )
             .frame(width: side, height: side)
         }
@@ -257,10 +255,6 @@ struct RingPreviewSelector: View {
     }
 
     // MARK: - Customization marks (App HUD only)
-
-    private var visibleOuterItems: [RingMenuItem] {
-        preview.isOuterRingVisible ? preview.outerItems : []
-    }
 
     private func wedgeAngles(_ band: Band, _ index: Int) -> (start: Angle, end: Angle) {
         RadialGeometry.wedgeAngles(
@@ -287,9 +281,9 @@ struct RingPreviewSelector: View {
         let marks: [(band: Band, index: Int, id: UUID)] =
             preview.innerItems.enumerated().map { (.inner, $0.offset, $0.element.id) }
             + preview.middleItems.enumerated().map { (.middle, $0.offset, $0.element.id) }
-            + visibleOuterItems.enumerated().map { (.outer, $0.offset, $0.element.id) }
         return ZStack {
-            ForEach(marks.filter { customizedItemIDs.contains($0.id) }, id: \.id) { mark in
+            ForEach(marks.indices.filter { isCustomized(marks[$0].id, in: marks[$0].band) }, id: \.self) { index in
+                let mark = marks[index]
                 let angles = wedgeAngles(mark.band, mark.index)
                 Circle()
                     .fill(Color.accentColor)
@@ -306,15 +300,19 @@ struct RingPreviewSelector: View {
 
     /// Handed to RingMenuView so its single wedge accessibility layer labels
     /// marked items ", customized for <App>". Nil when nothing is marked.
-    private var accessibilityLabelSuffix: ((RingMenuItem) -> String)? {
-        guard !customizedItemIDs.isEmpty else { return nil }
-        let ids = customizedItemIDs
-        let name = appName
-        return { item in
-            RingPreviewCustomizationMarker.accessibilitySuffix(
-                itemID: item.id, customizedItemIDs: ids, appName: name
+    private var accessibilityLabelSuffix: ((RingMenuItem, Band) -> String)? {
+        guard !model.customizedItemIDs.isEmpty else { return nil }
+        return { item, band in
+            guard band != .outer else { return "" }
+            let ids = model.customizedItemIDs(band: band == .inner ? .inner : .middle)
+            return RingPreviewCustomizationMarker.accessibilitySuffix(
+                itemID: item.id, customizedItemIDs: ids, appName: appName
             )
         }
+    }
+
+    private func isCustomized(_ id: UUID, in band: Band) -> Bool {
+        model.origin(of: id, band: band == .inner ? .inner : .middle) == .customized
     }
 
     private var outerRingGuidePresentation: EditorOuterRingGuidePresentation {
@@ -329,8 +327,8 @@ struct RingPreviewSelector: View {
         HUDPreviewInteractionSnapshot(
             geometry: preview.geometry,
             radii: preview.radii,
-            innerCount: model.inner.count,
-            middleCount: model.middle.count,
+            innerCount: preview.innerItems.count,
+            middleCount: preview.middleItems.count,
             expandedParentIndex: preview.expandedParentIndex,
             outerCount: preview.outerItems.count,
             outerVisibility: model.hudCustomization.outerRingVisibility,
@@ -338,21 +336,34 @@ struct RingPreviewSelector: View {
         )
     }
 
-    private func apply(_ intent: HUDPreviewIntent) {
+    private func previewSlot(for intent: HUDPreviewIntent) -> SlotSelection? {
         switch intent {
         case let .selectTopLevel(band, index):
-            let items = band == .inner ? model.inner : model.middle
-            guard items.indices.contains(index) else { return }
-            model.activeBand = band
-            model.selection = SlotSelection(band: band, itemID: items[index].id, subItemID: nil)
+            let items = band == .inner ? preview.innerItems : preview.middleItems
+            guard items.indices.contains(index) else { return nil }
+            return SlotSelection(band: band, itemID: items[index].id, subItemID: nil)
         case let .selectOuter(index):
-            guard let parent = expandedMiddleParent(),
-                  parent.item.dynamicSource == .none,
-                  let subs = parent.item.subItems, subs.indices.contains(index) else { return }
-            model.activeBand = .middle
-            model.selection = SlotSelection(band: .middle, itemID: parent.item.id,
-                                            subItemID: subs[index].id)
+            guard let parentIndex = preview.expandedParentIndex,
+                  preview.middleItems.indices.contains(parentIndex),
+                  preview.outerItems.indices.contains(index) else { return nil }
+            let parent = preview.middleItems[parentIndex]
+            guard parent.dynamicSource == .none else { return nil }
+            return SlotSelection(band: .middle, itemID: parent.id, subItemID: preview.outerItems[index].id)
         }
+    }
+
+    private func contains(_ slot: SlotSelection) -> Bool {
+        let items = slot.band == .inner ? model.inner : model.middle
+        guard let parent = items.first(where: { $0.id == slot.itemID }) else { return false }
+        guard let child = slot.subItemID else { return true }
+        return slot.band == .middle && parent.dynamicSource == .none
+            && parent.subItems?.contains { $0.id == child } == true
+    }
+
+    private func apply(_ intent: HUDPreviewIntent) {
+        guard let slot = previewSlot(for: intent), contains(slot) else { return }
+        model.activeBand = slot.band
+        model.selection = slot
     }
 
     private func syncPreview() {
@@ -391,8 +402,19 @@ struct RingPreviewSelector: View {
         return nil
     }
 
-    private func delete(_ intent: HUDPreviewIntent) {
-        apply(intent)
+    private func deleteTarget(for intent: HUDPreviewIntent) -> SlotSelection? {
+        guard let slot = previewSlot(for: intent), canDelete(slot) else { return nil }
+        return slot
+    }
+
+    func canDelete(_ slot: SlotSelection) -> Bool {
+        !model.followsGlobal(slot.band) && contains(slot)
+    }
+
+    func delete(_ slot: SlotSelection) {
+        guard canDelete(slot) else { return }
+        model.activeBand = slot.band
+        model.selection = slot
         model.removeSelectedItem()
     }
 

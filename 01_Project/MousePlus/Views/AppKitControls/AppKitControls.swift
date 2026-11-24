@@ -40,7 +40,7 @@ struct AppKitButton: NSViewRepresentable {
             NSImage(systemSymbolName: $0, accessibilityDescription: accessibilityLabel ?? title)
         }
         button.imagePosition = title.isEmpty ? .imageOnly : .imageLeading
-        button.isEnabled = isEnabled
+        button.isEnabled = isEnabled && context.environment.isEnabled
         configureAccessibility(
             button,
             label: accessibilityLabel ?? title,
@@ -81,7 +81,11 @@ struct AppKitCheckbox: NSViewRepresentable {
     @MainActor final class Coordinator: NSObject {
         var value: Binding<Bool>
         init(value: Binding<Bool>) { self.value = value }
-        @objc func changed(_ sender: NSButton) { value.wrappedValue = sender.state == .on }
+        @objc func changed(_ sender: NSButton) {
+            value.wrappedValue = sender.state == .on
+            // A binding may defer the change until the user confirms.
+            sender.state = value.wrappedValue ? .on : .off
+        }
     }
 }
 
@@ -112,7 +116,7 @@ struct AppKitPopup: NSViewRepresentable {
         for index in options.indices {
             popup.item(at: index)?.isEnabled = !disabledOptions.contains(index)
         }
-        popup.isEnabled = isEnabled
+        popup.isEnabled = isEnabled && context.environment.isEnabled
         configureAccessibility(
             popup, label: accessibilityLabel, identifier: accessibilityIdentifier,
             value: popup.titleOfSelectedItem
@@ -218,8 +222,9 @@ struct AppKitColorWell: NSViewRepresentable {
         let inherits = color == nil
         if let color { context.coordinator.lastCustomColor = color }
         context.coordinator.inheritButton?.state = inherits ? .on : .off
-        context.coordinator.inheritButton?.isEnabled = isEnabled
-        context.coordinator.colorWell?.isEnabled = isEnabled && !inherits
+        let enabled = isEnabled && context.environment.isEnabled
+        context.coordinator.inheritButton?.isEnabled = enabled
+        context.coordinator.colorWell?.isEnabled = enabled && !inherits
         context.coordinator.colorWell?.color = color ?? context.coordinator.lastCustomColor
         configureAccessibility(
             stack,
@@ -416,9 +421,9 @@ struct AppKitTextField: NSViewRepresentable {
         context.coordinator.isFocused = $isFocused
         if field.stringValue != text { field.stringValue = text }
         field.placeholderString = placeholder
-        field.isEnabled = isEnabled
+        field.isEnabled = isEnabled && context.environment.isEnabled
         configureAccessibility(field, label: accessibilityLabel, identifier: accessibilityIdentifier)
-        if isFocused, field.window?.firstResponder !== field.currentEditor() {
+        if field.isEnabled && isFocused, field.window?.firstResponder !== field.currentEditor() {
             field.window?.makeFirstResponder(field)
         } else if !isFocused, field.window?.firstResponder === field.currentEditor() {
             field.window?.makeFirstResponder(nil)
@@ -464,9 +469,10 @@ struct AppKitMultilineTextField: NSViewRepresentable {
         context.coordinator.text = $text
         context.coordinator.isFocused = $isFocused
         if textView.string != text { textView.string = text }
-        textView.isEditable = isEnabled
+        textView.isEditable = isEnabled && context.environment.isEnabled
+        textView.textColor = textView.isEditable ? .textColor : .disabledControlTextColor
         configureAccessibility(textView, label: accessibilityLabel, identifier: accessibilityIdentifier)
-        if isFocused, textView.window?.firstResponder !== textView {
+        if textView.isEditable && isFocused, textView.window?.firstResponder !== textView {
             textView.window?.makeFirstResponder(textView)
         } else if !isFocused, textView.window?.firstResponder === textView {
             textView.window?.makeFirstResponder(nil)

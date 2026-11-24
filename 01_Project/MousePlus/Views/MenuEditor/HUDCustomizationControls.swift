@@ -11,6 +11,7 @@ import SwiftUI
 @MainActor
 struct HUDCustomizationControls: View {
     @Bindable var model: MenuEditorModel
+    var onSetFollowsGlobal: (Bool, EditorBand) -> Void
     @State private var tab: Tab = .menu
 
     private enum Tab: Int, CaseIterable {
@@ -100,6 +101,16 @@ struct HUDCustomizationControls: View {
 
         return GroupBox("\(ringName(band)) ring") {
             VStack(alignment: .leading, spacing: 10) {
+                if model.isEditingAppHUD {
+                    AppKitCheckbox(
+                        title: "Use Global \(ringID(band)) ring",
+                        isOn: Binding(
+                            get: { model.followsGlobal(band) },
+                            set: { onSetFollowsGlobal($0, band) }
+                        ),
+                        accessibilityIdentifier: "hud.\(ringID(band)).useGlobal"
+                    )
+                }
                 HStack {
                     Text("\(ringItemCount(band))/8 items")
                         .font(.caption)
@@ -108,12 +119,12 @@ struct HUDCustomizationControls: View {
                     AppKitButton(
                         title: "Add \(ringName(band)) Item",
                         systemImageName: "plus",
-                        isEnabled: !model.atCap(for: band),
+                        isEnabled: !model.followsGlobal(band) && !model.atCap(for: band),
                         accessibilityIdentifier: "hud.\(ringID(band)).addItem"
                     ) {
                         model.addItem(to: band)
                     }
-                    .help(model.atCap(for: band) ? "Maximum 8 items" : "Add \(ringName(band).lowercased()) item")
+                    .help(addItemHelp(for: band))
                 }
 
                 row("Slots") {
@@ -198,7 +209,7 @@ struct HUDCustomizationControls: View {
                     AppKitButton(
                         title: "Add Outer Item",
                         systemImageName: "plus",
-                        isEnabled: selectedOuterParentID.map { !model.subItemsAtCap(for: $0) } ?? false,
+                        isEnabled: !model.followsGlobal(.middle) && (selectedOuterParentID.map { !model.subItemsAtCap(for: $0) } ?? false),
                         accessibilityIdentifier: "hud.outer.addItem"
                     ) {
                         if let parentID = selectedOuterParentID {
@@ -324,6 +335,11 @@ struct HUDCustomizationControls: View {
     private func ringID(_ band: EditorBand) -> String { band == .inner ? "inner" : "middle" }
     private func ringItemCount(_ band: EditorBand) -> Int { band == .inner ? model.inner.count : model.middle.count }
 
+    private func addItemHelp(for band: EditorBand) -> String {
+        if model.followsGlobal(band) { return "Untick Use Global \(ringID(band)) ring to add items." }
+        return model.atCap(for: band) ? "Maximum 8 items" : "Add \(ringID(band)) item"
+    }
+
     /// Outer items belong to a static middle parent rather than to a standalone
     /// ring. Keep the add action explicitly tied to that selected parent.
     private var selectedOuterParentID: UUID? {
@@ -337,6 +353,9 @@ struct HUDCustomizationControls: View {
     }
 
     private var outerAddHelp: String {
+        if model.followsGlobal(.middle) {
+            return "Untick Use Global middle ring to add outer items."
+        }
         if let selection = model.selection,
            selection.band == .middle,
            let parentID = selection.itemID,

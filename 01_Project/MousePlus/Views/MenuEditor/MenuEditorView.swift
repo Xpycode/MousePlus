@@ -15,6 +15,7 @@ struct MenuEditorWorkspace<ActionAccessory: View, MenuAccessory: View>: View {
     /// labels; `nil` for Global.
     var appName: String? = nil
     var onReset: () -> Void
+    var onSetFollowsGlobal: (Bool, EditorBand) -> Void
     @ViewBuilder var actionAccessory: () -> ActionAccessory
     @ViewBuilder var menuAccessory: () -> MenuAccessory
 
@@ -33,7 +34,6 @@ struct MenuEditorWorkspace<ActionAccessory: View, MenuAccessory: View>: View {
                     RingPreviewSelector(
                         model: model,
                         appearance: appearance,
-                        customizedItemIDs: model.isEditingAppHUD ? model.customizedItemIDs : [],
                         appName: model.isEditingAppHUD ? appName : nil
                     )
                         .frame(maxHeight: .infinity)
@@ -56,7 +56,7 @@ struct MenuEditorWorkspace<ActionAccessory: View, MenuAccessory: View>: View {
                     if inspectorSelection == 0 {
                         VStack(spacing: 8) {
                             ScrollView {
-                                HUDCustomizationControls(model: model)
+                                HUDCustomizationControls(model: model, onSetFollowsGlobal: onSetFollowsGlobal)
                                     .padding(.vertical, 4)
                             }
                             Divider()

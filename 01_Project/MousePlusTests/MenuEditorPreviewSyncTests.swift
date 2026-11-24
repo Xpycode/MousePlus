@@ -89,6 +89,44 @@ final class MenuEditorPreviewSyncTests: XCTestCase {
         XCTAssertEqual(snapshot.geometry, runtime.geometry)
     }
 
+    func testContextDeleteRevalidatesCapturedChildWithoutRemovingTheCurrentSelection() {
+        let child = RingMenuItem(label: "Child", icon: "circle", actionType: .custom)
+        var parent = RingMenuItem(label: "Parent", icon: "folder", actionType: .custom)
+        parent.subItems = [child]
+        let current = RingMenuItem(label: "Selected", icon: "star", actionType: .custom)
+        let global = HUDActionLayout(inner: [], middle: [parent, current])
+        let model = MenuEditorModel(inner: [], middle: [])
+        model.load(resolved: AppHUDResolver.resolve(global: global, rings: AppHUDRings()),
+                   global: global, hudCustomization: .default)
+        let preview = RingPreviewSelector(model: model)
+        let target = SlotSelection(band: .middle, itemID: parent.id, subItemID: child.id)
+        let selected = SlotSelection(band: .middle, itemID: current.id, subItemID: nil)
+        model.selection = selected
+        XCTAssertTrue(preview.canDelete(target))
+
+        model.setFollowsGlobal(true, for: .middle)
+        XCTAssertFalse(preview.canDelete(target))
+        preview.delete(target)
+        XCTAssertEqual(model.middle, global.middle)
+        XCTAssertEqual(model.selection, selected)
+
+        model.setFollowsGlobal(false, for: .middle)
+        model.middle.reverse()
+        model.middle[1].dynamicSource = .runningApps
+        XCTAssertFalse(preview.canDelete(target))
+        preview.delete(target)
+        XCTAssertEqual(model.selection, selected)
+        XCTAssertEqual(model.middle[1].subItems, [child])
+
+        model.middle[1].dynamicSource = .none
+        preview.delete(target)
+        XCTAssertNil(model.middle[1].subItems)
+        model.selection = selected
+        preview.delete(target)
+        XCTAssertEqual(model.middle.map(\.id), [current.id, parent.id])
+        XCTAssertEqual(model.selection, selected)
+    }
+
     // MARK: - Customized-item marks (App HUD inheritance, task 1.3)
 
     private func wedgeLabel(
@@ -125,12 +163,12 @@ final class MenuEditorPreviewSyncTests: XCTestCase {
         let model = MenuEditorModel(inner: RingMenuItem.sampleInnerItems,
                                     middle: RingMenuItem.sampleItems)
         let selector = RingPreviewSelector(model: model)
-        XCTAssertTrue(selector.customizedItemIDs.isEmpty)
+        XCTAssertTrue(model.customizedItemIDs.isEmpty)
         XCTAssertNil(selector.appName)
         for item in model.inner + model.middle {
             XCTAssertEqual(
                 RingPreviewCustomizationMarker.accessibilitySuffix(
-                    itemID: item.id, customizedItemIDs: selector.customizedItemIDs,
+                    itemID: item.id, customizedItemIDs: model.customizedItemIDs,
                     appName: selector.appName
                 ),
                 ""

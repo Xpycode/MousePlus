@@ -1,7 +1,7 @@
 # App HUD Inheritance Specification
 
 **Status:** Approved 2026-11-22. Per-item inheritance is planned in `docs/plans/app-hud-inheritance-implementation.md`.
-The whole-ring **Use Global ring** addendum (AC20–AC27) was added after E1 on 2026-11-22 and is not planned yet.
+The whole-ring **Use Global ring** addendum (AC20–AC27) was added after E1 on 2026-11-22 and is tracked in the [Use Global ring plan](../docs/plans/use-global-ring.md).
 **Created:** 2026-11-22
 **Last Updated:** 2026-11-22
 **Decision:** [2026-11-22 — App HUD slots inherit from Global unless overridden](../docs/decisions.md)
@@ -110,11 +110,10 @@ app-specific". A per-ring switch says that directly and can't drift.
 | Turning it off | Nothing visible changes: every item in the ring becomes an ordinary inherited item following Global's order. Per-item customizing works again from there. |
 | Default | Off for every existing and newly created App HUD. Per-item inheritance already makes an untouched ring follow Global. The switch only adds the lock and the one-step cleanup. |
 
-**Editor controls (approved in principle 2026-11-22; exact placement to be confirmed under the
-UI-change protocol before implementation):**
+**Editor controls (placement approved 2026-11-22):**
 
-- **Menu & Rings tab, App HUD only:** above each ring's item list (Inner and Middle sections), a
-  checkbox **Use Global inner ring** / **Use Global middle ring**. It is hidden for the Global
+- **Menu & Rings tab, App HUD only:** in the Inner and Middle tabs, the first row under the ring heading, directly
+  above the item count and Add Item button, is a checkbox **Use Global inner ring** / **Use Global middle ring**. It is hidden for the Global
   profile (as in AC13).
 - **Selected-item editor:** for an item in a ring that is on, the top row reads "Follows Global
   (whole ring)" with no Customize button, and the editable controls are disabled with a caption:

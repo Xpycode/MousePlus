@@ -92,7 +92,8 @@ struct HUDPreviewInteractionView: NSViewRepresentable {
     let onHover: @MainActor (ActiveSelection?) -> Void
     let onRevealChange: @MainActor (Bool) -> Void
     let onIntent: @MainActor (HUDPreviewIntent) -> Void
-    let onDeleteIntent: @MainActor (HUDPreviewIntent) -> Void
+    let deleteTarget: @MainActor (HUDPreviewIntent) -> SlotSelection?
+    let onDelete: @MainActor (SlotSelection) -> Void
 
     func makeCoordinator() -> Coordinator { Coordinator(snapshot: snapshot) }
 
@@ -106,7 +107,8 @@ struct HUDPreviewInteractionView: NSViewRepresentable {
         context.coordinator.onHover = onHover
         context.coordinator.onRevealChange = onRevealChange
         context.coordinator.onIntent = onIntent
-        context.coordinator.onDeleteIntent = onDeleteIntent
+        context.coordinator.deleteTarget = deleteTarget
+        context.coordinator.onDelete = onDelete
         context.coordinator.update(snapshot: snapshot)
     }
 
@@ -116,7 +118,8 @@ struct HUDPreviewInteractionView: NSViewRepresentable {
         var onHover: @MainActor (ActiveSelection?) -> Void = { _ in }
         var onRevealChange: @MainActor (Bool) -> Void = { _ in }
         var onIntent: @MainActor (HUDPreviewIntent) -> Void = { _ in }
-        var onDeleteIntent: @MainActor (HUDPreviewIntent) -> Void = { _ in }
+        var deleteTarget: @MainActor (HUDPreviewIntent) -> SlotSelection? = { _ in nil }
+        var onDelete: @MainActor (SlotSelection) -> Void = { _ in }
 
         init(snapshot: HUDPreviewInteractionSnapshot) { self.snapshot = snapshot }
 
@@ -147,16 +150,12 @@ struct HUDPreviewInteractionView: NSViewRepresentable {
             state.intent(at: point, center: center, snapshot: snapshot)
         }
 
-        func delete(_ intent: HUDPreviewIntent) {
-            onDeleteIntent(intent)
-        }
     }
 }
 
 final class InteractionNSView: NSView {
     weak var coordinator: HUDPreviewInteractionView.Coordinator?
     private var tracking: NSTrackingArea?
-    private var contextIntent: HUDPreviewIntent?
     override var isFlipped: Bool { true }
 
     override func updateTrackingAreas() {
@@ -180,20 +179,22 @@ final class InteractionNSView: NSView {
         guard let intent = coordinator?.intent(
             at: convert(event.locationInWindow, from: nil), center: center
         ) else { return nil }
-        contextIntent = intent
         let menu = NSMenu()
+        menu.autoenablesItems = false
         let item = NSMenuItem(
-            title: "Delete Item", action: #selector(deleteContextItem), keyEquivalent: ""
+            title: "Delete Item", action: #selector(deleteContextItem(_:)), keyEquivalent: ""
         )
+        let target = coordinator?.deleteTarget(intent)
+        item.representedObject = target
+        item.isEnabled = target != nil
         item.target = self
         menu.addItem(item)
         return menu
     }
 
-    @objc private func deleteContextItem() {
-        guard let contextIntent else { return }
-        coordinator?.delete(contextIntent)
-        self.contextIntent = nil
+    @objc private func deleteContextItem(_ sender: NSMenuItem) {
+        guard let target = sender.representedObject as? SlotSelection else { return }
+        coordinator?.onDelete(target)
     }
 
     private var center: CGPoint { CGPoint(x: bounds.midX, y: bounds.midY) }

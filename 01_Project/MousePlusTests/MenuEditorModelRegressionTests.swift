@@ -300,10 +300,11 @@ final class MenuEditorModelRegressionTests: XCTestCase {
 
     private func makeAppModel(
         global: HUDActionLayout,
+        inner: RingInheritance = RingInheritance(),
         middle: RingInheritance = RingInheritance()
     ) -> MenuEditorModel {
         let model = MenuEditorModel(inner: [], middle: [])
-        let resolved = AppHUDResolver.resolve(global: global, rings: AppHUDRings(middle: middle))
+        let resolved = AppHUDResolver.resolve(global: global, rings: AppHUDRings(inner: inner, middle: middle))
         model.load(resolved: resolved, global: global, hudCustomization: .default, normalizeStoredValues: false)
         return model
     }
@@ -454,6 +455,9 @@ final class MenuEditorModelRegressionTests: XCTestCase {
         XCTAssertEqual(model.middle.map(\.id), [f.a.id, f.b.id, f.c.id])
         XCTAssertNil(model.origin(of: f.a.id))
         XCTAssertNil(model.inheritanceEditState)
+        model.setFollowsGlobal(true, for: .middle)
+        XCTAssertFalse(model.followsGlobal(.middle))
+        XCTAssertNil(model.globalRingConfirmation(for: .middle))
 
         model.binding(forItem: f.a.id, band: .middle)?.wrappedValue.label = "Edited"
         model.customize(id: f.b.id)
@@ -471,5 +475,169 @@ final class MenuEditorModelRegressionTests: XCTestCase {
         let app = makeAppModel(global: f.global)
         app.load(actionLayout: f.global, hudCustomization: .default)
         XCTAssertFalse(app.isEditingAppHUD)
+    }
+
+    func testLockConfirmationCountsWorkingEditsAndOnlyClearsTheChosenRing() throws {
+        let f = AppFixture()
+        let other = RingMenuItem(label: "Inner", icon: "circle", actionType: .custom)
+        let global = HUDActionLayout(inner: [other], middle: [f.a, f.b, f.c])
+        let model = makeAppModel(global: global)
+        XCTAssertNil(model.globalRingConfirmation(for: .middle))
+        model.customize(id: other.id)
+        model.customize(id: f.c.id)
+        model.selection = SlotSelection(band: .middle, itemID: f.a.id, subItemID: nil)
+        model.removeSelectedItem()
+        model.moveItem(id: f.c.id, in: .middle, by: -1)
+        model.addItem(to: .middle)
+        model.addItem(to: .middle)
+
+        let before = model.inheritanceEditState
+        let prompt = try XCTUnwrap(model.globalRingConfirmation(for: .middle))
+        for category in ["1 customized item", "1 hidden item", "2 app-only items", "1 custom order"] {
+            XCTAssertTrue(prompt.contains(category), prompt)
+        }
+        XCTAssertEqual(model.inheritanceEditState, before)
+        XCTAssertFalse(model.followsGlobal(.middle))
+
+        model.setFollowsGlobal(true, for: .middle)
+        XCTAssertEqual(model.middle, global.middle)
+        XCTAssertTrue(model.hiddenItems.isEmpty)
+        XCTAssertFalse(model.hasCustomOrder(band: .middle))
+        XCTAssertNil(model.selection, "The selected app-only item disappeared")
+        XCTAssertEqual(model.customizedItemIDs, [other.id])
+        XCTAssertEqual(model.inner, global.inner)
+        XCTAssertEqual(model.inheritanceEditState?.lockedBands, [.middle])
+        for item in global.middle { XCTAssertEqual(model.origin(of: item.id), .inherited) }
+
+        model.setFollowsGlobal(false, for: .middle)
+        XCTAssertNil(model.globalRingConfirmation(for: .middle))
+        XCTAssertEqual(model.middle, global.middle)
+        model.binding(forItem: f.c.id, band: .middle)?.wrappedValue.label = "Now editable"
+        XCTAssertEqual(model.origin(of: f.c.id), .customized)
+    }
+
+    func testLockedMiddleBlocksStaleBindingsAndMutationsButPreservesReadableSelection() throws {
+        let f = AppFixture()
+        var parent = f.a
+        parent.subItems = [f.c]
+        let global = HUDActionLayout(inner: [], middle: [parent, f.b])
+        let model = makeAppModel(global: global)
+        let item = try XCTUnwrap(model.binding(forItem: parent.id, band: .middle))
+        let subItem = try XCTUnwrap(model.binding(forSubItem: f.c.id, ofMiddle: parent.id))
+        let color = try XCTUnwrap(model.colorBinding(forSubItem: f.c.id, ofMiddle: parent.id, role: .icon))
+        let selected = SlotSelection(band: .middle, itemID: parent.id, subItemID: f.c.id)
+        model.selection = selected
+        model.setFollowsGlobal(true, for: .middle)
+
+        model.customize(id: parent.id)
+        model.revertToGlobal(id: parent.id)
+        model.revertOrder(band: .middle)
+        model.show(hidden: f.b)
+        model.moveItem(id: parent.id, in: .middle, by: 1)
+        model.addItem(to: .middle)
+        model.addSubItem(toMiddle: parent.id)
+        model.removeSubItem(f.c.id, fromMiddle: parent.id)
+        model.removeSelectedItem()
+        item.wrappedValue.label = "Stale field"
+        subItem.wrappedValue.label = "Stale sub-item"
+        color.wrappedValue = .red
+        model.middle.removeAll()
+        XCTAssertEqual(model.selection, selected)
+        XCTAssertEqual(item.wrappedValue, parent)
+        XCTAssertEqual(subItem.wrappedValue, f.c)
+        XCTAssertEqual(model.middle, global.middle)
+        XCTAssertTrue(model.customizedItemIDs.isEmpty)
+
+        model.selection = SlotSelection(band: .middle, itemID: f.b.id, subItemID: nil)
+        model.removeSelectedItem()
+        XCTAssertEqual(model.selection?.itemID, f.b.id)
+        XCTAssertEqual(model.middle, global.middle)
+        model.setFollowsGlobal(false, for: .middle)
+        subItem.wrappedValue.label = "Editable again"
+        XCTAssertEqual(model.origin(of: parent.id), .customized)
+    }
+
+    func testStoredOrderThatMatchesGlobalStillNeedsConfirmationUntilReverted() {
+        let f = AppFixture()
+        let model = makeAppModel(global: f.global, middle: RingInheritance(customOrder: f.global.middle.map(\.id)))
+        XCTAssertEqual(model.middle, f.global.middle)
+        XCTAssertEqual(model.inheritanceEditState?.customOrderBands, [.middle])
+        XCTAssertTrue(model.globalRingConfirmation(for: .middle)?.contains("1 custom order") == true)
+        model.revertOrder(band: .middle)
+        XCTAssertNil(model.globalRingConfirmation(for: .middle))
+        XCTAssertEqual(model.inheritanceEditState?.customOrderBands, [])
+    }
+
+    func testLockIncludesAppOnlyItemsBeyondRingCapacityInConfirmationAndCleanup() {
+        let globalItems = (0..<AppHUDResolver.ringCapacity).map {
+            RingMenuItem(label: "Item \($0)", icon: "circle", actionType: .custom)
+        }
+        let extra = RingMenuItem(label: "Overflow", icon: "plus", actionType: .custom)
+        let model = makeAppModel(
+            global: HUDActionLayout(inner: globalItems, middle: []),
+            inner: RingInheritance(appOnly: [AppOnlyItem(item: extra, after: globalItems.last?.id)])
+        )
+        XCTAssertEqual(model.notShown(band: .inner), [extra])
+        XCTAssertTrue(model.globalRingConfirmation(for: .inner)?.contains("1 app-only item") == true)
+        model.setFollowsGlobal(true, for: .inner)
+        XCTAssertEqual(model.inner, globalItems)
+        XCTAssertTrue(model.notShown(band: .inner).isEmpty)
+        XCTAssertNil(model.origin(of: extra.id))
+    }
+
+    func testLockKeepsIdenticalSiblingOverrideWhenBothBandsUseTheSameID() throws {
+        let inner = RingMenuItem(label: "Inner", icon: "circle", actionType: .custom)
+        var middle = inner
+        middle.label = "Middle"
+        let global = HUDActionLayout(inner: [inner], middle: [middle])
+        let overrides = RingInheritance(overrides: [middle.id: middle])
+        let model = makeAppModel(global: global, middle: overrides)
+        XCTAssertNil(model.globalRingConfirmation(for: .inner))
+        XCTAssertEqual(model.customizedItemIDs(band: .middle), [middle.id])
+        XCTAssertTrue(model.customizedItemIDs(band: .inner).isEmpty)
+
+        model.customize(id: inner.id, band: .inner)
+        model.setFollowsGlobal(true, for: .inner)
+        XCTAssertEqual(model.origin(of: inner.id, band: .inner), .inherited)
+        XCTAssertEqual(model.origin(of: middle.id, band: .middle), .customized)
+        XCTAssertTrue(model.globalRingConfirmation(for: .middle)?.contains("1 customized item") == true)
+        let edit = try XCTUnwrap(model.inheritanceEditState)
+        let stored = AppHUDResolver.diff(
+            edited: edit.edited,
+            previous: AppHUDProfile(rings: AppHUDRings(middle: overrides)),
+            global: global, origins: edit.origins, lockedBands: edit.lockedBands,
+            customOrderBands: edit.customOrderBands, originsByBand: edit.originsByBand
+        )
+        XCTAssertEqual(stored.rings?.middle.overrides[middle.id], middle)
+        XCTAssertTrue(stored.rings?.inner.followsGlobal == true)
+
+        model.revertToGlobal(id: middle.id, band: .middle)
+        XCTAssertNil(model.globalRingConfirmation(for: .middle))
+        model.customize(id: middle.id, band: .middle)
+        XCTAssertEqual(model.origin(of: middle.id, band: .middle), .customized)
+        model.revertToGlobal(id: inner.id, band: .inner)
+        XCTAssertEqual(model.origin(of: middle.id, band: .middle), .customized)
+        XCTAssertEqual(model.inner, [inner])
+    }
+
+    func testLoadedInnerLockPreservesGlobalWhenEditingMiddleAndUnlockAllowsEdits() throws {
+        let f = AppFixture()
+        var snap = RingMenuItem(label: "Snap", icon: "circle", actionType: .windowSnap)
+        snap.actionData = ""
+        var parent = f.a
+        parent.subItems = [f.c]
+        let global = HUDActionLayout(inner: [snap], middle: [parent])
+        let locked = AppHUDResolver.resolve(global: global, rings: AppHUDRings(inner: RingInheritance(followsGlobal: true)))
+        let model = MenuEditorModel(inner: [], middle: [])
+        model.load(resolved: locked, global: global, hudCustomization: .default)
+        XCTAssertTrue(model.followsGlobal(.inner))
+        let binding = try XCTUnwrap(model.binding(forItem: snap.id, band: .inner))
+        binding.wrappedValue.label = "Blocked"
+        model.removeSubItem(f.c.id, fromMiddle: parent.id)
+        XCTAssertEqual(model.origin(of: parent.id), .customized)
+        XCTAssertEqual(model.inner, global.inner, "A locked ring must never normalize Global's payload")
+        model.setFollowsGlobal(false, for: .inner)
+        binding.wrappedValue.label = "Editable"
+        XCTAssertEqual(model.origin(of: snap.id), .customized)
     }
 }

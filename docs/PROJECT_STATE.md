@@ -1,6 +1,6 @@
 # Project State
 
-**Last updated:** 2026-11-22
+**Last updated:** 2026-11-24
 
 ## Identity
 
@@ -12,18 +12,18 @@
 ## Now
 
 - **Phase:** Implementation — next task selection. <!-- Phase changed: 2026-09-11 -->
-- **Focus:** Use Global ring switch for App HUDs — spec addendum written (`../specs/app-hud-inheritance.md`, AC20–AC27), not planned.
+- **Focus:** Per-ring Global inheritance is complete. The fresh build is available for personal use.
 - **Blocker:** No signing certificates on the M4 Pro; every unsigned rebuild loses its Accessibility permission and must be re-added by hand.
-- **Next:** confirm the checkbox placement, then `/make-plan` for the Use Global ring switch; local signing certificate once the 99-AUTH folder is on this Mac.
-- **Current handoff:** [2026-11-22 Resume (acceptance)](sessions/2026-11-22.md#resume-acceptance)
+- **Next:** choose the next backlog item.
+- **Current handoff:** [2026-11-24 Resume](sessions/2026-11-24.md#resume)
 
 ## Recent
 
+- **2026-11-24:** Added Use Global inner/middle ring to app profiles. Verified both switches in Settings and passed 94 focused tests.
 - **2026-11-22 (night):** You accepted App HUD inheritance live in Safari, so it is complete. Copy first failed because Safari's old copy had no keystroke; Revert to Global fixed it. The item editor buttons now fit on one row, and the spec gained a per-ring "Use Global ring" switch.
 - **2026-11-22 (evening):** Built App HUD inheritance end to end. App menus now follow Global unless you customize, hide or reorder an item, and existing App HUDs convert without visible change. 250 of 251 focused tests pass (the failure was already broken), the review was clean, and the Settings screens passed the hidden-desktop check. Your live acceptance is next; 7 commits are not pushed yet.
 - **2026-11-22 (later):** Wrote and approved the App HUD inheritance spec (app menus follow Global unless customized, hidden or reordered) and an 11-task plan, using a code survey and web research on how other apps handle overrides.
 - **2026-11-22:** The mouse trigger button no longer also acts in other apps (Warp tab switching); Global menu saves no longer overwrite outside changes; Test Action sends keystrokes to the app you came from. User-verified and committed. Decided app menus will inherit from Global.
-- **2026-11-21:** Key labels now follow the keyboard layout; precautionary fix for the stale preview; fixed ring keystrokes going to MousePlus instead of the app underneath (ring panel no longer takes keyboard focus; user-accepted in Safari with Settings closed and open). Committed.
 
 ## Progress
 
@@ -36,8 +36,8 @@
 - **HUD Opening Styles:** 7/7 tasks complete and signed-live verified on the supported BetterMouse-to-keyboard route. VoiceOver, direct MousePlus mouse triggering and the broad device/geometry performance matrix are deferred before release and remain untested.
 - **App-specific HUDs:** 5/5 implementation waves and signed-live Finder/Global acceptance complete on the supported BetterMouse-to-keyboard route.
 - **Trigger backend:** Keyboard and standard mouse paths work (the mouse trigger button is now consumed, not passed to other apps); advanced Logitech HID++ support remains undecided.
-- **App HUD inheritance:** complete; 11/11 tasks, Atlas and user live acceptance passed. Use Global ring addendum specified, not planned.
-- **Task tracker:** no current sprint tasks; 9 backlog items, one of them a precautionary fix awaiting a recurrence check.
+- **App HUD inheritance:** complete; 11/11 tasks, Atlas and user live acceptance passed. [Use Global ring](plans/use-global-ring.md) complete, 4/4 tasks.
+- **Task tracker:** no active plan; 8 backlog items, one of them a precautionary fix awaiting a recurrence check.
 
 ## Risks and Backlog
 

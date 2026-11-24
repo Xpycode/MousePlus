@@ -86,7 +86,7 @@ struct RingMenuView: View {
     var persistentSelection: ActiveSelection? = nil
     /// Preview-only: appended to a wedge's accessibility label (for example
     /// ", customized for Safari"). Runtime leaves this nil: no suffix.
-    var accessibilityLabelSuffix: ((RingMenuItem) -> String)? = nil
+    var accessibilityLabelSuffix: ((RingMenuItem, Band) -> String)? = nil
 
     // T11: sourced from `AppearanceConfig` via the view model (persisted in Settings):
     //   - `keepSpokeLit`: also keep inner wedge `p` lit on the live branch (§2.3).
@@ -693,7 +693,7 @@ struct RingMenuView: View {
                 ?? isActive(band, index),
             unavailableReason: unavailableReason,
             identifierPrefix: accessibilityIdentifierPrefix,
-            labelSuffix: accessibilityLabelSuffix?(item) ?? ""
+            labelSuffix: accessibilityLabelSuffix?(item, band) ?? ""
         )
     }
 

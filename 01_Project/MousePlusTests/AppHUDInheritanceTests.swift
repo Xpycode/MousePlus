@@ -612,6 +612,171 @@ final class AppHUDInheritanceTests: XCTestCase {
         XCTAssertEqual(saved["appHUDProfiles"] as? NSDictionary, profiles as NSDictionary)
     }
 
+    // MARK: - Whole-ring inheritance (AC20–AC27)
+
+    func testLockUsesGlobalKeystrokeClearsOnlyInnerAndPreservesSiblingMetadata() throws {
+        var global = HUDActionLayout(inner: [copy, paste], middle: [apps, snap, menu])
+        global.inner[0].keystrokePayload = .key(keyCode: 8, modifiers: 1 << 20)
+        let middle = RingInheritance(
+            overrides: [menu.id: menu], hidden: [apps.id],
+            appOnly: [AppOnlyItem(item: spotlight, after: apps.id)],
+            customOrder: [menu.id, spotlight.id]
+        )
+        let profile = AppHUDProfile(rings: AppHUDRings(
+            inner: RingInheritance(overrides: [copy.id: copy], hidden: [paste.id]),
+            middle: middle
+        ))
+        let before = AppHUDResolver.resolve(global: global, profile: profile)
+        let saved = AppHUDResolver.diff(
+            edited: before.layout, previous: profile, global: global,
+            origins: before.origins, lockedBands: [.inner], customOrderBands: [.middle]
+        )
+        let resolved = AppHUDResolver.resolve(global: global, profile: saved)
+
+        XCTAssertEqual(saved.rings?.middle, middle)
+        XCTAssertEqual(saved.rings?.inner, RingInheritance(followsGlobal: true))
+        XCTAssertEqual(resolved.lockedBands, [.inner])
+        XCTAssertEqual(resolved.customOrderBands, [.middle])
+        XCTAssertEqual(resolved.layout.inner, global.inner)
+        XCTAssertEqual(resolved.origins[copy.id], .inherited)
+        XCTAssertEqual(resolved.layout.middle, before.layout.middle)
+        XCTAssertEqual(resolved.origins[menu.id], .customized)
+        XCTAssertEqual(resolved.origins[spotlight.id], .appOnly)
+    }
+
+    func testLockingInnerKeepsExplicitMiddleOverrideWithSameItemID() throws {
+        var global = HUDActionLayout(inner: [copy], middle: [copy])
+        let previous = AppHUDProfile(rings: AppHUDRings(
+            inner: RingInheritance(hidden: [copy.id]),
+            middle: RingInheritance(overrides: [copy.id: copy])
+        ))
+        var draft = try XCTUnwrap(previous.rings)
+        draft.inner = RingInheritance(followsGlobal: true)
+        let resolved = AppHUDResolver.resolve(global: global, rings: draft)
+        XCTAssertEqual(resolved.origins[copy.id], .inherited)
+        XCTAssertEqual(resolved.originsByBand[.inner]?[copy.id], .inherited)
+        XCTAssertEqual(resolved.originsByBand[.middle]?[copy.id], .customized)
+        let saved = AppHUDResolver.diff(
+            edited: resolved.layout, previous: previous, global: global,
+            origins: resolved.origins, lockedBands: resolved.lockedBands, originsByBand: resolved.originsByBand
+        )
+        XCTAssertEqual(saved.rings, draft)
+        global.inner[0].label = "Updated Inner"
+        global.middle[0].label = "Updated Middle"
+        let next = AppHUDResolver.resolve(global: global, profile: saved)
+        XCTAssertEqual(next.layout.inner, global.inner)
+        XCTAssertEqual(next.layout.middle, [copy])
+    }
+
+    func testLockedMiddleTracksGlobalEditsAndSkipsRepairIncludingOuterItems() throws {
+        var parent = apps
+        parent.subItems = [copy]
+        let oldGlobal = HUDActionLayout(inner: [], middle: [parent, snap, menu])
+        // Even stale known fields on a locked ring must never enter resolution or repair.
+        let stale = RingInheritance(
+            followsGlobal: true, overrides: [snap.id: snap], hidden: [menu.id],
+            appOnly: [AppOnlyItem(item: paste, after: snap.id)], customOrder: [snap.id]
+        )
+        let profile = AppHUDProfile(rings: AppHUDRings(middle: stale))
+        parent.subItems = [paste, copy]
+        let newGlobal = try layout(inner: [], middle: [
+            itemJSON(menu), itemJSON(spotlight), itemJSON(parent, extra: ["future": 7]),
+        ])
+        let repaired = AppHUDResolver.repairAfterGlobalChange(
+            profile: profile, oldGlobal: oldGlobal, newGlobal: newGlobal
+        )
+        let resolved = AppHUDResolver.resolve(global: newGlobal, profile: repaired)
+
+        XCTAssertEqual(profile, repaired)
+        XCTAssertEqual(try sortedJSON(profile), try sortedJSON(repaired))
+        XCTAssertEqual(resolved.layout.middle, newGlobal.middle)
+        XCTAssertEqual(resolved.layout.preservedMiddleItemsJSON, newGlobal.preservedMiddleItemsJSON)
+        XCTAssertTrue(newGlobal.middle.allSatisfy { resolved.origins[$0.id] == .inherited })
+        XCTAssertEqual(resolved.lockedBands, [.middle])
+        XCTAssertTrue(resolved.customOrderBands.isEmpty)
+    }
+
+    func testLockRoundTripClearsKnownCustomizationPreservesUnknownKeysAndDefaultsOff() throws {
+        let raw: [String: Any] = try [
+            "schemaVersion": 2, "futureProfile": true, "rings": [
+                "futureRings": 9, "inner": [
+                    "futureRing": ["x": 4], "followsGlobal": true,
+                    "overrides": [itemJSON(copy)], "hidden": [paste.id.uuidString],
+                    "appOnly": [["item": itemJSON(menu)]], "customOrder": [copy.id.uuidString],
+                ],
+            ],
+        ]
+        let decoded = try JSONDecoder().decode(
+            AppHUDProfile.self, from: JSONSerialization.data(withJSONObject: raw)
+        )
+        let global = HUDActionLayout(inner: [copy, paste], middle: [])
+        let saved = AppHUDResolver.diff(edited: HUDActionLayout(inner: [menu], middle: []),
+                                        previous: decoded, global: global)
+        let object = try jsonObject(saved)
+        let rings = try XCTUnwrap(object["rings"] as? [String: Any])
+        let inner = try XCTUnwrap(rings["inner"] as? [String: Any])
+        XCTAssertEqual(object["schemaVersion"] as? Int, 2)
+        XCTAssertEqual(object["futureProfile"] as? Bool, true)
+        XCTAssertEqual(rings["futureRings"] as? Int, 9)
+        XCTAssertEqual(inner["futureRing"] as? [String: Int], ["x": 4])
+        XCTAssertEqual(inner["followsGlobal"] as? Bool, true)
+        for key in ["overrides", "hidden", "appOnly"] {
+            XCTAssertEqual((inner[key] as? [Any])?.count, 0)
+        }
+        XCTAssertNil(inner["customOrder"])
+        let reloaded = try JSONDecoder().decode(AppHUDProfile.self, from: JSONEncoder().encode(saved))
+        XCTAssertEqual(AppHUDResolver.resolve(global: global, profile: reloaded).lockedBands, [.inner])
+        XCTAssertEqual(reloaded.rings?.middle.followsGlobal, false)
+        let legacy = AppHUDProfile(layout: global).migrated(global: global)
+        XCTAssertEqual(legacy.rings, AppHUDRings())
+        XCTAssertNil((rings["middle"] as? [String: Any])?["followsGlobal"])
+    }
+
+    func testExplicitUnlockLeavesGlobalContentInheritedAndAllowsNextEdit() {
+        let global = HUDActionLayout(inner: [copy, paste], middle: [menu])
+        let locked = RingInheritance(followsGlobal: true)
+        let profile = AppHUDProfile(rings: AppHUDRings(inner: locked, middle: locked))
+        let unlocked = AppHUDResolver.diff(edited: global, previous: profile, global: global, lockedBands: [])
+        let resolved = AppHUDResolver.resolve(global: global, profile: unlocked)
+        XCTAssertEqual(unlocked, AppHUDProfile())
+        XCTAssertEqual(resolved.layout, global)
+        XCTAssertTrue(resolved.origins.values.allSatisfy { $0 == .inherited })
+        var edited = resolved.layout
+        edited.inner[0].label = "Safari Copy"
+        let saved = AppHUDResolver.diff(edited: edited, previous: unlocked, global: global)
+        XCTAssertEqual(saved.rings?.inner.overrides[copy.id], edited.inner[0])
+    }
+
+    func testCoincidentStoredOrderSurvivesSiblingLockAndCanBeExplicitlyReverted() {
+        let global = HUDActionLayout(inner: [copy, paste], middle: [apps, snap])
+        let profile = AppHUDProfile(rings: AppHUDRings(middle: RingInheritance(customOrder: [apps.id])))
+        let before = AppHUDResolver.resolve(global: global, profile: profile)
+        XCTAssertEqual(before.layout, global)
+        XCTAssertEqual(before.customOrderBands, [.middle])
+        let saved = AppHUDResolver.diff(
+            edited: global, previous: profile, global: global, lockedBands: [.inner],
+            customOrderBands: before.customOrderBands
+        )
+        XCTAssertEqual(saved.rings?.middle, profile.rings?.middle)
+        let reverted = AppHUDResolver.diff(
+            edited: global, previous: saved, global: global, customOrderBands: []
+        )
+        XCTAssertNil(reverted.rings?.middle.customOrder)
+        XCTAssertEqual(reverted.rings?.inner.followsGlobal, true)
+    }
+
+    func testLockedBandResolvesVerbatimWithoutOverflowWarnings() {
+        let items = (0...AppHUDResolver.ringCapacity).map {
+            RingMenuItem(label: "Global \($0)", icon: "circle", actionType: .custom)
+        }
+        let global = HUDActionLayout(inner: items, middle: [])
+        let resolved = AppHUDResolver.resolve(
+            global: global, rings: AppHUDRings(inner: RingInheritance(followsGlobal: true))
+        )
+        XCTAssertEqual(resolved.layout.inner, items)
+        XCTAssertNil(resolved.notShown[.inner])
+    }
+
     // MARK: - Helpers
 
     private func itemJSON(_ item: RingMenuItem, extra: [String: Any] = [:]) throws -> [String: Any] {

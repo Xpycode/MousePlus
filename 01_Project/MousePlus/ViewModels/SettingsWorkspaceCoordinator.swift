@@ -597,7 +597,10 @@ final class SettingsWorkspaceCoordinator {
             edited: edit.edited,
             previous: profile,
             global: edit.global,
-            origins: edit.origins
+            origins: edit.origins,
+            lockedBands: edit.lockedBands,
+            customOrderBands: edit.customOrderBands,
+            originsByBand: edit.originsByBand
         )
         guard edited != profile else { return nil }
         let before = AppHUDResolver.resolve(global: edit.global, profile: profile)
@@ -676,7 +679,8 @@ final class SettingsWorkspaceCoordinator {
     }
 
     private static func sameRing(_ lhs: RingInheritance, _ rhs: RingInheritance) -> Bool {
-        lhs.overrides == rhs.overrides
+        lhs.followsGlobal == rhs.followsGlobal
+            && lhs.overrides == rhs.overrides
             && lhs.hidden == rhs.hidden
             && lhs.customOrder == rhs.customOrder
             && lhs.appOnly.map(\.item) == rhs.appOnly.map(\.item)
@@ -695,7 +699,11 @@ final class SettingsWorkspaceCoordinator {
     }
 
     private static func rebase(_ desired: RingInheritance, onto fresh: RingInheritance) -> RingInheritance {
-        var result = RingInheritance(hidden: desired.hidden, customOrder: desired.customOrder)
+        var result = RingInheritance(
+            followsGlobal: desired.followsGlobal,
+            hidden: desired.hidden,
+            customOrder: desired.customOrder
+        )
         for item in desired.overrides.values {
             result.setOverride(
                 item,
@@ -727,7 +735,8 @@ final class SettingsWorkspaceCoordinator {
                 forBundleIdentifier: bundleIdentifier
             ) else { return [] }
             return [Band.inner, .middle].compactMap { band in
-                guard let count = resolved.notShown[band]?.count, count > 0 else { return nil }
+                guard !resolved.lockedBands.contains(band),
+                      let count = resolved.notShown[band]?.count, count > 0 else { return nil }
                 return AppHUDOverflowWarning(bundleIdentifier: bundleIdentifier, band: band, count: count)
             }
         }
