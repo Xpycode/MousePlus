@@ -51,12 +51,12 @@ enum AppHUDResolver {
         let inner = resolvedEntries(
             global: global.inner,
             globalJSON: global.preservedInnerItemsJSON,
-            ring: rings.inner
+            ring: rings.inner, globalIsMissing: global.missingGlobalBands.contains(.inner)
         )
         let middle = resolvedEntries(
             global: global.middle,
             globalJSON: global.preservedMiddleItemsJSON,
-            ring: rings.middle
+            ring: rings.middle, globalIsMissing: global.missingGlobalBands.contains(.middle)
         )
 
         func itemOrigins(_ entries: [Entry]) -> [UUID: ItemOrigin] {
@@ -102,8 +102,12 @@ enum AppHUDResolver {
     private static func resolvedEntries(
         global: [RingMenuItem],
         globalJSON: [JSONValue],
-        ring: RingInheritance
+        ring stored: RingInheritance,
+        globalIsMissing: Bool
     ) -> [Entry] {
+        // Keep orphaned actions visible using a temporary repair. Their stored
+        // links can resolve again when the missing Global ring is restored.
+        let ring = globalIsMissing ? repairRing(stored, oldGlobal: global, newGlobal: global) : stored
         let pairedGlobalJSON = pairedJSON(global, globalJSON)
         if ring.followsGlobal {
             return global.indices.map { Entry(item: global[$0], origin: .inherited, json: pairedGlobalJSON[$0]) }
@@ -275,7 +279,8 @@ enum AppHUDResolver {
 
             // Preserve the original anchors and partial order in an untouched
             // sibling ring. A round trip through visible items loses that detail.
-            let before = resolvedEntries(global: globalItems, globalJSON: globalJSON, ring: previous)
+            let missing = global.missingGlobalBands.contains(band)
+            let before = resolvedEntries(global: globalItems, globalJSON: globalJSON, ring: previous, globalIsMissing: missing)
             let wantsCustomOrder = customOrderBands?.contains(band)
             let bandOrigins = originsByBand?[band] ?? origins
             if !previous.followsGlobal,
@@ -286,8 +291,17 @@ enum AppHUDResolver {
             }
 
             let baseline = previous.followsGlobal ? previous.cleared(followsGlobal: false) : previous
+            // When editing the fallback view, surviving overrides still have
+            // Global identities even though their original items are unavailable.
+            var linkedItems = globalItems
+            if missing {
+                var ids = Set(globalItems.map(\.id))
+                for item in items where baseline.overrides[item.id] != nil && ids.insert(item.id).inserted {
+                    linkedItems.append(item)
+                }
+            }
             var ring = diff(
-                edited: items, previous: baseline, global: globalItems, origins: bandOrigins,
+                edited: items, previous: baseline, global: linkedItems, origins: bandOrigins,
                 editedItemsJSON: json, globalItemsJSON: globalJSON
             )
             if let wantsCustomOrder {
@@ -362,17 +376,21 @@ enum AppHUDResolver {
     /// gone becomes app-only, anchored to the deleted item's nearest surviving
     /// former predecessor (ring start if it had none; the end if `oldGlobal` does
     /// not contain it). App-only anchors to deleted items move the same way.
-    /// Hidden and order IDs that no longer exist are removed. Without a deletion
-    /// the result is equal to the input. On load, pass the current Global as both
-    /// `oldGlobal` and `newGlobal`. A version 1 copy is returned unchanged.
+    /// Removes hidden and order references to items deleted by this change.
+    /// On load, pass the current Global as both layouts to recover orphaned
+    /// overrides and anchors while preserving externally stored hidden/order IDs.
     static func repairAfterGlobalChange(
         profile: AppHUDProfile,
         oldGlobal: HUDActionLayout,
         newGlobal: HUDActionLayout
     ) -> AppHUDProfile {
         guard var rings = profile.rings else { return profile }
-        rings.inner = repairRing(rings.inner, oldGlobal: oldGlobal.inner, newGlobal: newGlobal.inner)
-        rings.middle = repairRing(rings.middle, oldGlobal: oldGlobal.middle, newGlobal: newGlobal.middle)
+        if !newGlobal.missingGlobalBands.contains(.inner) {
+            rings.inner = repairRing(rings.inner, oldGlobal: oldGlobal.inner, newGlobal: newGlobal.inner)
+        }
+        if !newGlobal.missingGlobalBands.contains(.middle) {
+            rings.middle = repairRing(rings.middle, oldGlobal: oldGlobal.middle, newGlobal: newGlobal.middle)
+        }
         var result = profile
         result.setRings(rings)
         return result
@@ -422,10 +440,9 @@ enum AppHUDResolver {
             result.appOnly[index].after = formerPredecessor(of: after)
         }
 
-        result.hidden.formIntersection(newIDs)
-        if let customOrder = result.customOrder {
-            result.customOrder = customOrder.filter { newIDs.contains($0) || appOnlyIDs.contains($0) }
-        }
+        let deletedIDs = Set(oldIndexByID.keys).subtracting(newIDs)
+        result.hidden.subtract(deletedIDs)
+        result.customOrder?.removeAll { deletedIDs.contains($0) && !appOnlyIDs.contains($0) }
         return result
     }
 

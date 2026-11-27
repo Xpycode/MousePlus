@@ -239,7 +239,7 @@ final class AppHUDInheritanceTests: XCTestCase {
         )
         let ring = try XCTUnwrap(repaired.rings?.inner)
         XCTAssertTrue(ring.overrides.isEmpty)
-        XCTAssertTrue(ring.hidden.isEmpty)
+        XCTAssertEqual(ring.hidden, profile.rings?.inner.hidden)
         XCTAssertEqual(
             AppHUDResolver.resolve(global: global, profile: repaired).layout.inner,
             [copy, spotlight, safariPaste]

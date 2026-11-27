@@ -1406,6 +1406,154 @@ final class SettingsWorkspaceCoordinatorTests: XCTestCase {
         XCTAssertEqual(try appLayout(saved, "com.apple.Safari").inner, saved.inner)
     }
 
+    func testMissingGlobalRingSurvivesUnrelatedSaveAndReconnectsWhenRestored() async throws {
+        let bundleID = "com.example.disposable"
+        for band in [Band.inner, .middle] {
+            let key = band == .inner ? "inner" : "middle"
+            let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+            defer { try? FileManager.default.removeItem(at: directory) }
+            let store = ConfigurationStore(directoryURL: directory)
+            let persistence = ConfigurationService(store: store)
+            let original = RingMenuItem(label: "Global action", icon: "star", actionType: .custom)
+            var customized = original
+            customized.label = "App action"
+            var seed = Configuration(inner: [original], middle: [original])
+            let ring = RingInheritance(overrides: [original.id: customized])
+            XCTAssertTrue(seed.setAppHUDProfile(
+                AppHUDProfile(rings: AppHUDRings(inner: ring, middle: ring)), forBundleIdentifier: bundleID
+            ))
+            try await persistence.save(seed)
+            var damaged = try encodedObject(seed)
+            let originalRing = try XCTUnwrap(damaged.removeValue(forKey: key))
+            try JSONSerialization.data(withJSONObject: damaged).write(to: store.configurationURL)
+            let coordinator = SettingsWorkspaceCoordinator(persistence: persistence)
+            await coordinator.load()
+            XCTAssertTrue(coordinator.isLoaded)
+            let visible = try appLayout(coordinator.configuration, bundleID)
+            XCTAssertTrue((band == .inner ? visible.inner : visible.middle).contains(customized))
+            coordinator.edit([.behavior]) { $0.behavior.dismissOnEscape.toggle() }
+            let saved = await coordinator.flush()
+            XCTAssertTrue(saved)
+            let data = try Data(contentsOf: store.configurationURL)
+            let onDisk = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
+            XCTAssertNil(onDisk[key])
+            let profiles = try XCTUnwrap(onDisk["appHUDProfiles"])
+            XCTAssertEqual(try JSONSerialization.data(withJSONObject: profiles, options: [.sortedKeys]),
+                           try appHUDProfilesData(seed))
+            let reloaded = try await persistence.load()
+            XCTAssertEqual(reloaded.appHUDProfile(forBundleIdentifier: bundleID)?.rings, AppHUDRings(inner: ring, middle: ring))
+            XCTAssertNotEqual(reloaded.behavior.dismissOnEscape, seed.behavior.dismissOnEscape)
+
+            // The fallback view remains editable before Global is restored.
+            XCTAssertTrue(coordinator.selectHUDProfile(.app(bundleIdentifier: bundleID)))
+            let items = band == .inner ? coordinator.menuEditorModel.inner : coordinator.menuEditorModel.middle
+            let index = try XCTUnwrap(items.firstIndex { $0.id == original.id })
+            customized.label = "Edited while Global was missing"
+            if band == .inner {
+                coordinator.menuEditorModel.inner[index].label = customized.label
+            } else {
+                coordinator.menuEditorModel.middle[index].label = customized.label
+            }
+            coordinator.menuItemsDidChange()
+            let edited = await coordinator.flush()
+            XCTAssertTrue(edited)
+            let updatedData = try Data(contentsOf: store.configurationURL)
+            var updated = try XCTUnwrap(JSONSerialization.jsonObject(with: updatedData) as? [String: Any])
+            XCTAssertNil(updated[key])
+            updated[key] = originalRing
+            try JSONSerialization.data(withJSONObject: updated).write(to: store.configurationURL)
+            let restored = try await persistence.load()
+            let resolved = try XCTUnwrap(restored.resolvedAppLayout(forBundleIdentifier: bundleID))
+            XCTAssertEqual(resolved.originsByBand[band]?[original.id], .customized)
+            XCTAssertEqual(band == .inner ? resolved.layout.inner : resolved.layout.middle, [customized])
+        }
+    }
+
+    func testMissingRingIsPreservedAcrossSiblingEditResetAndUndo() async throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let store = ConfigurationStore(directoryURL: directory)
+        let persistence = ConfigurationService(store: store)
+        let seed = Configuration()
+        try await persistence.save(seed)
+        var damaged = try encodedObject(seed)
+        damaged.removeValue(forKey: "middle")
+        try JSONSerialization.data(withJSONObject: damaged).write(to: store.configurationURL)
+
+        func diskObject() throws -> [String: Any] {
+            let data = try Data(contentsOf: store.configurationURL)
+            return try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
+        }
+        let coordinator = SettingsWorkspaceCoordinator(persistence: persistence)
+        await coordinator.load()
+        coordinator.menuEditorModel.inner[0].label = "Edited inner"
+        coordinator.menuItemsDidChange()
+        let saved = await coordinator.flush()
+        XCTAssertTrue(saved)
+        XCTAssertNil(try diskObject()["middle"])
+
+        // Reset supplies a real middle ring even when the fallback looks identical.
+        let reset = await coordinator.resetMenuItems()
+        XCTAssertTrue(reset)
+        XCTAssertNotNil(try diskObject()["middle"])
+        let undone = await coordinator.undoMenuItemsReset()
+        XCTAssertTrue(undone)
+        XCTAssertNil(try diskObject()["middle"])
+        XCTAssertEqual(coordinator.menuEditorModel.inner[0].label, "Edited inner")
+
+        coordinator.menuEditorModel.middle[0].label = "Explicit middle edit"
+        coordinator.menuItemsDidChange()
+        let supplied = await coordinator.flush()
+        XCTAssertTrue(supplied)
+        let middle = try XCTUnwrap(try diskObject()["middle"] as? [[String: Any]])
+        XCTAssertEqual(middle.first?["label"] as? String, "Explicit middle edit")
+    }
+
+    func testGlobalSavePreservesExternalStaleIDsAndRemovesOnlyDeletedGlobalIDs() async throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let store = ConfigurationStore(directoryURL: directory)
+        let persistence = ConfigurationService(store: store)
+        let bundleID = "com.example.disposable"
+        var external = Configuration()
+        let existingID = external.middle[0].id
+        let staleID = UUID()
+        XCTAssertTrue(external.setAppHUDProfile(AppHUDProfile(), forBundleIdentifier: bundleID))
+        try await persistence.save(external)
+        let coordinator = SettingsWorkspaceCoordinator(
+            persistence: persistence, debounceClock: LongWorkspaceDebounceClock()
+        )
+        await coordinator.load()
+
+        // An external writer adds references after Settings loads its baseline.
+        let ring = RingInheritance(hidden: [existingID, staleID], customOrder: [staleID, existingID])
+        XCTAssertTrue(external.setAppHUDInheritance(AppHUDRings(middle: ring), forBundleIdentifier: bundleID))
+        try await persistence.save(external)
+        func storedProfiles() throws -> Data {
+            let data = try Data(contentsOf: store.configurationURL)
+            let object = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
+            return try JSONSerialization.data(withJSONObject: try XCTUnwrap(object["appHUDProfiles"]), options: [.sortedKeys])
+        }
+        let before = try storedProfiles()
+        coordinator.menuEditorModel.middle[1].label = "Renamed Global"
+        coordinator.menuItemsDidChange()
+        let renamed = await coordinator.flush()
+        XCTAssertTrue(renamed)
+        let afterRename = try await persistence.load()
+        XCTAssertEqual(afterRename.middle[1].label, "Renamed Global")
+        XCTAssertEqual(try storedProfiles(), before)
+
+        coordinator.menuEditorModel.middle.removeFirst()
+        coordinator.menuItemsDidChange()
+        let deleted = await coordinator.flush()
+        XCTAssertTrue(deleted)
+        let afterDelete = try await persistence.load()
+        XCTAssertFalse(afterDelete.middle.contains { $0.id == existingID })
+        let remaining = try XCTUnwrap(afterDelete.appHUDProfile(forBundleIdentifier: bundleID)?.rings?.middle)
+        XCTAssertEqual(remaining.hidden, [staleID])
+        XCTAssertEqual(remaining.customOrder, [staleID])
+    }
+
     func testGlobalOnlyEditKeepsExternalAppHUDEditInsteadOfOverwritingIt() async throws {
         var initial = Configuration()
         _ = initial.setAppHUDProfile(AppHUDProfile(), forBundleIdentifier: "com.apple.Safari")

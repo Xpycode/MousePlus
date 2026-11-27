@@ -3,11 +3,22 @@ import Foundation
 /// Full configuration for the ring menu.
 struct Configuration: Codable {
     /// Inner band — symbol-only quick actions (no labels rendered).
-    var inner: [RingMenuItem]
+    var inner: [RingMenuItem] {
+        didSet {
+            if missingGlobalBands.contains(.inner), inner != oldValue { missingGlobalBands.remove(.inner) }
+        }
+    }
     /// Middle band — labeled items; each direct or expandable.
     /// Inner and middle are INDEPENDENT action sets that share only spoke geometry
     /// (not parent/child). See IMPLEMENTATION_PLAN §2.3.
-    var middle: [RingMenuItem]
+    var middle: [RingMenuItem] {
+        didSet {
+            if missingGlobalBands.contains(.middle), middle != oldValue { missingGlobalBands.remove(.middle) }
+        }
+    }
+    /// Fallback items can be displayed while a hand-edited file lacks a ring.
+    /// Only editing that band or explicitly replacing Global supplies its contents.
+    private var missingGlobalBands: Set<Band> = []
     var triggers: TriggersConfig
     var appearance: AppearanceConfig
     var behavior: BehaviorConfig
@@ -28,7 +39,8 @@ struct Configuration: Codable {
                 inner: inner,
                 middle: middle,
                 preservingInner: preservedGlobalInnerJSON,
-                preservingMiddle: preservedGlobalMiddleJSON
+                preservingMiddle: preservedGlobalMiddleJSON,
+                missingGlobalBands: missingGlobalBands
             )
         }
         set {
@@ -36,6 +48,7 @@ struct Configuration: Codable {
             middle = newValue.middle
             preservedGlobalInnerJSON = newValue.preservedInnerItemsJSON
             preservedGlobalMiddleJSON = newValue.preservedMiddleItemsJSON
+            missingGlobalBands = newValue.missingGlobalBands
         }
     }
 
@@ -105,6 +118,8 @@ struct Configuration: Codable {
         //   New format → `inner` + `middle` keys read directly.
         //   Old format → only a flat `items` array; it lands in `middle`, `inner` defaults.
         if c.contains(.middle) || c.contains(.inner) {
+            if !c.contains(.inner) { missingGlobalBands.insert(.inner) }
+            if !c.contains(.middle) { missingGlobalBands.insert(.middle) }
             if let rawMiddle = try c.decodeIfPresent([JSONValue].self, forKey: .middle) {
                 preservedGlobalMiddleJSON = rawMiddle
                 middle = try rawMiddle.map { try $0.decode(RingMenuItem.self) }
@@ -131,6 +146,9 @@ struct Configuration: Codable {
             middle = RingMenuItem.sampleItems
             preservedGlobalInnerJSON = []
             preservedGlobalMiddleJSON = []
+            if schemaVersion >= 1 || c.contains(.appHUDProfiles) {
+                missingGlobalBands = [.inner, .middle]
+            }
         }
 
         appearance = try c.decodeIfPresent(AppearanceConfig.self, forKey: .appearance) ?? .default
@@ -181,14 +199,12 @@ struct Configuration: Codable {
         var c = encoder.container(keyedBy: CodingKeys.self)
         // Canonical new keys.
         try c.encode(Self.currentSchemaVersion, forKey: .schemaVersion)
-        try c.encode(
-            HUDActionLayout.mergedItems(inner, preserving: preservedGlobalInnerJSON),
-            forKey: .inner
-        )
-        try c.encode(
-            HUDActionLayout.mergedItems(middle, preserving: preservedGlobalMiddleJSON),
-            forKey: .middle
-        )
+        if !missingGlobalBands.contains(.inner) {
+            try c.encode(HUDActionLayout.mergedItems(inner, preserving: preservedGlobalInnerJSON), forKey: .inner)
+        }
+        if !missingGlobalBands.contains(.middle) {
+            try c.encode(HUDActionLayout.mergedItems(middle, preserving: preservedGlobalMiddleJSON), forKey: .middle)
+        }
         try c.encode(triggers, forKey: .triggers)
         try c.encode(appearance, forKey: .appearance)
         try c.encode(behavior, forKey: .behavior)
@@ -268,8 +284,8 @@ struct Configuration: Codable {
 
     /// Repairs every readable inheriting App HUD after Global changed from
     /// `oldGlobal` to the current Global: overrides of deleted Global items
-    /// become app-only and stale hidden/order IDs are dropped. Without a Global
-    /// deletion the stored profiles stay equal. Quarantined entries and
+    /// become app-only and references to newly deleted IDs are removed from
+    /// hidden items and custom orders. Quarantined entries and
     /// version 1 copies are left unchanged.
     mutating func repairAppHUDProfiles(afterGlobalChangeFrom oldGlobal: HUDActionLayout) {
         let newGlobal = globalHUDActionLayout

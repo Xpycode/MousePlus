@@ -8,6 +8,8 @@ struct HUDActionLayout: Codable, Equatable {
     private var unknownFields: [String: JSONValue]
     private var preservedInnerJSON: [JSONValue]
     private var preservedMiddleJSON: [JSONValue]
+    /// Only a Global layout read from an incomplete configuration sets this.
+    var missingGlobalBands: Set<Band> = []
 
     init(inner: [RingMenuItem], middle: [RingMenuItem]) {
         self.init(inner: inner, middle: middle, preservingInner: [], preservingMiddle: [])
@@ -17,13 +19,15 @@ struct HUDActionLayout: Codable, Equatable {
         inner: [RingMenuItem],
         middle: [RingMenuItem],
         preservingInner: [JSONValue],
-        preservingMiddle: [JSONValue]
+        preservingMiddle: [JSONValue],
+        missingGlobalBands: Set<Band> = []
     ) {
         self.inner = inner
         self.middle = middle
         unknownFields = [:]
         preservedInnerJSON = preservingInner
         preservedMiddleJSON = preservingMiddle
+        self.missingGlobalBands = missingGlobalBands
     }
 
     var preservedInnerItemsJSON: [JSONValue] { preservedInnerJSON }
@@ -62,6 +66,7 @@ struct HUDActionLayout: Codable, Equatable {
     static func == (lhs: Self, rhs: Self) -> Bool {
         lhs.inner == rhs.inner
             && lhs.middle == rhs.middle
+            && lhs.missingGlobalBands == rhs.missingGlobalBands
             && lhs.unknownFields == rhs.unknownFields
     }
 

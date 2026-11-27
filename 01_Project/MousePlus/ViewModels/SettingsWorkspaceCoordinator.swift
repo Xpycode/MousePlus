@@ -284,8 +284,11 @@ final class SettingsWorkspaceCoordinator {
         switch selectedHUDProfile {
         case .global:
             let previousGlobal = configuration.globalHUDActionLayout
-            configuration.inner = RingMenuItem.sampleInnerItems
-            configuration.middle = RingMenuItem.sampleItems
+            var defaults = previousGlobal
+            defaults.inner = RingMenuItem.sampleInnerItems
+            defaults.middle = RingMenuItem.sampleItems
+            defaults.missingGlobalBands = []
+            configuration.globalHUDActionLayout = defaults
             configuration.hudCustomization = .default
             configuration.repairAppHUDProfiles(afterGlobalChangeFrom: previousGlobal)
         case .app(let bundleIdentifier):
@@ -755,18 +758,17 @@ final class SettingsWorkspaceCoordinator {
         to edited: Configuration,
         into target: inout Configuration
     ) throws {
-        let editedMatchesBaseline = edited.inner == baseline.inner
-            && edited.middle == baseline.middle
-        guard !editedMatchesBaseline else { return }
-        let freshMatchesBaseline = target.inner == baseline.inner
-            && target.middle == baseline.middle
-        let freshMatchesEdited = target.inner == edited.inner
-            && target.middle == edited.middle
-        guard freshMatchesBaseline || freshMatchesEdited else {
+        let original = baseline.globalHUDActionLayout
+        let desired = edited.globalHUDActionLayout
+        guard desired != original else { return }
+        var fresh = target.globalHUDActionLayout
+        guard fresh == original || fresh == desired else {
             throw MenuItemsMergeError.globalMenuChangedExternally
         }
-        target.inner = edited.inner
-        target.middle = edited.middle
+        fresh.inner = desired.inner
+        fresh.middle = desired.middle
+        fresh.missingGlobalBands = desired.missingGlobalBands
+        target.globalHUDActionLayout = fresh
     }
 
     /// Applies only this workspace's app-profile differences to a fresh disk
