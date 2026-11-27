@@ -1,8 +1,11 @@
 # Completed Tasks
 
-**Total archived:** 50
+**Total archived:** 53
 **Last updated:** 2026-11-27
 
+- [x] (2026-11-27) Preserved missing Global ring keys and their app overrides across unrelated saves. Restoring either ring reconnects the customized item. [Verification](sessions/2026-11-27.md#missing-global-ring-keys)
+- [x] (2026-11-27) Preserved externally stored hidden and custom-order IDs during unrelated Global edits. Verified rename and deletion through the real Settings save path. [Regression](sessions/2026-11-27.md#global-rename-and-an-externally-edited-profile)
+- [x] (2026-11-27) Restored space for the Activity Monitor profile heading and the symbol name at the minimum Settings width. [Before and after](sessions/2026-11-27.md#menu-items-at-minimum-width)
 - [x] (2026-11-27) Test Action names the receiving app, uses the selected app profile and disables testing while that app is closed. Verified Calculator Copy in both profiles. [Checks](sessions/2026-11-27.md#test-action-recipients)
 - [x] (2026-11-27) Fixed the Menu Items preview drawing sample wedges beside the loaded profile. Verified six rotated wedges, an icon edit, Finder overrides and selection targets. [Regression and screenshots](sessions/2026-11-27.md#menu-items-preview-repair)
 - [x] (2026-11-27) Verified M4 Pro Accessibility across signed builds and recovered Input Monitoring by removing the old ad hoc build's entry. Option-Command-Comma opened MousePlus Settings from Calculator. [Evidence](sessions/2026-11-27.md#permission-check)

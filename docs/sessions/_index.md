@@ -10,7 +10,7 @@
 
 | Date | Focus | Outcome | Log |
 |------|-------|---------|-----|
-| 2026-11-27 | App icon, permissions, menu preview and Test Action targeting | Accessibility carried over and the Settings shortcut recovered. The preview passed 76 focused tests. Test Action passed 32 focused tests and delivered Copy to Calculator in both profiles. 13 backlog entries remain. | [Log](2026-11-27.md#resume) |
+| 2026-11-27 | Settings layout, menu preview, Test Action and profile saves | Verified the layout fix, Calculator targeting and Finder profile recovery. All 119 focused persistence and inheritance tests passed. M4 Pro helper cleanup is pending. Next, reproduce Safari missing from the app picker. | [Log](2026-11-27.md#resume) |
 | 2026-11-26 | Retry MousePlus Accessibility approval | The signed baseline requested access again. The picker disabled Open while the macOS permission alert remained available. Check the Accessibility list from that alert before testing the second build. | [Log](2026-11-26.md) |
 | 2026-11-25 | Check Accessibility across signed builds | The installed baseline passed signature verification. The helper's Accessibility picker kept Open disabled for both copies. Diagnose the first grant before testing the second build. | [Log](2026-11-25.md) |
 | 2026-11-24 | Use Global ring | Inner and Middle switches implemented and tested. 94 focused checks passed. Confirm, cancel and independent editing verified in Atlas. | [Log](2026-11-24.md) |

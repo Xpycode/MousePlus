@@ -10,14 +10,6 @@
 <!-- Ideas and future work. Added by /interview, user input, or discovered during development. -->
 <!-- Priority: top = highest, bottom = lowest -->
 
-- [ ] **Settings cosmetics after the E1 layout fix (2026-11-22):** profile-bar buttons grew wider, so
-  "Editing Activity Monitor HUD" now truncates ("Editing Activity Mon…"), and the selected-item column
-  is narrower, so the icon field shows "doc.on.d". Both are visible in Atlas capture `1795376506075372000`.
-
-- [ ] **Low-confidence review notes (5.2, 2026-11-22):**
-  - (a) `repairAfterGlobalChange` always cleans stale hidden/order IDs, so a profile on disk with stale IDs (only possible from external edits) gets rewritten by an unrelated save, a strict-reading AC19 exception.
-  - (b) A config missing its `inner`/`middle` key decodes to `[]`/sample items with random IDs, which would repair overrides into app-only items. This matters only for hand-damaged configs.
-
 - [ ] **Inbox (2026-11-22):** in the Atlas helper, the Add App HUD picker didn't list Safari (Activity Monitor was listed). Check whether the picker skips Safari's location (`/Applications/Safari.app` is a cryptex-backed app) on a real desktop.
 
 - [ ] **Pre-existing test failure:** `WorkspaceAccessibilityTests.testFillUnusedSlotsUsesNativeCheckboxAndUpdatesSharedCustomization`

@@ -13,12 +13,13 @@
 
 - **Phase:** Implementation. <!-- Phase changed: 2026-09-11 -->
 - **Focus:** Backlog selection. No active implementation plan.
-- **Next:** Choose among the 13 [backlog entries](TASKS.md#backlog). The first is the truncated profile name and icon field in Settings.
+- **Next:** Choose among the 11 [backlog entries](TASKS.md#backlog). The first is to reproduce Safari missing from the Add App HUD picker.
+- **M4 Pro cleanup:** Another Atlas session is using the helper. The disposable MousePlus profile and test apps are recorded in the current handoff.
 - **Current handoff:** [2026-11-27 Resume](sessions/2026-11-27.md#resume)
 
 ## Recent
 
-- **2026-11-27:** Packaged the Radial Fan icon, verified Accessibility across signed builds and recovered the global Settings shortcut. Repaired the recurring preview mismatch and verified the Global and Finder profiles in Atlas. Verified Calculator Copy from Global and Calculator’s own profile after fixing Test Action targeting.
+- **2026-11-27:** Packaged the Radial Fan icon, verified Accessibility across signed builds and recovered the global Settings shortcut. Repaired the recurring preview mismatch and verified the Global and Finder profiles in Atlas. Verified Calculator Copy from Global and Calculator’s own profile after fixing Test Action targeting. Fixed the truncated profile heading and symbol name at minimum width. Verified that a Global rename preserves externally stored hidden and order IDs. Restoring a missing Global ring now reconnects its customized app items.
 - **2026-11-26:** The signed baseline still requested access at close. On retry, macOS showed a separate permission alert while the file picker's Open button remained disabled.
 - **2026-11-25:** The installed MousePlus baseline passed signature verification in the helper. System Settings still disabled Open when the user selected it.
 - **2026-11-24:** Added Use Global inner/middle ring to app profiles. Verified both switches in Settings and passed 94 focused tests.
@@ -36,7 +37,7 @@
 - **App-specific HUDs:** 5/5 implementation waves and signed-live Finder/Global acceptance complete on the supported BetterMouse-to-keyboard route.
 - **Trigger backend:** Keyboard and standard mouse paths work (the mouse trigger button is now consumed, not passed to other apps); advanced Logitech HID++ support remains undecided.
 - **App HUD inheritance:** complete; 11/11 tasks, Atlas and user live acceptance passed. [Use Global ring](plans/use-global-ring.md) complete, 4/4 tasks.
-- **Task tracker:** 13 open backlog entries, including visual design exploration and permission setup improvements. No active plan.
+- **Task tracker:** 11 open backlog entries, including visual design exploration and permission setup improvements. No active plan.
 
 ## Risks and Backlog
 
