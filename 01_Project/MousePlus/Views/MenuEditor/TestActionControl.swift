@@ -2,16 +2,17 @@ import SwiftUI
 
 struct TestActionControl: View {
     let item: RingMenuItem
-    let contextAvailability: SettingsActionContextAvailability
+    let contextAvailability: () -> SettingsActionContextAvailability
     @Bindable var controller: TestActionController
     /// Where the item comes from, e.g. "from Global" or "only in Safari".
     /// `nil` (the Global profile) shows no caption.
     var sourceLabel: String? = nil
 
     var body: some View {
+        let shownContext = contextAvailability()
         let presentation = controller.presentation(
             for: item,
-            contextAvailability: contextAvailability
+            contextAvailability: shownContext
         )
         let displayedResult = controller.displayedResult.flatMap {
             $0.itemID == item.id ? $0 : nil
@@ -20,7 +21,6 @@ struct TestActionControl: View {
             HStack(spacing: 8) {
                 AppKitButton(
                     title: buttonTitle(for: displayedResult),
-                    isEnabled: displayedResult != nil || presentation.isEnabled,
                     accessibilityIdentifier: "menuItems.testAction",
                     accessibilityValue: controller.accessibilityValue(
                         for: displayedResult,
@@ -32,14 +32,15 @@ struct TestActionControl: View {
                         if displayedResult != nil {
                             await controller.dismissResult()
                         } else {
-                            await controller.test(item, contextAvailability: contextAvailability)
+                            await controller.test(item, contextAvailability: shownContext, refresh: contextAvailability)
                         }
                     }
                 }
+                .disabled(displayedResult == nil && !presentation.isEnabled)
                 .help(displayedResult == nil ? "Run this configured action" : "Dismiss the test result")
 
                 if let targetName = presentation.targetName {
-                    Text("Target: \(targetName)")
+                    Text("Test sends to \(targetName)")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }

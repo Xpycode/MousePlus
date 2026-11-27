@@ -38,7 +38,9 @@ struct MenuItemsPane: View {
                     if let selectedItem {
                         TestActionControl(
                             item: selectedItem,
-                            contextAvailability: contextProvider.availability,
+                            contextAvailability: {
+                                contextProvider.availability(for: coordinator.selectedHUDProfile, appName: editedAppName)
+                            },
                             controller: testActionController,
                             sourceLabel: selectedItemSourceLabel
                         )

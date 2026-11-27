@@ -91,6 +91,7 @@ final class TestActionControllerTests: XCTestCase {
         let context = await executor.lastContext
         XCTAssertEqual(context?.frontmostPID, 42)
         XCTAssertEqual(context?.returnsFocusToTarget, true)
+        XCTAssertEqual(context?.keystrokeDestination, .process(42))
     }
 
     func testKeystrokeWithoutTargetIsDisabledAndNotSent() async {
@@ -109,6 +110,24 @@ final class TestActionControllerTests: XCTestCase {
         await controller.test(item, contextAvailability: availability)
         let recordedEvents = await events.snapshot()
         XCTAssertFalse(recordedEvents.contains("execute"))
+    }
+
+    func testProfileClosureBlocksDirectActionAndCancelsKeystrokeDuringSave() async {
+        let events = TestActionEvents()
+        let coordinator = makeCoordinator(TestActionPersistence(configuration: Configuration()))
+        await coordinator.load()
+        let controller = TestActionController(
+            coordinator: coordinator, actionService: TestActionExecutor(events: events, result: .completed)
+        )
+        let closed = SettingsActionContextAvailability.profileAppClosed(reason: "Open Safari.")
+        XCTAssertFalse(controller.presentation(for: directItem(), contextAvailability: closed).isEnabled)
+        let shown = SettingsActionContextAvailability.available(
+            target: .init(name: "Safari", processIdentifier: 42), context: .init(frontmostPID: 42)
+        )
+        await controller.test(keystrokeItem(), contextAvailability: shown, refresh: { closed })
+        let recorded = await events.snapshot()
+        XCTAssertTrue(recorded.isEmpty)
+        XCTAssertEqual(controller.displayedResult?.result, .failed(message: "Open Safari."))
     }
 
     private func keystrokeItem() -> RingMenuItem {

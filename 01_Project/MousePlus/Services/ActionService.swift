@@ -6,6 +6,7 @@ struct ActionContext: Sendable {
     var screenLayout: ScreenLayout?
     /// Live-ring actions set this: if MousePlus itself took focus while the ring
     /// was used, hand focus back to `frontmostPID` before sending a keystroke.
+    var keystrokeDestination: KeystrokeDestination = .hidTap
     var returnsFocusToTarget = false
 
     init(frontmostPID: pid_t? = nil, screenLayout: ScreenLayout? = nil,
@@ -92,7 +93,7 @@ struct SystemActionWorkspace: ActionWorkspace {
 }
 
 protocol ActionKeystrokeSending: Sendable {
-    func send(keyCode: UInt16, flags: CGEventFlags) async throws
+    func send(keyCode: UInt16, flags: CGEventFlags, destination: KeystrokeDestination) async throws
 }
 
 extension KeystrokeService: ActionKeystrokeSending {}
@@ -153,7 +154,8 @@ actor ActionService {
                 }
                 try await keystrokeService.send(
                     keyCode: keyCode,
-                    flags: CGEventFlags(rawValue: UInt64(modifiers))
+                    flags: CGEventFlags(rawValue: UInt64(modifiers)),
+                    destination: context.keystrokeDestination
                 )
             case .custom:
                 let status = try await processRunner.run(command: item.actionData)

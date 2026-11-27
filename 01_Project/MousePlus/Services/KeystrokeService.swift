@@ -39,7 +39,7 @@ actor KeystrokeService {
         self.clock = clock
     }
 
-    func send(keyCode: UInt16, flags: CGEventFlags) async throws {
+    func send(keyCode: UInt16, flags: CGEventFlags, destination: KeystrokeDestination = .hidTap) async throws {
         guard poster.preflightPostEventAccess() else {
             throw KeystrokeError.postEventAccessDenied
         }
@@ -51,7 +51,7 @@ actor KeystrokeService {
             keyDown: true,
             flags: flags,
             sourceStateID: .privateState,
-            tap: .cghidEventTap
+            destination: destination
         )
 
         do {
@@ -66,7 +66,7 @@ actor KeystrokeService {
                 keyDown: false,
                 flags: flags,
                 sourceStateID: .privateState,
-                tap: .cghidEventTap
+                destination: destination
             )
             throw error
         }
@@ -75,7 +75,7 @@ actor KeystrokeService {
             keyDown: false,
             flags: flags,
             sourceStateID: .privateState,
-            tap: .cghidEventTap
+            destination: destination
         )
     }
 }

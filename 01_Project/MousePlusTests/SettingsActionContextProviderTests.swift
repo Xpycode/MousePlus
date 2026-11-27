@@ -1,3 +1,4 @@
+import Combine
 import XCTest
 @testable import MousePlus
 
@@ -54,6 +55,28 @@ final class SettingsActionContextProviderTests: XCTestCase {
         XCTAssertNil(provider.target)
     }
 
+    func testAppProfileUsesItsOwnRunningAppAndNeverFallsBackToGlobal() {
+        let workspace = WorkspaceStub(frontmost: .external(pid: 20, name: "Notes"))
+        let provider = makeProvider(workspace: workspace)
+        workspace.activate(.external(pid: 30, name: "Safari"))
+        workspace.activate(.external(pid: 20, name: "Notes"))
+
+        let profile = HUDProfileReference.app(bundleIdentifier: "com.example.Safari")
+        guard case .available(let target, let context) = provider.availability(for: profile, appName: "Safari") else {
+            return XCTFail("Expected Safari")
+        }
+        XCTAssertEqual(target.name, "Safari")
+        XCTAssertEqual(context.frontmostPID, 30)
+        assertAvailable(provider, name: "Notes", pid: 20)
+
+        workspace.terminate(pid: 30)
+        guard case .profileAppClosed(let reason) = provider.availability(for: profile, appName: "Safari") else {
+            return XCTFail("A closed profile must not target Notes")
+        }
+        XCTAssertTrue(reason.contains("Open Safari"))
+        assertAvailable(provider, name: "Notes", pid: 20)
+    }
+
     private func makeProvider(workspace: WorkspaceStub) -> SettingsActionContextProvider {
         SettingsActionContextProvider(
             workspace: workspace,
@@ -101,6 +124,13 @@ private final class WorkspaceStub: SettingsWorkspaceProviding {
         applications[processIdentifier]
     }
 
+    private let changes = PassthroughSubject<Void, Never>()
+    var runningApplicationsChanged: AnyPublisher<Void, Never> { changes.eraseToAnyPublisher() }
+
+    func runningApplications(bundleIdentifier: String) -> [SettingsRunningApplication] {
+        applications.values.filter { $0.bundleIdentifier == bundleIdentifier }
+    }
+
     func observeApplicationActivations(
         _ handler: @escaping (SettingsRunningApplication) -> Void
     ) -> AnyObject {
@@ -122,6 +152,7 @@ private final class WorkspaceStub: SettingsWorkspaceProviding {
             processIdentifier: app.processIdentifier,
             isTerminated: true
         )
+        changes.send()
     }
 }
 

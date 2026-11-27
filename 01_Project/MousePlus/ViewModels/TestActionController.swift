@@ -60,7 +60,8 @@ final class TestActionController {
     /// no caller can accidentally execute a dirty editor value first.
     func test(
         _ item: RingMenuItem,
-        contextAvailability: SettingsActionContextAvailability
+        contextAvailability: SettingsActionContextAvailability,
+        refresh: (() -> SettingsActionContextAvailability)? = nil
     ) async {
         guard !isRunning else { return }
         let resolved = Self.resolveContext(for: item, availability: contextAvailability)
@@ -80,10 +81,15 @@ final class TestActionController {
             }
             return
         }
-        // Context can become stale while a save is in flight. The provider gives
-        // us value snapshots, so the service still validates the exact snapshot
-        // that the pane named before performing any side effect.
-        let result = await actionService.execute(item, context: resolved.context)
+        // Keep the recipient shown at click time even if focus or the profile changes during save.
+        let latest = refresh.map { Self.resolveContext(for: item, availability: $0()) } ?? resolved
+        guard !latest.blocksExecution, latest.unavailableReason == nil,
+              latest.context.frontmostPID == resolved.context.frontmostPID else {
+            let message = latest.unavailableReason ?? "The test recipient changed. Check the recipient and try again."
+            displayedResult = await resultRouter.routeSettingsResult(.failed(message: message), for: item.id)
+            return
+        }
+        let result = await actionService.execute(item, context: latest.context)
         displayedResult = await resultRouter.routeSettingsResult(result, for: item.id)
     }
 
@@ -113,22 +119,19 @@ final class TestActionController {
         for item: RingMenuItem,
         availability: SettingsActionContextAvailability
     ) -> ResolvedTestContext {
+        if case .profileAppClosed(let reason) = availability {
+            return ResolvedTestContext(unavailableReason: reason, blocksExecution: true)
+        }
         switch item.actionType {
-        case .windowSnap:
-            switch availability {
-            case .available(let target, let context):
-                return ResolvedTestContext(context: context, targetName: target.name)
-            case .unavailable(let reason):
-                return ResolvedTestContext(unavailableReason: reason)
-            }
-        case .sendKeystroke:
-            // Settings is frontmost while testing, so the keystroke would land on
-            // MousePlus itself. Hand focus to the remembered app before posting.
+        case .windowSnap, .sendKeystroke:
             switch availability {
             case .available(let target, var context):
-                context.returnsFocusToTarget = true
+                if item.actionType == .sendKeystroke {
+                    context.returnsFocusToTarget = true
+                    context.keystrokeDestination = .process(target.processIdentifier)
+                }
                 return ResolvedTestContext(context: context, targetName: target.name)
-            case .unavailable(let reason):
+            case .unavailable(let reason), .profileAppClosed(let reason):
                 return ResolvedTestContext(unavailableReason: reason, blocksExecution: true)
             }
         default:

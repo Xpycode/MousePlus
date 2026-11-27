@@ -37,10 +37,18 @@ final class MousePlusTests: XCTestCase {
         XCTAssertEqual(clock.durations, [.milliseconds(50), .milliseconds(10)])
         XCTAssertEqual(poster.events, [
             .init(keyCode: 12, keyDown: true, flags: flags,
-                  sourceStateID: .privateState, tap: .cghidEventTap),
+                  sourceStateID: .privateState, destination: .hidTap),
             .init(keyCode: 12, keyDown: false, flags: flags,
-                  sourceStateID: .privateState, tap: .cghidEventTap),
+                  sourceStateID: .privateState, destination: .hidTap),
         ])
+    }
+
+    func testSettingsChordAddressesBothEventsToTheSameProcess() async throws {
+        let poster = RecordingEventPoster(hasAccess: true)
+        let service = KeystrokeService(poster: poster, clock: RecordingKeystrokeClock())
+        try await service.send(keyCode: 8, flags: .maskCommand, destination: .process(42))
+        XCTAssertEqual(poster.events.map(\.keyDown), [true, false])
+        XCTAssertEqual(poster.events.map(\.destination), [.process(42), .process(42)])
     }
 
     func testEmptyFlagsAreExplicitOnBothEvents() async throws {
@@ -537,7 +545,7 @@ private final class RecordingEventPoster: CGEventPosting, @unchecked Sendable {
         let keyDown: Bool
         let flags: CGEventFlags
         let sourceStateID: CGEventSourceStateID
-        let tap: CGEventTapLocation
+        let destination: KeystrokeDestination
     }
 
     let hasAccess: Bool
@@ -558,14 +566,14 @@ private final class RecordingEventPoster: CGEventPosting, @unchecked Sendable {
         keyDown: Bool,
         flags: CGEventFlags,
         sourceStateID: CGEventSourceStateID,
-        tap: CGEventTapLocation
+        destination: KeystrokeDestination
     ) throws {
         events.append(.init(
             keyCode: keyCode,
             keyDown: keyDown,
             flags: flags,
             sourceStateID: sourceStateID,
-            tap: tap
+            destination: destination
         ))
     }
 }

@@ -193,12 +193,12 @@ private actor WorkspaceStub: ActionWorkspace {
 
 private actor KeystrokeStub: ActionKeystrokeSending {
     let error: Error?
-    private(set) var calls: [(UInt16, CGEventFlags)] = []
+    private(set) var calls: [(UInt16, CGEventFlags, KeystrokeDestination)] = []
 
     init(error: Error? = nil) { self.error = error }
 
-    func send(keyCode: UInt16, flags: CGEventFlags) async throws {
-        calls.append((keyCode, flags))
+    func send(keyCode: UInt16, flags: CGEventFlags, destination: KeystrokeDestination) async throws {
+        calls.append((keyCode, flags, destination))
         if let error { throw error }
     }
 }

@@ -11,6 +11,7 @@ struct SettingsActionTarget: Equatable, Sendable {
 enum SettingsActionContextAvailability: Sendable {
     case available(target: SettingsActionTarget, context: ActionContext)
     case unavailable(reason: String)
+    case profileAppClosed(reason: String)
 }
 
 struct SettingsRunningApplication: Equatable, Sendable {
@@ -24,6 +25,8 @@ struct SettingsRunningApplication: Equatable, Sendable {
 protocol SettingsWorkspaceProviding: AnyObject {
     var frontmostApplication: SettingsRunningApplication? { get }
     func runningApplication(processIdentifier: pid_t) -> SettingsRunningApplication?
+    func runningApplications(bundleIdentifier: String) -> [SettingsRunningApplication]
+    var runningApplicationsChanged: AnyPublisher<Void, Never> { get }
     func observeApplicationActivations(_ handler: @escaping (SettingsRunningApplication) -> Void) -> AnyObject
 }
 
@@ -37,6 +40,20 @@ private final class SystemSettingsWorkspace: SettingsWorkspaceProviding {
 
     func runningApplication(processIdentifier: pid_t) -> SettingsRunningApplication? {
         NSRunningApplication(processIdentifier: processIdentifier).map(SettingsRunningApplication.init)
+    }
+
+    func runningApplications(bundleIdentifier: String) -> [SettingsRunningApplication] {
+        NSRunningApplication.runningApplications(withBundleIdentifier: bundleIdentifier)
+            .map(SettingsRunningApplication.init)
+    }
+
+    var runningApplicationsChanged: AnyPublisher<Void, Never> {
+        let center = workspace.notificationCenter
+        return center.publisher(for: NSWorkspace.didLaunchApplicationNotification)
+            .merge(with: center.publisher(for: NSWorkspace.didTerminateApplicationNotification))
+            .map { _ in () }
+            .receive(on: DispatchQueue.main)
+            .eraseToAnyPublisher()
     }
 
     func observeApplicationActivations(
@@ -80,6 +97,7 @@ final class SettingsActionContextProvider: ObservableObject {
     private let ownProcessIdentifier: pid_t
     private let ownBundleIdentifier: String?
     private let captureScreens: @MainActor () -> ScreenLayout
+    private var runningAppsObserver: AnyCancellable?
     private var activationObserver: AnyObject?
 
     convenience init() {
@@ -101,6 +119,14 @@ final class SettingsActionContextProvider: ObservableObject {
         self.ownProcessIdentifier = ownProcessIdentifier
         self.ownBundleIdentifier = ownBundleIdentifier
         self.captureScreens = captureScreens
+        runningAppsObserver = workspace.runningApplicationsChanged.sink { [weak self] in
+            guard let self else { return }
+            if let target, workspace.runningApplication(processIdentifier: target.processIdentifier)?.isTerminated != false {
+                markUnavailable(Self.staleTargetReason)
+            } else {
+                objectWillChange.send()
+            }
+        }
         activationObserver = workspace.observeApplicationActivations { [weak self] app in
             self?.recordIfSafe(app)
         }
@@ -115,16 +141,31 @@ final class SettingsActionContextProvider: ObservableObject {
         recordIfSafe(app)
     }
 
+    func availability(for profile: HUDProfileReference, appName: String?) -> SettingsActionContextAvailability {
+        guard case .app(let identifier) = profile else { return availability }
+        let name = appName ?? identifier
+        guard let app = workspace.runningApplications(bundleIdentifier: identifier).first(where: {
+            !$0.isTerminated && isExternal($0)
+        }) else {
+            return .profileAppClosed(reason: "Open \(name) to test actions in this profile.")
+        }
+        return availableContext(for: SettingsActionTarget(
+            name: app.name ?? name, processIdentifier: app.processIdentifier
+        ))
+    }
+
     var availability: SettingsActionContextAvailability {
         guard let target else {
             return .unavailable(reason: unavailableReason)
         }
         guard let app = workspace.runningApplication(processIdentifier: target.processIdentifier),
               !app.isTerminated, isExternal(app) else {
-            self.target = nil
-            unavailableReason = Self.staleTargetReason
             return .unavailable(reason: Self.staleTargetReason)
         }
+        return availableContext(for: target)
+    }
+
+    private func availableContext(for target: SettingsActionTarget) -> SettingsActionContextAvailability {
         return .available(
             target: target,
             context: ActionContext(

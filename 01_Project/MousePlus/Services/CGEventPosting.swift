@@ -1,6 +1,11 @@
 import CoreGraphics
 import Foundation
 
+enum KeystrokeDestination: Equatable, Sendable {
+    case hidTap
+    case process(pid_t)
+}
+
 /// The Core Graphics operations used by `KeystrokeService`.
 ///
 /// Keeping this boundary above `CGEvent` construction means tests never need to
@@ -13,7 +18,7 @@ protocol CGEventPosting: Sendable {
         keyDown: Bool,
         flags: CGEventFlags,
         sourceStateID: CGEventSourceStateID,
-        tap: CGEventTapLocation
+        destination: KeystrokeDestination
     ) throws
 }
 
@@ -46,7 +51,7 @@ final class SystemCGEventPoster: CGEventPosting, @unchecked Sendable {
         keyDown: Bool,
         flags: CGEventFlags,
         sourceStateID: CGEventSourceStateID,
-        tap: CGEventTapLocation
+        destination: KeystrokeDestination
     ) throws {
         let source = try eventSource(for: sourceStateID)
         guard let event = CGEvent(
@@ -60,7 +65,12 @@ final class SystemCGEventPoster: CGEventPosting, @unchecked Sendable {
         // Set flags even for an empty chord. Leaving this unset can allow
         // physically held modifiers to contaminate the synthetic event.
         event.flags = flags
-        event.post(tap: tap)
+        switch destination {
+        case .hidTap:
+            event.post(tap: .cghidEventTap)
+        case .process(let pid):
+            event.postToPid(pid)
+        }
     }
 
     private func eventSource(for stateID: CGEventSourceStateID) throws -> CGEventSource {
