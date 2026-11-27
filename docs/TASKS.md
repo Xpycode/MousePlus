@@ -32,8 +32,20 @@
   at e456859, before the App HUD inheritance work (checked 2026-11-22), so it isn't a regression from it.
   [2026-11-21 session](sessions/2026-11-21.md#progress).
 
-- [ ] Set up a stable local signing identity on the M4 Pro (self-signed certificate, or sign Xcode
-  into the Apple ID) so Accessibility permission survives rebuilds. Offered 2026-11-21; undecided.
+- [ ] Verify the M4 Pro keeps MousePlus's Accessibility grant across two signed builds. Local
+  Developer ID signing is restored and both builds satisfy the same signing requirement. The helper's
+  Accessibility file picker disables Open for the installed baseline. Check the app list from the
+  separate macOS permission alert. [Current evidence](sessions/2026-11-26.md#resume)
+
+- [ ] Explore a draggable MousePlus app icon on the welcome screen for Accessibility setup.
+  The user would drag it into the Accessibility list in System Settings, then enable MousePlus.
+  In a future session, check which supported macOS versions accept this drop.
+
+- [ ] Fix the silent **Request Access…** button in Settings → Triggers → Keystroke posting.
+  On November 27 the user saw no response. After they manually enabled MousePlus in Input
+  Monitoring, the warning disappeared. The button calls `CGRequestPostEventAccess()` and
+  rechecks permission. It offers no guidance if access is still denied. Reproduce that path
+  and verify that the user can reach the relevant setting and send a configured keystroke.
 
 - [ ] Test HID++ button diversion next to BetterMouse (MX Master 3S gesture button `0x00C3`) to
   settle the Logitech trigger-backend question; then spec a minimal Swift port. Call sequence,
@@ -58,6 +70,10 @@
   route: isolated direct MousePlus physical mouse triggering, maximum geometry and screen edges,
   branch/configuration combinations, and smoothness on other supported Macs. Explicitly deferred
   by the user on 2026-09-11; untested, not failed.
+
+- [ ] Dedicate future design sessions to how MousePlus looks in use. Explore translucency,
+  gradients and glass materials in the radial menu and Settings. Compare how clearly the
+  menu, labels and selected slice read over light, dark and visually busy windows.
 
 ## Current Sprint
 <!-- Active work. Populated by /plan or /execute. Keep focused (3-7 tasks). -->

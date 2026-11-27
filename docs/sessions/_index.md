@@ -10,6 +10,9 @@
 
 | Date | Focus | Outcome | Log |
 |------|-------|---------|-----|
+| 2026-11-27 | Select the app icon and organize local installers | Verified the eight-wedge Radial Fan icon in Finder, organized signed installers in 04_Exports and logged permission and appearance work. The first Accessibility grant in AppAtlas remains open. | [Log](2026-11-27.md#resume) |
+| 2026-11-26 | Retry MousePlus Accessibility approval | The signed baseline requested access again. The picker disabled Open while the macOS permission alert remained available. Check the Accessibility list from that alert before testing the second build. | [Log](2026-11-26.md) |
+| 2026-11-25 | Check Accessibility across signed builds | The installed baseline passed signature verification. The helper's Accessibility picker kept Open disabled for both copies. Diagnose the first grant before testing the second build. | [Log](2026-11-25.md) |
 | 2026-11-24 | Use Global ring | Inner and Middle switches implemented and tested. 94 focused checks passed. Confirm, cancel and independent editing verified in Atlas. | [Log](2026-11-24.md) |
 | 2026-11-22 | App HUD inheritance live acceptance | E2 passed in Safari after reverting a migrated Copy that had no keystroke; inheritance plan complete. Footer buttons fit one row (Earlier/Later). Spec addendum: per-ring Use Global switch (AC20–27). Next: plan it. | [Log](2026-11-22.md#session-4-2026-11-22-app-hud-inheritance-live-acceptance) |
 | 2026-11-22 | App HUD inheritance execution (all waves) | All 11 tasks done in 7 commits (unpushed): migrate/resolve/save sparse overrides, Settings UI for inherited/customized/hidden items. 250/251 focused tests (one was already failing), review clean, Atlas Settings check passed after two layout fixes. Next: E2 user live acceptance. | [Log](2026-11-22.md#session-3-2026-11-22-app-hud-inheritance-execution) |
@@ -27,9 +30,6 @@
 | 2026-09-04 | Execute HUD Motion v1 Wave 3 | Added summon fade and safe outer-branch crossfades; immediate commit/dismissal preserved. All 48 focused tests and Debug build pass. Next: Wave 4 native motion controls; live checks remain in Wave 5. | [→](2026-09-04.md) |
 | 2026-09-04 | Investigate HUD animation feasibility | Confirmed the overlay can support restrained role-based motion; recorded safe effects, rejected disruptive ones, and established immediate interaction with Reduce Motion-aware presentation. Next: plan Motion v1. | [→](2026-09-04.md) |
 | 2026-09-04 | Close the remaining App Switcher v1 live checks | A fresh signed build passed; the user confirmed recent-usage ordering and clean rapid Apps↔Snap re-pointing with no stale icons. App Switcher v1 is complete; HUD-animation feasibility was captured for later. | [→](2026-09-04.md) |
-| 2026-09-04 | Live-verify App Switcher activation and prototype a richer circular layout | Routed tap-toggle commits through native AppKit mouse-up, then added and live-verified a pointer-aligned full-circle running-app ring with optional labels. Build and 249 tests pass. Next: MRU/re-point checks, then scope the next switcher increment. | [→](2026-09-04.md) |
-| 2026-09-04 | Clarify dynamic Apps and clean up Selected Item controls | Confirmed live running-app names/icons; made Apps read-only in the inspector, hid preserved inactive children, centralized outer-item creation, and moved Delete to the footer. Signed builds pass. Next: verify activation, MRU, rapid re-pointing; review label crowding. | [→](2026-09-04.md) |
-| 2026-09-04 | Decide Action selector UX and fix App Switcher Settings preview | Logged the Action choice-grid decision; migrated legacy Apps configs losslessly; fixed dynamic-parent commit and preview Reveal overwriting the clicked branch. Full suite and signed build pass; user confirmed the Apps/Snap sequence. Next: live-HUD Apps verification. | [→](2026-09-04.md) |
 
 ---
 

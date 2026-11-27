@@ -1,6 +1,6 @@
 # Project State
 
-**Last updated:** 2026-11-24
+**Last updated:** 2026-11-27
 
 ## Identity
 
@@ -12,18 +12,19 @@
 ## Now
 
 - **Phase:** Implementation — next task selection. <!-- Phase changed: 2026-09-11 -->
-- **Focus:** Per-ring Global inheritance is complete. The fresh build is available for personal use.
-- **Blocker:** No signing certificates on the M4 Pro; every unsigned rebuild loses its Accessibility permission and must be re-added by hand.
-- **Next:** choose the next backlog item.
-- **Current handoff:** [2026-11-24 Resume](sessions/2026-11-24.md#resume)
+- **Focus:** Verify that the M4 Pro keeps MousePlus's Accessibility permission across two signed builds.
+- **Blocker:** In the helper's Accessibility file picker, Open stayed disabled for both the temporary and installed baseline app. The first grant is unconfirmed.
+- **Next:** The user opens Accessibility from the macOS alert and checks for the MousePlus switch. If missing, capture the list with the picker closed. Test the second build once the first grant is confirmed.
+- **Current handoff:** [2026-11-27 Resume](sessions/2026-11-27.md#resume)
 
 ## Recent
 
+- **2026-11-27:** Packaged build 1 with the eight-wedge Radial Fan icon. The current local installer is in `04_Exports/`. Two permission setup improvements are in the backlog.
+- **2026-11-26:** The signed baseline still requested access at close. On retry, macOS showed a separate permission alert while the file picker's Open button remained disabled.
+- **2026-11-25:** The installed MousePlus baseline passed signature verification in the helper. System Settings still disabled Open when the user selected it.
 - **2026-11-24:** Added Use Global inner/middle ring to app profiles. Verified both switches in Settings and passed 94 focused tests.
 - **2026-11-22 (night):** You accepted App HUD inheritance live in Safari, so it is complete. Copy first failed because Safari's old copy had no keystroke; Revert to Global fixed it. The item editor buttons now fit on one row, and the spec gained a per-ring "Use Global ring" switch.
 - **2026-11-22 (evening):** Built App HUD inheritance end to end. App menus now follow Global unless you customize, hide or reorder an item, and existing App HUDs convert without visible change. 250 of 251 focused tests pass (the failure was already broken), the review was clean, and the Settings screens passed the hidden-desktop check. Your live acceptance is next; 7 commits are not pushed yet.
-- **2026-11-22 (later):** Wrote and approved the App HUD inheritance spec (app menus follow Global unless customized, hidden or reordered) and an 11-task plan, using a code survey and web research on how other apps handle overrides.
-- **2026-11-22:** The mouse trigger button no longer also acts in other apps (Warp tab switching); Global menu saves no longer overwrite outside changes; Test Action sends keystrokes to the app you came from. User-verified and committed. Decided app menus will inherit from Global.
 
 ## Progress
 
@@ -37,7 +38,7 @@
 - **App-specific HUDs:** 5/5 implementation waves and signed-live Finder/Global acceptance complete on the supported BetterMouse-to-keyboard route.
 - **Trigger backend:** Keyboard and standard mouse paths work (the mouse trigger button is now consumed, not passed to other apps); advanced Logitech HID++ support remains undecided.
 - **App HUD inheritance:** complete; 11/11 tasks, Atlas and user live acceptance passed. [Use Global ring](plans/use-global-ring.md) complete, 4/4 tasks.
-- **Task tracker:** no active plan; 8 backlog items, one of them a precautionary fix awaiting a recurrence check.
+- **Task tracker:** 16 open backlog entries, including visual design exploration, the welcome-screen drag-to-Accessibility idea and the silent keystroke permission button. No active plan.
 
 ## Risks and Backlog
 
@@ -52,7 +53,7 @@
 ## Infrastructure
 
 - **Build:** `xcodebuild -workspace 01_Project/MousePlus.xcworkspace -scheme MousePlus -configuration Debug build`
-- **Signing:** Stable per-machine Debug identity on the M1 Max. The M4 Pro was reset and has no certificates (2026-11-18); recreate `Config/Debug.local.xcconfig` after adding one.
+- **Signing:** Stable per-machine Debug identity on the M1 Max. On the M4 Pro, `01_Project/Config/Debug.local.xcconfig` selects the restored Developer ID Application identity for team `FDMSRXXN73` and disables Debug base-entitlement injection.
 - **Runtime:** Non-sandboxed AppKit/SwiftUI menu-bar app using an `NSPanel`, global event monitoring, Accessibility APIs, JSON configuration, and UserDefaults settings.
 - **Packages:** Adopts GlobalEventMonitors and ShortcutKit; contributes source patterns for GlobalEventMonitors and PermissionsService. See `PACKAGE-NOTES.md`.
 
