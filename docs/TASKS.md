@@ -10,13 +10,6 @@
 <!-- Ideas and future work. Added by /interview, user input, or discovered during development. -->
 <!-- Priority: top = highest, bottom = lowest -->
 
-- [ ] **Clearer Test Action target label (2026-11-22):** "Target: Notes" confused the user on a Global item.
-  Consider "Test sends to: <App>", and for an App HUD test against that app when it is running.
-
-- [ ] **Awaiting recurrence check:** Menu Items preview showed the built-in sample ring while the
-  status said "Saved". Cause not reproduced; precautionary remount-after-load added 2026-11-21.
-  If it recurs, check the Selected Item tab before clicking the ring.
-
 - [ ] **Settings cosmetics after the E1 layout fix (2026-11-22):** profile-bar buttons grew wider, so
   "Editing Activity Monitor HUD" now truncates ("Editing Activity Mon…"), and the selected-item column
   is narrower, so the icon field shows "doc.on.d". Both are visible in Atlas capture `1795376506075372000`.
@@ -32,11 +25,6 @@
   at e456859, before the App HUD inheritance work (checked 2026-11-22), so it isn't a regression from it.
   [2026-11-21 session](sessions/2026-11-21.md#progress).
 
-- [ ] Verify the M4 Pro keeps MousePlus's Accessibility grant across two signed builds. Local
-  Developer ID signing is restored and both builds satisfy the same signing requirement. The helper's
-  Accessibility file picker disables Open for the installed baseline. Check the app list from the
-  separate macOS permission alert. [Current evidence](sessions/2026-11-26.md#resume)
-
 - [ ] Explore a draggable MousePlus app icon on the welcome screen for Accessibility setup.
   The user would drag it into the Accessibility list in System Settings, then enable MousePlus.
   In a future session, check which supported macOS versions accept this drop.
@@ -44,8 +32,9 @@
 - [ ] Fix the silent **Request Access…** button in Settings → Triggers → Keystroke posting.
   On November 27 the user saw no response. After they manually enabled MousePlus in Input
   Monitoring, the warning disappeared. The button calls `CGRequestPostEventAccess()` and
-  rechecks permission. It offers no guidance if access is still denied. Reproduce that path
-  and verify that the user can reach the relevant setting and send a configured keystroke.
+  rechecks permission. A simulated denial confirmed the state stays denied and the UI offers no
+  further guidance. Calculator Copy now passes in both Settings profiles. The outstanding work is
+  to explain a persistent denial and verify recovery. [Delivery check](sessions/2026-11-27.md#test-action-recipients)
 
 - [ ] Test HID++ button diversion next to BetterMouse (MX Master 3S gesture button `0x00C3`) to
   settle the Logitech trigger-backend question; then spec a minimal Swift port. Call sequence,

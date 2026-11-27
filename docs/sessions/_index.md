@@ -10,7 +10,7 @@
 
 | Date | Focus | Outcome | Log |
 |------|-------|---------|-----|
-| 2026-11-27 | Select the app icon and organize local installers | Verified the eight-wedge Radial Fan icon in Finder, organized signed installers in 04_Exports and logged permission and appearance work. The first Accessibility grant in AppAtlas remains open. | [Log](2026-11-27.md#resume) |
+| 2026-11-27 | App icon, permissions, menu preview and Test Action targeting | Accessibility carried over and the Settings shortcut recovered. The preview passed 76 focused tests. Test Action passed 32 focused tests and delivered Copy to Calculator in both profiles. 13 backlog entries remain. | [Log](2026-11-27.md#resume) |
 | 2026-11-26 | Retry MousePlus Accessibility approval | The signed baseline requested access again. The picker disabled Open while the macOS permission alert remained available. Check the Accessibility list from that alert before testing the second build. | [Log](2026-11-26.md) |
 | 2026-11-25 | Check Accessibility across signed builds | The installed baseline passed signature verification. The helper's Accessibility picker kept Open disabled for both copies. Diagnose the first grant before testing the second build. | [Log](2026-11-25.md) |
 | 2026-11-24 | Use Global ring | Inner and Middle switches implemented and tested. 94 focused checks passed. Confirm, cancel and independent editing verified in Atlas. | [Log](2026-11-24.md) |

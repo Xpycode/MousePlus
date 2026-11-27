@@ -1,8 +1,11 @@
 # Completed Tasks
 
-**Total archived:** 47
-**Last updated:** 2026-11-22
+**Total archived:** 50
+**Last updated:** 2026-11-27
 
+- [x] (2026-11-27) Test Action names the receiving app, uses the selected app profile and disables testing while that app is closed. Verified Calculator Copy in both profiles. [Checks](sessions/2026-11-27.md#test-action-recipients)
+- [x] (2026-11-27) Fixed the Menu Items preview drawing sample wedges beside the loaded profile. Verified six rotated wedges, an icon edit, Finder overrides and selection targets. [Regression and screenshots](sessions/2026-11-27.md#menu-items-preview-repair)
+- [x] (2026-11-27) Verified M4 Pro Accessibility across signed builds and recovered Input Monitoring by removing the old ad hoc build's entry. Option-Command-Comma opened MousePlus Settings from Calculator. [Evidence](sessions/2026-11-27.md#permission-check)
 - [x] (2026-11-22) Mouse trigger button is consumed by an event tap so other apps (Warp) no longer also act on it; user-verified.
 - [x] (2026-11-22) Global menu saves write only when changed and refuse to overwrite external Global changes; 3 tests.
 - [x] (2026-11-22) Settings Test Action for Send Keystroke targets the remembered app and hands focus to it; user-verified.

@@ -11,20 +11,18 @@
 
 ## Now
 
-- **Phase:** Implementation — next task selection. <!-- Phase changed: 2026-09-11 -->
-- **Focus:** Verify that the M4 Pro keeps MousePlus's Accessibility permission across two signed builds.
-- **Blocker:** In the helper's Accessibility file picker, Open stayed disabled for both the temporary and installed baseline app. The first grant is unconfirmed.
-- **Next:** The user opens Accessibility from the macOS alert and checks for the MousePlus switch. If missing, capture the list with the picker closed. Test the second build once the first grant is confirmed.
+- **Phase:** Implementation. <!-- Phase changed: 2026-09-11 -->
+- **Focus:** Backlog selection. No active implementation plan.
+- **Next:** Choose among the 13 [backlog entries](TASKS.md#backlog). The first is the truncated profile name and icon field in Settings.
 - **Current handoff:** [2026-11-27 Resume](sessions/2026-11-27.md#resume)
 
 ## Recent
 
-- **2026-11-27:** Packaged build 1 with the eight-wedge Radial Fan icon. The current local installer is in `04_Exports/`. Two permission setup improvements are in the backlog.
+- **2026-11-27:** Packaged the Radial Fan icon, verified Accessibility across signed builds and recovered the global Settings shortcut. Repaired the recurring preview mismatch and verified the Global and Finder profiles in Atlas. Verified Calculator Copy from Global and Calculator’s own profile after fixing Test Action targeting.
 - **2026-11-26:** The signed baseline still requested access at close. On retry, macOS showed a separate permission alert while the file picker's Open button remained disabled.
 - **2026-11-25:** The installed MousePlus baseline passed signature verification in the helper. System Settings still disabled Open when the user selected it.
 - **2026-11-24:** Added Use Global inner/middle ring to app profiles. Verified both switches in Settings and passed 94 focused tests.
 - **2026-11-22 (night):** You accepted App HUD inheritance live in Safari, so it is complete. Copy first failed because Safari's old copy had no keystroke; Revert to Global fixed it. The item editor buttons now fit on one row, and the spec gained a per-ring "Use Global ring" switch.
-- **2026-11-22 (evening):** Built App HUD inheritance end to end. App menus now follow Global unless you customize, hide or reorder an item, and existing App HUDs convert without visible change. 250 of 251 focused tests pass (the failure was already broken), the review was clean, and the Settings screens passed the hidden-desktop check. Your live acceptance is next; 7 commits are not pushed yet.
 
 ## Progress
 
@@ -32,13 +30,13 @@
 - **Send Keystroke:** Complete; automated coverage and signed live verification passed.
 - **Ring UI:** Complete and live-verified.
 - **Ring-controls reorganization (Menu/Inner/Middle/Outer tabs + per-ring labels):** 4/4 waves complete; automated, adversarial, signed-build, and user-driven checks passed.
-- **HUD actions:** Window snapping and keystroke delivery work; App Switcher v1 is complete and signed-live verified, including MRU order and rapid re-point safety; menu-bar mirror, system toggles, and screenshots remain.
+- **HUD actions:** Window snapping and App Switcher v1 are verified, including MRU order and rapid re-point safety. Calculator received Copy from both Settings profiles in [the signed helper check](sessions/2026-11-27.md#test-action-recipients). Menu-bar mirror, system toggles and screenshots remain open.
 - **HUD Motion v1:** 5/5 waves complete; automated checks and independent review passed, with overall signed-live acceptance from the user.
 - **HUD Opening Styles:** 7/7 tasks complete and signed-live verified on the supported BetterMouse-to-keyboard route. VoiceOver, direct MousePlus mouse triggering and the broad device/geometry performance matrix are deferred before release and remain untested.
 - **App-specific HUDs:** 5/5 implementation waves and signed-live Finder/Global acceptance complete on the supported BetterMouse-to-keyboard route.
 - **Trigger backend:** Keyboard and standard mouse paths work (the mouse trigger button is now consumed, not passed to other apps); advanced Logitech HID++ support remains undecided.
 - **App HUD inheritance:** complete; 11/11 tasks, Atlas and user live acceptance passed. [Use Global ring](plans/use-global-ring.md) complete, 4/4 tasks.
-- **Task tracker:** 16 open backlog entries, including visual design exploration, the welcome-screen drag-to-Accessibility idea and the silent keystroke permission button. No active plan.
+- **Task tracker:** 13 open backlog entries, including visual design exploration and permission setup improvements. No active plan.
 
 ## Risks and Backlog
 

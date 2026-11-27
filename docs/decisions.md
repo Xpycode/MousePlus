@@ -4,6 +4,22 @@ This file tracks the WHY behind technical and design decisions.
 
 ---
 
+## 2026-11-27 - Address Settings test keystrokes to the displayed app
+
+Settings previously restored focus before posting a keystroke through the system event tap. Calculator regained focus and MousePlus reported success, but the clipboard still held its previous value. Naming a recipient in Settings requires both keyboard events to reach the same process, even when focus changes during a save.
+
+Global takes its recipient from the last active external app. An app profile resolves its own running process by bundle identifier. Settings checks the recipient again after saving and addresses key-down and key-up to that process. A closed profile app disables testing until it reopens. [Calculator delivery checks](sessions/2026-11-27.md#test-action-recipients)
+
+---
+
+## 2026-11-27 - Draw and select editor wedges from the same profile
+
+The Menu Items inspector counted six saved Global items while the preview showed the four built-in samples. The earlier fix remounted the editor after loading. Each mount still created a sample menu and relied on a later callback to copy the edited profile into it.
+
+The editor now gives the shared wedge renderer and its click handlers one snapshot of the current profile per frame. This keeps item identity, appearance and geometry together across Global edits and app-specific overrides. The live HUD keeps its interaction model and both surfaces reuse the same geometry and styling rules. Regression coverage compares the drawn glyphs and fills with the live renderer and checks which item each click selects. [Verification](sessions/2026-11-27.md#menu-items-preview-repair)
+
+---
+
 ## 2026-11-22 - Per-ring "Use Global ring" switch for App HUDs
 
 **Context:** During E2 live acceptance, the migrated Safari HUD kept a customized Copy item with
