@@ -117,7 +117,7 @@ final class HUDCustomizationIntegrationTests: XCTestCase {
             runtime.load(from: config)
             runtime.expand(0)
 
-            var preview = HUDPreviewInteractionState()
+            let preview = HUDPreviewInteractionState()
             let snapshot = HUDPreviewInteractionSnapshot(
                 geometry: runtime.geometry, radii: runtime.radii,
                 innerCount: 1, middleCount: 1, expandedParentIndex: 0,

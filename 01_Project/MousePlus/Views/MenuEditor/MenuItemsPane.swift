@@ -49,13 +49,6 @@ struct MenuItemsPane: View {
                 }
             )
             .frame(minHeight: 520)
-            // Rebuild the editor when the configuration finishes loading. The ring
-            // preview keeps a private copy of the items that starts as the built-in
-            // samples; if Settings opens directly on this pane, the load can land
-            // before that copy starts tracking the editor, leaving the samples on
-            // screen next to a "Saved" status. A fresh mount always starts from
-            // the loaded items.
-            .id(coordinator.isLoaded)
         }
         // The item form and customization column scroll independently. The band
         // selector, preview, spoke count, and actions remain pinned.

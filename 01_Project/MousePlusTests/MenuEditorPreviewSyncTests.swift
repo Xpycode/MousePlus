@@ -56,37 +56,124 @@ final class MenuEditorPreviewSyncTests: XCTestCase {
         XCTAssertEqual(interaction.coordinator?.snapshot.geometry, runtime.geometry)
     }
 
-    /// Regression (2026-11-18): Settings opened on Menu Items, the saved menu loaded
-    /// right after the preview mounted, and the preview kept drawing the samples.
-    func testPreviewFollowsALoadThatLandsImmediatelyAfterMount() async throws {
-        let model = MenuEditorModel(inner: RingMenuItem.sampleInnerItems,
-                                    middle: RingMenuItem.sampleItems)
-        let host = NSHostingView(rootView: RingPreviewSelector(model: model))
-        let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 480, height: 500),
+    /// Compare the actual pixels (including the glyph) at each wedge with the
+    /// configured runtime renderer. Geometry alone also passes with stale artwork.
+    func testSixWedgeArtworkAndClicksFollowTheEditedProfile() async throws {
+        let colors = [NSColor.red, .green, .blue, .orange, .purple, .brown]
+        let icons = ["sun.max.fill", "leaf.fill", "drop.fill", "bolt.fill", "heart.fill", "moon.fill"]
+        var global = Configuration(
+            inner: zip(icons, colors).map { icon, color in
+                RingMenuItem(label: icon, icon: icon, actionType: .appSwitch,
+                             wedgeColor: HUDColor(nsColor: color))
+            },
+            middle: [RingMenuItem(label: "Orbit", icon: "globe", actionType: .appSwitch,
+                                  wedgeColor: HUDColor(nsColor: .darkGray))]
+        )
+        global.hudCustomization.inner.layout.angularOffset = 30
+        let model = MenuEditorModel(inner: RingMenuItem.sampleInnerItems, middle: RingMenuItem.sampleItems)
+        let selector = RingPreviewSelector(model: model)
+        let side = global.appearance.bandRadii.r3 * 2
+        let center = CGPoint(x: side / 2, y: side / 2)
+        let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: side, height: side),
                               styleMask: .borderless, backing: .buffered, defer: false)
+        let host = NSHostingView(rootView: selector)
         window.contentView = host
         defer { window.contentView = nil }
-
-        // No settling between mount and load: both land in the same update.
-        var config = Configuration()
-        config.inner.append(RingMenuItem(label: "Extra", icon: "app.fill", actionType: .appSwitch))
-        config.middle.append(RingMenuItem(label: "Extra", icon: "app.fill", actionType: .appSwitch))
-        config.hudCustomization.inner.layout.angularOffset = 61
-        model.load(from: config)
-
-        for _ in 0..<10 {
-            host.layoutSubtreeIfNeeded()
-            try? await Task.sleep(for: .milliseconds(10))
-        }
 
         func surface(_ view: NSView) -> InteractionNSView? {
             if let view = view as? InteractionNSView { return view }
             return view.subviews.lazy.compactMap { surface($0) }.first
         }
-        let snapshot = try XCTUnwrap(surface(host)?.coordinator?.snapshot)
-        let runtime = RingViewModel()
-        runtime.load(from: config)
-        XCTAssertEqual(snapshot.geometry, runtime.geometry)
+
+        func bitmap<V: View>(_ view: V) throws -> NSBitmapImageRep {
+            let renderer = ImageRenderer(content: view.frame(width: side, height: side))
+            renderer.scale = 1
+            return NSBitmapImageRep(cgImage: try XCTUnwrap(renderer.cgImage))
+        }
+
+        func verify(_ config: Configuration, firstFrame: Bool = false) async throws {
+            let runtime = RingViewModel()
+            runtime.load(from: config)
+            let expected = try bitmap(RingMenuView(
+                viewModel: runtime, interactionEnabled: false,
+                presentationMode: .staticEditor, exposesCenterSettings: false
+            ))
+            // A first-frame render gives the preview no lifecycle callback in
+            // which to repair an initially incorrect set of wedges.
+            let first = firstFrame ? try bitmap(selector.artwork) : nil
+            for _ in 0..<5 {
+                host.layoutSubtreeIfNeeded()
+                try await Task.sleep(for: .milliseconds(10))
+            }
+            let interaction = try XCTUnwrap(surface(host)?.coordinator)
+            let mounted = try XCTUnwrap(host.bitmapImageRepForCachingDisplay(in: host.bounds))
+            host.cacheDisplay(in: host.bounds, to: mounted)
+            for band in [Band.inner, .middle] {
+                let items = band == .inner ? config.inner : config.middle
+                for (index, item) in items.enumerated() {
+                    let point = RadialGeometry.centroid(
+                        band: band, index: index, center: center, radii: runtime.radii,
+                        geometry: runtime.geometry, expandedParentIndex: nil, outerCount: 0
+                    )
+                    for actual in [first, mounted].compactMap({ $0 }) {
+                        try assertArtwork(actual, matches: expected, at: point, label: item.label)
+                    }
+                    interaction.clicked(point, center: center)
+                    XCTAssertEqual(model.selection, SlotSelection(band: band == .inner ? .inner : .middle,
+                                                                  itemID: item.id, subItemID: nil))
+                }
+            }
+        }
+
+        model.load(from: global) // Immediately after mount, before the first run-loop turn.
+        try await verify(global, firstFrame: true)
+
+        global.inner.swapAt(1, 4)
+        global.inner[0].icon = "camera.fill"
+        global.hudCustomization.inner.layout.angularOffset = 75
+        model.inner = global.inner
+        model.hudCustomization = global.hudCustomization
+        model.selection = nil
+        try await verify(global)
+
+        var override = global.inner[0]
+        override.icon = "bell.fill"
+        override.wedgeColor = HUDColor(nsColor: .cyan)
+        let layout = global.globalHUDActionLayout
+        let rings = AppHUDRings(inner: RingInheritance(overrides: [override.id: override],
+                                                       hidden: [global.inner[2].id]))
+        let resolved = AppHUDResolver.resolve(global: layout, rings: rings)
+        model.load(resolved: resolved, global: layout, hudCustomization: global.hudCustomization)
+        var app = global
+        app.globalHUDActionLayout = resolved.layout
+        try await verify(app)
+
+        model.load(from: global)
+        try await verify(global)
+    }
+
+    /// Compare a patch containing the symbol and its surrounding fill. Small
+    /// color differences are expected between Core Graphics and a hosted view.
+    private func assertArtwork(
+        _ actual: NSBitmapImageRep, matches expected: NSBitmapImageRep,
+        at point: CGPoint, label: String, file: StaticString = #filePath, line: UInt = #line
+    ) throws {
+        let scale = CGFloat(actual.pixelsWide) / CGFloat(expected.pixelsWide)
+        var difference = 0.0
+        var channels = 0
+        for dy in stride(from: -12, through: 12, by: 2) {
+            for dx in stride(from: -12, through: 12, by: 2) {
+                let x = Int(point.x) + dx
+                let y = Int(point.y) + dy
+                let sampled = actual.colorAt(x: Int(CGFloat(x) * scale), y: Int(CGFloat(y) * scale))
+                let a = try XCTUnwrap(sampled?.usingColorSpace(.sRGB))
+                let b = try XCTUnwrap(expected.colorAt(x: x, y: y)?.usingColorSpace(.sRGB))
+                difference += abs(a.redComponent - b.redComponent)
+                    + abs(a.greenComponent - b.greenComponent) + abs(a.blueComponent - b.blueComponent)
+                channels += 3
+            }
+        }
+        XCTAssertLessThan(difference / Double(channels), 0.08, "Artwork for \(label)", file: file, line: line)
     }
 
     func testContextDeleteRevalidatesCapturedChildWithoutRemovingTheCurrentSelection() {

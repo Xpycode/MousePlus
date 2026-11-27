@@ -10,7 +10,7 @@ final class HUDPreviewInteractionTests: XCTestCase {
         for policy in OuterRingVisibility.allCases {
             for parent in [nil, 0] {
                 for outerCount in [0, 2] {
-                    var state = HUDPreviewInteractionState()
+                    let state = HUDPreviewInteractionState()
                     let snapshot = makeSnapshot(
                         visibility: policy, parent: parent, outerCount: outerCount
                     )
@@ -81,7 +81,7 @@ final class HUDPreviewInteractionTests: XCTestCase {
     }
 
     func testConditionalRevealShowsOuterSelectionOnDirectArrival() {
-        var state = HUDPreviewInteractionState()
+        let state = HUDPreviewInteractionState()
         let snapshot = makeSnapshot(visibility: .revealBeyondInnerRing,
                                     parent: 0, outerCount: 2)
         let outer = RadialGeometry.centroid(
@@ -117,7 +117,7 @@ final class HUDPreviewInteractionTests: XCTestCase {
     }
 
     func testTraversalBeforeParentExpansionIsRetainedForInvocation() {
-        var state = HUDPreviewInteractionState()
+        let state = HUDPreviewInteractionState()
         let root = makeSnapshot(visibility: .revealBeyondInnerRing)
         _ = state.pointerMoved(to: .zero, center: center, snapshot: root)
         _ = state.pointerMoved(to: point(angle: 0, radius: 25),
@@ -131,11 +131,10 @@ final class HUDPreviewInteractionTests: XCTestCase {
     }
 
     @MainActor
-    func testCoordinatorPublishesRetainedRevealWhenParentExpands() {
+    func testCoordinatorSharesRetainedRevealWhenParentExpands() {
         let root = makeSnapshot(visibility: .revealBeyondInnerRing)
-        let coordinator = HUDPreviewInteractionView.Coordinator(snapshot: root)
-        var visibilityChanges: [Bool] = []
-        coordinator.onRevealChange = { visibilityChanges.append($0) }
+        let pointer = HUDPreviewInteractionState()
+        let coordinator = HUDPreviewInteractionView.Coordinator(snapshot: root, state: pointer)
 
         coordinator.moved(.zero, center: center)
         coordinator.moved(point(angle: 0, radius: 25), center: center)
@@ -143,7 +142,7 @@ final class HUDPreviewInteractionTests: XCTestCase {
             visibility: .revealBeyondInnerRing, parent: 0, outerCount: 2
         ))
 
-        XCTAssertEqual(visibilityChanges, [true])
+        XCTAssertTrue(pointer.outerIsVisible(snapshot: coordinator.snapshot))
     }
 
     func testAlwaysHiddenOuterHasNoIntent() {

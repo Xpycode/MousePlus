@@ -25,20 +25,22 @@ struct HUDPreviewInteractionSnapshot {
 
 /// Pure preview-only pointer state. It deliberately has no ActionService,
 /// application-launching callback, or runtime commit path.
-struct HUDPreviewInteractionState {
-    private var outerRingPolicyState = OuterRingPolicyState()
+@Observable
+final class HUDPreviewInteractionState {
+    private(set) var outerRingPolicyState = OuterRingPolicyState()
 
-    mutating func resetReveal() {
+    func resetReveal() {
         outerRingPolicyState = OuterRingPolicyState()
     }
 
-    mutating func pointerMoved(to point: CGPoint, center: CGPoint,
+    func pointerMoved(to point: CGPoint, center: CGPoint,
                                snapshot: HUDPreviewInteractionSnapshot) -> ActiveSelection? {
         let distance = hypot(point.x - center.x, point.y - center.y)
-        outerRingPolicyState = resolution(
+        let next = resolution(
             snapshot: snapshot,
             pointerIsAtOrInsideInnerBoundary: distance <= snapshot.radii.r1
         ).state
+        if next != outerRingPolicyState { outerRingPolicyState = next }
         return selection(at: point, center: center, snapshot: snapshot)
     }
 
@@ -90,12 +92,12 @@ struct HUDPreviewInteractionState {
 struct HUDPreviewInteractionView: NSViewRepresentable {
     let snapshot: HUDPreviewInteractionSnapshot
     let onHover: @MainActor (ActiveSelection?) -> Void
-    let onRevealChange: @MainActor (Bool) -> Void
+    let pointer: HUDPreviewInteractionState
     let onIntent: @MainActor (HUDPreviewIntent) -> Void
     let deleteTarget: @MainActor (HUDPreviewIntent) -> SlotSelection?
     let onDelete: @MainActor (SlotSelection) -> Void
 
-    func makeCoordinator() -> Coordinator { Coordinator(snapshot: snapshot) }
+    func makeCoordinator() -> Coordinator { Coordinator(snapshot: snapshot, state: pointer) }
 
     func makeNSView(context: Context) -> InteractionNSView {
         let view = InteractionNSView()
@@ -105,7 +107,6 @@ struct HUDPreviewInteractionView: NSViewRepresentable {
 
     func updateNSView(_ view: InteractionNSView, context: Context) {
         context.coordinator.onHover = onHover
-        context.coordinator.onRevealChange = onRevealChange
         context.coordinator.onIntent = onIntent
         context.coordinator.deleteTarget = deleteTarget
         context.coordinator.onDelete = onDelete
@@ -114,30 +115,26 @@ struct HUDPreviewInteractionView: NSViewRepresentable {
 
     @MainActor final class Coordinator {
         var snapshot: HUDPreviewInteractionSnapshot
-        var state = HUDPreviewInteractionState()
+        let state: HUDPreviewInteractionState
         var onHover: @MainActor (ActiveSelection?) -> Void = { _ in }
-        var onRevealChange: @MainActor (Bool) -> Void = { _ in }
         var onIntent: @MainActor (HUDPreviewIntent) -> Void = { _ in }
         var deleteTarget: @MainActor (HUDPreviewIntent) -> SlotSelection? = { _ in nil }
         var onDelete: @MainActor (SlotSelection) -> Void = { _ in }
 
-        init(snapshot: HUDPreviewInteractionSnapshot) { self.snapshot = snapshot }
+        init(snapshot: HUDPreviewInteractionSnapshot, state: HUDPreviewInteractionState) {
+            self.snapshot = snapshot
+            self.state = state
+        }
 
         func update(snapshot newSnapshot: HUDPreviewInteractionSnapshot) {
-            let wasVisible = state.outerIsVisible(snapshot: snapshot)
             if snapshot.outerVisibility != newSnapshot.outerVisibility {
                 state.resetReveal()
             }
             snapshot = newSnapshot
-            let isVisible = state.outerIsVisible(snapshot: snapshot)
-            if wasVisible != isVisible { onRevealChange(isVisible) }
         }
 
         func moved(_ point: CGPoint, center: CGPoint) {
-            let before = state.outerIsVisible(snapshot: snapshot)
             onHover(state.pointerMoved(to: point, center: center, snapshot: snapshot))
-            let after = state.outerIsVisible(snapshot: snapshot)
-            if before != after { onRevealChange(after) }
         }
 
         func clicked(_ point: CGPoint, center: CGPoint) {

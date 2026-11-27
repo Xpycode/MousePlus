@@ -182,6 +182,58 @@ struct RingAccessibilitySnapshot {
     }
 }
 
+/// One frame of the editor. Both the visual wedges and pointer callbacks
+/// retain these item identities, including during a profile replacement.
+struct EditorRingPresentation: RingMenuPresentation {
+    let innerItems: [RingMenuItem]
+    let middleItems: [RingMenuItem]
+    let outerItems: [RingMenuItem]
+    let expandedParentIndex: Int?
+    let activeSelection: ActiveSelection?
+    let appearance: AppearanceConfig
+    let hudCustomization: HUDCustomization
+    let isOuterRingVisible: Bool
+    var radii: BandRadii { appearance.bandRadii }
+    var runtime: RingViewModel? { nil }
+
+    var outerRingGuidePresentation: EditorOuterRingGuidePresentation {
+        EditorOuterRingGuidePresentation(
+            radii: radii,
+            visibility: hudCustomization.outerRingVisibility,
+            hasLocalizedOuterSurface: isOuterRingVisible
+        )
+    }
+
+    var interactionSnapshot: HUDPreviewInteractionSnapshot {
+        HUDPreviewInteractionSnapshot(
+            geometry: geometry,
+            radii: radii,
+            innerCount: innerItems.count,
+            middleCount: middleItems.count,
+            expandedParentIndex: expandedParentIndex,
+            outerCount: outerItems.count,
+            outerVisibility: hudCustomization.outerRingVisibility,
+            outerLayout: outerRingLayout
+        )
+    }
+
+    func slot(for intent: HUDPreviewIntent) -> SlotSelection? {
+        switch intent {
+        case let .selectTopLevel(band, index):
+            let items = band == .inner ? innerItems : middleItems
+            guard items.indices.contains(index) else { return nil }
+            return SlotSelection(band: band, itemID: items[index].id, subItemID: nil)
+        case let .selectOuter(index):
+            guard let parentIndex = expandedParentIndex,
+                  middleItems.indices.contains(parentIndex),
+                  outerItems.indices.contains(index) else { return nil }
+            let parent = middleItems[parentIndex]
+            guard parent.dynamicSource == .none else { return nil }
+            return SlotSelection(band: .middle, itemID: parent.id, subItemID: outerItems[index].id)
+        }
+    }
+}
+
 /// Runtime-identical rendering with one preview-only AppKit pointer surface.
 /// The surface emits editor selection/add intents and has no action execution path.
 @MainActor
@@ -190,7 +242,8 @@ struct RingPreviewSelector: View {
     var appearance: AppearanceConfig = .default
     /// App name for the ", customized for <App>" accessibility suffix.
     var appName: String? = nil
-    @State private var preview = RingViewModel()
+    @State private var hover: ActiveSelection?
+    @State private var pointer = HUDPreviewInteractionState()
     private let canvasSide: CGFloat = 448
 
     /// Fixed stand-in for `.runningApps` parents — the editor preview never
@@ -203,35 +256,30 @@ struct RingPreviewSelector: View {
     ]
 
     var body: some View {
+        // Resolve the displayed profile before constructing either layer. SwiftUI
+        // can coalesce a mount with a load, or replace the profile at the same index.
+        let artwork = self.artwork
+        let preview = artwork.viewModel
         let side = 2 * preview.radii.r3
         let scale = HUDPreviewInteractionSnapshot.fitScale(
             logicalSide: side, canvasSide: canvasSide
         )
 
-        ZStack {
-            EditorOuterRingGuide(presentation: outerRingGuidePresentation)
-            RingMenuView(
-                viewModel: preview,
-                interactionEnabled: false,
-                presentationMode: .staticEditor,
-                accessibilityIdentifierPrefix: "menuItems.preview.wedge",
-                exposesCenterSettings: false,
-                onAccessibilitySelection: applyAccessibilitySelection,
-                persistentSelection: editorActiveSelection,
-                accessibilityLabelSuffix: accessibilityLabelSuffix
-            )
+        return ZStack {
+            EditorOuterRingGuide(presentation: preview.outerRingGuidePresentation)
+            artwork
                 .allowsHitTesting(false)
             if !model.customizedItemIDs.isEmpty {
-                customizationDots
+                customizationDots(preview)
                     .allowsHitTesting(false)
                     .accessibilityHidden(true)
             }
             HUDPreviewInteractionView(
-                snapshot: snapshot,
-                onHover: { preview.activeSelection = $0 },
-                onRevealChange: { if $0 { revealPreviewOuterRing() } },
-                onIntent: apply,
-                deleteTarget: deleteTarget,
+                snapshot: preview.interactionSnapshot,
+                onHover: { if hover != $0 { hover = $0 } },
+                pointer: pointer,
+                onIntent: { apply($0, in: preview) },
+                deleteTarget: { deleteTarget(for: $0, in: preview) },
                 onDelete: delete
             )
             .frame(width: side, height: side)
@@ -239,24 +287,43 @@ struct RingPreviewSelector: View {
         .frame(width: side, height: side)
         .scaleEffect(scale)
         .frame(width: canvasSide, height: canvasSide)
-        .onChange(of: previewContent, initial: true) { _, content in
-            preview.load(from: content.configuration)
-            syncPreview()
-        }
-        .onChange(of: model.selection) { _, _ in syncPreview() }
         .transaction { $0.animation = nil }
     }
 
-    private var previewContent: MenuEditorPreviewContent {
-        MenuEditorPreviewContent(
-            inner: model.inner, middle: model.middle,
-            hudCustomization: model.hudCustomization, appearance: appearance
+    var artwork: RingMenuView<EditorRingPresentation> {
+        let preview = makePreview()
+        return RingMenuView(
+            viewModel: preview,
+            interactionEnabled: false,
+            presentationMode: .staticEditor,
+            accessibilityIdentifierPrefix: "menuItems.preview.wedge",
+            exposesCenterSettings: false,
+            onAccessibilitySelection: { applyAccessibilitySelection($0, in: preview) },
+            persistentSelection: editorActiveSelection,
+            accessibilityLabelSuffix: accessibilityLabelSuffix
+        )
+    }
+
+    private func makePreview() -> EditorRingPresentation {
+        let parent = expandedMiddleParent()
+        let children = parent?.item.dynamicSource == .runningApps
+            ? Self.runningAppsPreviewPlaceholder : parent?.item.subItems ?? []
+        let policy = model.hudCustomization.outerRingVisibility
+        let outer = pointer.outerRingPolicyState.transition(
+            policy: policy, hasExpandedParent: parent != nil, itemCount: children.count
+        )
+        return EditorRingPresentation(
+            innerItems: model.inner, middleItems: model.middle,
+            outerItems: outer.isEligible ? children : [],
+            expandedParentIndex: outer.isEligible ? parent?.index : nil,
+            activeSelection: hover, appearance: appearance, hudCustomization: model.hudCustomization,
+            isOuterRingVisible: outer.isVisible
         )
     }
 
     // MARK: - Customization marks (App HUD only)
 
-    private func wedgeAngles(_ band: Band, _ index: Int) -> (start: Angle, end: Angle) {
+    private func wedgeAngles(_ band: Band, _ index: Int, in preview: EditorRingPresentation) -> (start: Angle, end: Angle) {
         RadialGeometry.wedgeAngles(
             band: band, index: index, geometry: preview.geometry,
             expandedParentIndex: preview.expandedParentIndex,
@@ -265,7 +332,7 @@ struct RingPreviewSelector: View {
         )
     }
 
-    private func bandRadii(_ band: Band) -> (inner: CGFloat, outer: CGFloat) {
+    private func bandRadii(_ band: Band, in preview: EditorRingPresentation) -> (inner: CGFloat, outer: CGFloat) {
         switch band {
         case .inner: (preview.radii.r0, preview.radii.r1)
         case .middle: (preview.radii.r1, preview.radii.r2)
@@ -275,7 +342,7 @@ struct RingPreviewSelector: View {
 
     /// Fixed-size overlay in the ring's own square: it cannot shift layout,
     /// and the caller disables hit-testing and hides it from accessibility.
-    private var customizationDots: some View {
+    private func customizationDots(_ preview: EditorRingPresentation) -> some View {
         let side = 2 * preview.radii.r3
         let center = CGPoint(x: side / 2, y: side / 2)
         let marks: [(band: Band, index: Int, id: UUID)] =
@@ -284,14 +351,14 @@ struct RingPreviewSelector: View {
         return ZStack {
             ForEach(marks.indices.filter { isCustomized(marks[$0].id, in: marks[$0].band) }, id: \.self) { index in
                 let mark = marks[index]
-                let angles = wedgeAngles(mark.band, mark.index)
+                let angles = wedgeAngles(mark.band, mark.index, in: preview)
                 Circle()
                     .fill(Color.accentColor)
                     .frame(width: RingPreviewCustomizationMarker.dotDiameter,
                            height: RingPreviewCustomizationMarker.dotDiameter)
                     .position(RingPreviewCustomizationMarker.dotPosition(
                         start: angles.start, end: angles.end,
-                        outerRadius: bandRadii(mark.band).outer, center: center
+                        outerRadius: bandRadii(mark.band, in: preview).outer, center: center
                     ))
             }
         }
@@ -315,43 +382,6 @@ struct RingPreviewSelector: View {
         model.origin(of: id, band: band == .inner ? .inner : .middle) == .customized
     }
 
-    private var outerRingGuidePresentation: EditorOuterRingGuidePresentation {
-        EditorOuterRingGuidePresentation(
-            radii: preview.radii,
-            visibility: model.hudCustomization.outerRingVisibility,
-            hasLocalizedOuterSurface: preview.isOuterRingVisible
-        )
-    }
-
-    private var snapshot: HUDPreviewInteractionSnapshot {
-        HUDPreviewInteractionSnapshot(
-            geometry: preview.geometry,
-            radii: preview.radii,
-            innerCount: preview.innerItems.count,
-            middleCount: preview.middleItems.count,
-            expandedParentIndex: preview.expandedParentIndex,
-            outerCount: preview.outerItems.count,
-            outerVisibility: model.hudCustomization.outerRingVisibility,
-            outerLayout: preview.outerRingLayout
-        )
-    }
-
-    private func previewSlot(for intent: HUDPreviewIntent) -> SlotSelection? {
-        switch intent {
-        case let .selectTopLevel(band, index):
-            let items = band == .inner ? preview.innerItems : preview.middleItems
-            guard items.indices.contains(index) else { return nil }
-            return SlotSelection(band: band, itemID: items[index].id, subItemID: nil)
-        case let .selectOuter(index):
-            guard let parentIndex = preview.expandedParentIndex,
-                  preview.middleItems.indices.contains(parentIndex),
-                  preview.outerItems.indices.contains(index) else { return nil }
-            let parent = preview.middleItems[parentIndex]
-            guard parent.dynamicSource == .none else { return nil }
-            return SlotSelection(band: .middle, itemID: parent.id, subItemID: preview.outerItems[index].id)
-        }
-    }
-
     private func contains(_ slot: SlotSelection) -> Bool {
         let items = slot.band == .inner ? model.inner : model.middle
         guard let parent = items.first(where: { $0.id == slot.itemID }) else { return false }
@@ -360,31 +390,10 @@ struct RingPreviewSelector: View {
             && parent.subItems?.contains { $0.id == child } == true
     }
 
-    private func apply(_ intent: HUDPreviewIntent) {
-        guard let slot = previewSlot(for: intent), contains(slot) else { return }
+    private func apply(_ intent: HUDPreviewIntent, in preview: EditorRingPresentation) {
+        guard let slot = preview.slot(for: intent), contains(slot) else { return }
         model.activeBand = slot.band
         model.selection = slot
-    }
-
-    private func syncPreview() {
-        preview.appearance.motion.isEnabled = false
-        preview.innerItems = model.inner
-        preview.middleItems = model.middle
-        preview.hudCustomization = model.hudCustomization
-        if let parent = expandedMiddleParent() {
-            if parent.item.dynamicSource == .runningApps {
-                preview.expandedParentIndex = parent.index
-                preview.outerItems = Self.runningAppsPreviewPlaceholder
-            } else {
-                preview.expand(parent.index)
-            }
-        } else {
-            preview.reset()
-        }
-        preview.innerItems = model.inner
-        preview.middleItems = model.middle
-        preview.hudCustomization = model.hudCustomization
-        preview.activeSelection = nil
     }
 
     private var editorActiveSelection: ActiveSelection? {
@@ -402,8 +411,8 @@ struct RingPreviewSelector: View {
         return nil
     }
 
-    private func deleteTarget(for intent: HUDPreviewIntent) -> SlotSelection? {
-        guard let slot = previewSlot(for: intent), canDelete(slot) else { return nil }
+    private func deleteTarget(for intent: HUDPreviewIntent, in preview: EditorRingPresentation) -> SlotSelection? {
+        guard let slot = preview.slot(for: intent), canDelete(slot) else { return nil }
         return slot
     }
 
@@ -418,22 +427,12 @@ struct RingPreviewSelector: View {
         model.removeSelectedItem()
     }
 
-    private func applyAccessibilitySelection(_ selection: ActiveSelection) {
+    private func applyAccessibilitySelection(_ selection: ActiveSelection, in preview: EditorRingPresentation) {
         switch selection.band {
-        case .inner: apply(.selectTopLevel(.inner, selection.index))
-        case .middle: apply(.selectTopLevel(.middle, selection.index))
-        case .outer: apply(.selectOuter(selection.index))
+        case .inner: apply(.selectTopLevel(.inner, selection.index), in: preview)
+        case .middle: apply(.selectTopLevel(.middle, selection.index), in: preview)
+        case .outer: apply(.selectOuter(selection.index), in: preview)
         }
-    }
-
-    private func revealPreviewOuterRing() {
-        let center = CGPoint(x: preview.radii.r3, y: preview.radii.r3)
-        preview.updateOuterRingReveal(
-            at: CGPoint(x: center.x + preview.radii.r1, y: center.y), center: center
-        )
-        preview.updateOuterRingReveal(
-            at: CGPoint(x: center.x + preview.radii.r1 + 1, y: center.y), center: center
-        )
     }
 
     private func expandedMiddleParent() -> (item: RingMenuItem, index: Int)? {
@@ -442,19 +441,5 @@ struct RingPreviewSelector: View {
               let index = model.middle.firstIndex(where: { $0.id == id }),
               model.middle[index].hasSubItems else { return nil }
         return (model.middle[index], index)
-    }
-}
-
-/// One observed snapshot includes both the editable profile and shared geometry.
-/// Loading it uses the same configuration path as the live HUD.
-struct MenuEditorPreviewContent: Equatable {
-    let inner: [RingMenuItem]
-    let middle: [RingMenuItem]
-    let hudCustomization: HUDCustomization
-    let appearance: AppearanceConfig
-
-    var configuration: Configuration {
-        Configuration(inner: inner, middle: middle, appearance: appearance,
-                      hudCustomization: hudCustomization)
     }
 }

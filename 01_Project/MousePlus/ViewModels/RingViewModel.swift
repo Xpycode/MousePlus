@@ -66,6 +66,113 @@ struct OuterRingPolicyState: Equatable {
     }
 }
 
+/// The values consumed by the wedge renderer. The editor supplies a value
+/// snapshot, while the live HUD supplies its observable interaction model.
+@MainActor
+protocol RingMenuPresentation {
+    var innerItems: [RingMenuItem] { get }
+    var middleItems: [RingMenuItem] { get }
+    var outerItems: [RingMenuItem] { get }
+    var expandedParentIndex: Int? { get }
+    var activeSelection: ActiveSelection? { get }
+    var appearance: AppearanceConfig { get }
+    var radii: BandRadii { get }
+    var hudCustomization: HUDCustomization { get }
+    var isOuterRingVisible: Bool { get }
+    var runtime: RingViewModel? { get }
+}
+
+extension RingMenuPresentation {
+    /// Independent effective top-level geometry after resolving auto/fixed mode.
+    var geometry: TopLevelRingGeometry {
+        TopLevelRingGeometry(
+            inner: effectiveGeometry(for: hudCustomization.inner.layout,
+                                     itemCount: innerItems.count),
+            middle: effectiveGeometry(for: hudCustomization.middle.layout,
+                                      itemCount: middleItems.count)
+        )
+    }
+
+    /// Running apps get the whole outer circumference. Other expandable items
+    /// retain the compact arc centered on their middle-ring parent.
+    var outerRingLayout: OuterRingLayout {
+        guard let index = expandedParentIndex,
+              middleItems.indices.contains(index),
+              middleItems[index].dynamicSource == .runningApps else {
+            return .localizedArc
+        }
+        return .fullCircle
+    }
+
+    /// Resolves persisted menu/ring/item presentation through the same path used
+    /// by both the runtime HUD and editor preview.
+    func iconOrientation(for band: Band) -> IconOrientation {
+        ringAppearance(for: band).iconOrientation ?? hudCustomization.iconOrientation
+    }
+
+    /// Mirrors `iconOrientation(for:)`'s menu → ring inheritance, but for
+    /// caption orientation. Independent of `iconOrientation` so reorienting a
+    /// label never perturbs the icon.
+    func labelOrientation(for band: Band) -> LabelOrientation {
+        ringAppearance(for: band).labelOrientation ?? hudCustomization.labelOrientation
+    }
+
+    /// Unlike orientation, visibility has no menu-level default to inherit —
+    /// each ring resolves its own `labelVisible` (see `HUDRingAppearance`).
+    func isLabelVisible(for band: Band) -> Bool {
+        ringAppearance(for: band).labelVisible
+    }
+
+    func colorResolution(
+        for item: RingMenuItem,
+        band: Band,
+        application: HUDColorResolver.Overrides,
+        backdrop: HUDColor
+    ) -> HUDColorResolver.Resolution {
+        let ring = ringAppearance(for: band)
+        return HUDColorResolver.resolve(
+            application: application,
+            menu: .init(wedge: hudCustomization.wedgeColor,
+                        icon: hudCustomization.iconColor),
+            ring: .init(wedge: ring.wedgeColor, icon: ring.iconColor),
+            item: .init(wedge: item.wedgeColor, icon: item.iconColor),
+            backdrop: backdrop
+        )
+    }
+
+    private func ringAppearance(for band: Band) -> HUDRingAppearance {
+        switch band {
+        case .inner: hudCustomization.inner.appearance
+        case .middle: hudCustomization.middle.appearance
+        case .outer: hudCustomization.outerAppearance
+        }
+    }
+
+    var hiddenSubmenuUnavailableReason: String? {
+        hudCustomization.outerRingVisibility == .alwaysHidden
+            ? "Submenu hidden by HUD setting"
+            : nil
+    }
+
+    private func effectiveGeometry(for layout: HUDRingLayout,
+                                   itemCount: Int) -> RingBandGeometry {
+        let boundedItems = min(max(itemCount, 1), HUDRingLayout.supportedSlotRange.upperBound)
+        let slots: Int
+        switch layout.slotCountMode {
+        case .auto:
+            slots = boundedItems
+        case .fixed:
+            // A malformed/stale fixed value must never overlap configured
+            // items. Preserve all items while staying within the ring limit.
+            slots = min(max(HUDRingLayout.clampedSlotCount(layout.fixedSlotCount),
+                            boundedItems),
+                        HUDRingLayout.supportedSlotRange.upperBound)
+        }
+        return RingBandGeometry(slotCount: slots,
+                                angularOffset: CGFloat(layout.angularOffset * .pi / 180))
+    }
+}
+
 /// Main view model for the concentric wedge ring menu.
 ///
 /// State model (§2):
@@ -77,7 +184,8 @@ struct OuterRingPolicyState: Equatable {
 ///   - `activeSelection` is the cursor-driven `(band, index)` highlight.
 @MainActor
 @Observable
-final class RingViewModel {
+final class RingViewModel: RingMenuPresentation {
+    var runtime: RingViewModel? { self }
 
     // MARK: - New concentric-wedge state (T4)
 
@@ -110,27 +218,6 @@ final class RingViewModel {
 
     /// Persisted HUD policy and per-band layout loaded with the menu items.
     var hudCustomization: HUDCustomization = .default
-
-    /// Independent effective top-level geometry after resolving auto/fixed mode.
-    var geometry: TopLevelRingGeometry {
-        TopLevelRingGeometry(
-            inner: effectiveGeometry(for: hudCustomization.inner.layout,
-                                     itemCount: innerItems.count),
-            middle: effectiveGeometry(for: hudCustomization.middle.layout,
-                                      itemCount: middleItems.count)
-        )
-    }
-
-    /// Running apps get the whole outer circumference. Other expandable items
-    /// retain the compact arc centered on their middle-ring parent.
-    var outerRingLayout: OuterRingLayout {
-        guard let index = expandedParentIndex,
-              middleItems.indices.contains(index),
-              middleItems[index].dynamicSource == .runningApps else {
-            return .localizedArc
-        }
-        return .fullCircle
-    }
 
     /// Whether conditional reveal has latched for this invocation.
     private var outerRingPolicyState = OuterRingPolicyState()
@@ -236,50 +323,6 @@ final class RingViewModel {
             ? profile.targetApplication.processIdentifier
             : nil
         reset()
-    }
-
-    /// Resolves persisted menu/ring/item presentation through the same path used
-    /// by both the runtime HUD and editor preview.
-    func iconOrientation(for band: Band) -> IconOrientation {
-        ringAppearance(for: band).iconOrientation ?? hudCustomization.iconOrientation
-    }
-
-    /// Mirrors `iconOrientation(for:)`'s menu → ring inheritance, but for
-    /// caption orientation. Independent of `iconOrientation` so reorienting a
-    /// label never perturbs the icon.
-    func labelOrientation(for band: Band) -> LabelOrientation {
-        ringAppearance(for: band).labelOrientation ?? hudCustomization.labelOrientation
-    }
-
-    /// Unlike orientation, visibility has no menu-level default to inherit —
-    /// each ring resolves its own `labelVisible` (see `HUDRingAppearance`).
-    func isLabelVisible(for band: Band) -> Bool {
-        ringAppearance(for: band).labelVisible
-    }
-
-    func colorResolution(
-        for item: RingMenuItem,
-        band: Band,
-        application: HUDColorResolver.Overrides,
-        backdrop: HUDColor
-    ) -> HUDColorResolver.Resolution {
-        let ring = ringAppearance(for: band)
-        return HUDColorResolver.resolve(
-            application: application,
-            menu: .init(wedge: hudCustomization.wedgeColor,
-                        icon: hudCustomization.iconColor),
-            ring: .init(wedge: ring.wedgeColor, icon: ring.iconColor),
-            item: .init(wedge: item.wedgeColor, icon: item.iconColor),
-            backdrop: backdrop
-        )
-    }
-
-    private func ringAppearance(for band: Band) -> HUDRingAppearance {
-        switch band {
-        case .inner: hudCustomization.inner.appearance
-        case .middle: hudCustomization.middle.appearance
-        case .outer: hudCustomization.outerAppearance
-        }
     }
 
     // MARK: - Item lookup
@@ -440,12 +483,6 @@ final class RingViewModel {
         return false
     }
 
-    var hiddenSubmenuUnavailableReason: String? {
-        hudCustomization.outerRingVisibility == .alwaysHidden
-            ? "Submenu hidden by HUD setting"
-            : nil
-    }
-
     /// Full reset to root state — used on show/hide and after a direct commit.
     func reset() {
         activeSelection = nil
@@ -483,24 +520,6 @@ final class RingViewModel {
     }
 
     // MARK: - Effective geometry and invocation reveal
-
-    private func effectiveGeometry(for layout: HUDRingLayout,
-                                   itemCount: Int) -> RingBandGeometry {
-        let boundedItems = min(max(itemCount, 1), HUDRingLayout.supportedSlotRange.upperBound)
-        let slots: Int
-        switch layout.slotCountMode {
-        case .auto:
-            slots = boundedItems
-        case .fixed:
-            // A malformed/stale fixed value must never overlap configured
-            // items. Preserve all items while staying within the ring limit.
-            slots = min(max(HUDRingLayout.clampedSlotCount(layout.fixedSlotCount),
-                            boundedItems),
-                        HUDRingLayout.supportedSlotRange.upperBound)
-        }
-        return RingBandGeometry(slotCount: slots,
-                                angularOffset: CGFloat(layout.angularOffset * .pi / 180))
-    }
 
     /// Records the pointer's reveal traversal without changing the active wedge
     /// or re-pointing the expanded parent. The editor preview uses this when its

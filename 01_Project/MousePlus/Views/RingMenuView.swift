@@ -13,8 +13,8 @@ import SwiftUI
 /// (`RingViewModel.updateActive` → `RadialGeometry.hitTest`), NOT per-wedge
 /// `contentShape` — per-wedge containment causes boundary flicker / dead zones
 /// (§2.2). Each `WedgeView` is purely presentational.
-struct RingMenuView: View {
-    @Bindable var viewModel: RingViewModel
+struct RingMenuView<Presentation: RingMenuPresentation>: View {
+    let viewModel: Presentation
     @Environment(\.accessibilityReduceMotion) private var accessibilityReduceMotion
     @State private var outerMotionState = HUDOuterBranchMotionState()
     @State private var settleOpeningID = 0
@@ -48,7 +48,7 @@ struct RingMenuView: View {
     #endif
 
     private var effectiveOpeningReplayID: Int {
-        presentationMode == .live ? viewModel.openingInvocationID : openingReplayID
+        presentationMode == .live ? (viewModel.runtime?.openingInvocationID ?? 0) : openingReplayID
     }
 
     func openingMotionRequest(reduceMotion: Bool) -> HUDOpeningMotionRequest {
@@ -60,7 +60,7 @@ struct RingMenuView: View {
             ),
             playbackEnabled: openingPlaybackEnabled && presentationMode != .staticEditor,
             invocationID: effectiveOpeningReplayID,
-            isAwaitingMount: presentationMode == .live && viewModel.openingIsAwaitingMount
+            isAwaitingMount: presentationMode == .live && viewModel.runtime?.openingIsAwaitingMount == true
         )
     }
 
@@ -203,18 +203,18 @@ struct RingMenuView: View {
                 if exposesCenterSettings {
                     HUDCenterSettingsControl(
                         presentation: HUDCenterContextPresentation(
-                            resolved: viewModel.resolvedHUDProfile
+                            resolved: viewModel.runtime?.resolvedHUDProfile
                         ),
                         applicationIcon: centerApplicationIcon,
                         action: {
                             settleOpening("center action")
-                            viewModel.activateCenterSettings()
+                            viewModel.runtime?.activateCenterSettings()
                         },
                         draggingEnabled: onCenterDrag != nil,
                         onDrag: { delta in
                             // A center drag is panel manipulation, never wedge selection.
                             settleOpening("center drag")
-                            viewModel.activeSelection = nil
+                            viewModel.runtime?.activeSelection = nil
                             onCenterDrag?(delta)
                         }
                     )
@@ -259,7 +259,7 @@ struct RingMenuView: View {
         // Pointer movement (tap-toggle / hover) drives the active wedge.
         .onContinuousHover { phase in
             if interactionEnabled, case .active(let location) = phase {
-                viewModel.updateActive(at: location, center: center)
+                viewModel.runtime?.updateActive(at: location, center: center)
                 #if DEBUG
                 onOpeningHover?(location, center, viewModel.activeSelection != nil)
                 #endif
@@ -274,13 +274,13 @@ struct RingMenuView: View {
             DragGesture(minimumDistance: 0)
                 .onChanged { value in
                     guard interactionEnabled else { return }
-                    viewModel.updateActive(at: value.location, center: center)
+                    viewModel.runtime?.updateActive(at: value.location, center: center)
                     if viewModel.activeSelection != nil { settleOpening("pointer drag") }
                 }
                 .onEnded { value in
                     guard interactionEnabled else { return }
                     guard commitsOnPointerRelease else { return }
-                    viewModel.commit(at: value.location, center: center)
+                    viewModel.runtime?.commit(at: value.location, center: center)
                 }
         )
     }
@@ -597,7 +597,7 @@ struct RingMenuView: View {
     /// A dynamic-source item with a fetched icon renders that live app icon;
     /// everything else falls back to its configured SF Symbol.
     private func iconSource(for item: RingMenuItem) -> IconSource {
-        viewModel.dynamicIcons[item.id].map { .appIcon($0) } ?? .sfSymbol(item.icon)
+        viewModel.runtime?.dynamicIcons[item.id].map { .appIcon($0) } ?? .sfSymbol(item.icon)
     }
 
     private func presentation(
@@ -702,8 +702,8 @@ struct RingMenuView: View {
         let selection = ActiveSelection(band: band, index: index)
         if let onAccessibilitySelection { onAccessibilitySelection(selection) }
         else {
-            viewModel.activeSelection = selection
-            viewModel.commitActive()
+            viewModel.runtime?.activeSelection = selection
+            viewModel.runtime?.commitActive()
         }
     }
 
