@@ -105,6 +105,7 @@ struct MenuItemsPane: View {
                     profileMessage = nil
                     showingAppHUDPicker = true
                 }
+                .fixedSize()
 
                 AppKitButton(
                     title: "Delete…",
@@ -114,6 +115,7 @@ struct MenuItemsPane: View {
                 ) {
                     confirmDeleteSelectedAppHUD()
                 }
+                .fixedSize()
 
                 if coordinator.menuEditorModel.isEditingAppHUD {
                     hiddenItemsButton

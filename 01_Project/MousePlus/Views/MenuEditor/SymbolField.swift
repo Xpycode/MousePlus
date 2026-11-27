@@ -61,6 +61,7 @@ struct SymbolField: View {
                 ) {
                     isPickerPresented.toggle()
                 }
+                .fixedSize()
                 .help("Browse symbols")
                 .popover(isPresented: $isPickerPresented, arrowEdge: .bottom) {
                     pickerGrid
